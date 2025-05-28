@@ -24,7 +24,7 @@ class Settings(BaseModel):
     DATABASE_URL: str = "sqlite:///./eindr.db"
     
     # AI Models paths (assuming local models)
-    VOSK_MODEL_PATH: str = "./models/vosk-model-en-us-0.22"
+    COQUI_STT_MODEL_PATH: str = "./models/coqui-stt.tflite"
     TTS_MODEL_PATH: str = "./models/tts"
     INTENT_MODEL_PATH: str = "./models/intent"
     CHAT_MODEL_PATH: str = "./models/bloom-560m"
@@ -32,10 +32,14 @@ class Settings(BaseModel):
     # Audio settings
     AUDIO_SAMPLE_RATE: int = 16000
     AUDIO_CHANNELS: int = 1
+    AUDIO_BIT_DEPTH: int = 16
     
     # File upload settings
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 10MB
     UPLOAD_DIR: str = "./uploads"
+    
+    # Supported audio formats for STT
+    SUPPORTED_AUDIO_FORMATS: List[str] = [".wav", ".wave"]
     
     class Config:
         env_file = ".env"
