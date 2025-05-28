@@ -21,7 +21,8 @@ class Settings(BaseModel):
     ALLOWED_HOSTS: List[str] = ["*"]
     
     # Database
-    DATABASE_URL: str = "sqlite:///./eindr.db"
+    DATABASE_URL: str = "postgresql://postgres:admin123@localhost:5432/eindr"
+
     
     # AI Models paths (assuming local models)
     COQUI_STT_MODEL_PATH: str = "./models/coqui-stt.tflite"

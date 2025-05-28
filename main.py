@@ -70,7 +70,7 @@ app.add_middleware(
 )
 
 # Import routers after app creation to avoid circular imports
-from api import auth, reminders, notes, ledger, friends, users, stt
+from api import auth, reminders, notes, ledger, friends, users, stt, embeddings, history
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -79,6 +79,8 @@ app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Reminder
 app.include_router(notes.router, prefix="/api/v1/notes", tags=["Notes"])
 app.include_router(ledger.router, prefix="/api/v1/ledger", tags=["Ledger"])
 app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
+app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
+app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
 app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])
 
 @app.get("/")

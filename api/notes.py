@@ -7,28 +7,25 @@ from models.models import Note
 from connect_db import get_db
 from firebase_auth import verify_firebase_token
 from utils.logger import logger
+import uuid
 
 router = APIRouter()
 
 # Pydantic models
 class NoteCreate(BaseModel):
-    title: str
-    content: str
-    tags: Optional[List[str]] = []
+    content: Optional[str] = None
+    source: Optional[str] = None
 
 class NoteUpdate(BaseModel):
-    title: Optional[str] = None
     content: Optional[str] = None
-    tags: Optional[List[str]] = None
+    source: Optional[str] = None
 
 class NoteResponse(BaseModel):
     id: str
-    title: str
-    content: str
-    tags: List[str]
     user_id: str
+    content: Optional[str]
+    source: Optional[str]
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -41,22 +38,26 @@ async def create_note(
 ):
     """Create a new note."""
     try:
-        # Create new note
+        user_id = current_user["uid"]
+        
         note = Note(
-            title=note_data.title,
+            id=str(uuid.uuid4()),
+            user_id=user_id,
             content=note_data.content,
-            tags=",".join(note_data.tags) if note_data.tags else "",
-            user_id=current_user["uid"]
+            source=note_data.source
         )
         
         db.add(note)
         db.commit()
         db.refresh(note)
         
-        logger.info(f"Created note: {note.id} for user: {current_user['uid']}")
+        logger.info(f"Created note: {note.id} for user: {user_id}")
         return NoteResponse(
-            **note.__dict__,
-            tags=note.tags.split(",") if note.tags else []
+            id=str(note.id),
+            user_id=str(note.user_id),
+            content=note.content,
+            source=note.source,
+            created_at=note.created_at
         )
         
     except Exception as e:
@@ -69,24 +70,28 @@ async def create_note(
 
 @router.get("/", response_model=List[NoteResponse])
 async def get_notes(
-    tag: Optional[str] = None,
+    source: Optional[str] = None,
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
     """Get all notes for the current user."""
     try:
-        query = db.query(Note).filter(Note.user_id == current_user["uid"])
+        user_id = current_user["uid"]
+        query = db.query(Note).filter(Note.user_id == user_id)
         
-        if tag:
-            query = query.filter(Note.tags.contains(tag))
+        if source:
+            query = query.filter(Note.source == source)
         
-        notes = query.order_by(Note.updated_at.desc()).all()
+        notes = query.order_by(Note.created_at.desc()).all()
         
         return [
             NoteResponse(
-                **note.__dict__,
-                tags=note.tags.split(",") if note.tags else []
-            ) 
+                id=str(note.id),
+                user_id=str(note.user_id),
+                content=note.content,
+                source=note.source,
+                created_at=note.created_at
+            )
             for note in notes
         ]
         
@@ -105,9 +110,10 @@ async def get_note(
 ):
     """Get a specific note."""
     try:
+        user_id = current_user["uid"]
         note = db.query(Note).filter(
             Note.id == note_id,
-            Note.user_id == current_user["uid"]
+            Note.user_id == user_id
         ).first()
         
         if not note:
@@ -117,8 +123,11 @@ async def get_note(
             )
         
         return NoteResponse(
-            **note.__dict__,
-            tags=note.tags.split(",") if note.tags else []
+            id=str(note.id),
+            user_id=str(note.user_id),
+            content=note.content,
+            source=note.source,
+            created_at=note.created_at
         )
         
     except HTTPException:
@@ -139,9 +148,10 @@ async def update_note(
 ):
     """Update a note."""
     try:
+        user_id = current_user["uid"]
         note = db.query(Note).filter(
             Note.id == note_id,
-            Note.user_id == current_user["uid"]
+            Note.user_id == user_id
         ).first()
         
         if not note:
@@ -151,20 +161,20 @@ async def update_note(
             )
         
         # Update fields if provided
-        if note_data.title is not None:
-            note.title = note_data.title
-        if note_data.content is not None:
-            note.content = note_data.content
-        if note_data.tags is not None:
-            note.tags = ",".join(note_data.tags)
+        update_data = note_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(note, field, value)
         
         db.commit()
         db.refresh(note)
         
         logger.info(f"Updated note: {note_id}")
         return NoteResponse(
-            **note.__dict__,
-            tags=note.tags.split(",") if note.tags else []
+            id=str(note.id),
+            user_id=str(note.user_id),
+            content=note.content,
+            source=note.source,
+            created_at=note.created_at
         )
         
     except HTTPException:
@@ -185,9 +195,10 @@ async def delete_note(
 ):
     """Delete a note."""
     try:
+        user_id = current_user["uid"]
         note = db.query(Note).filter(
             Note.id == note_id,
-            Note.user_id == current_user["uid"]
+            Note.user_id == user_id
         ).first()
         
         if not note:
@@ -207,6 +218,39 @@ async def delete_note(
     except Exception as e:
         db.rollback()
         logger.error(f"Delete note error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/search/{query}", response_model=List[NoteResponse])
+async def search_notes(
+    query: str,
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Search notes by content."""
+    try:
+        user_id = current_user["uid"]
+        
+        notes = db.query(Note).filter(
+            Note.user_id == user_id,
+            Note.content.ilike(f"%{query}%")
+        ).order_by(Note.created_at.desc()).all()
+        
+        return [
+            NoteResponse(
+                id=str(note.id),
+                user_id=str(note.user_id),
+                content=note.content,
+                source=note.source,
+                created_at=note.created_at
+            )
+            for note in notes
+        ]
+        
+    except Exception as e:
+        logger.error(f"Search notes error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

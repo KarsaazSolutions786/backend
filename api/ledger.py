@@ -2,190 +2,301 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 from sqlalchemy.orm import Session
-from models.models import Expense
+from models.models import LedgerEntry
 from connect_db import get_db
 from firebase_auth import verify_firebase_token
 from utils.logger import logger
+import uuid
 
 router = APIRouter()
 
-class ExpenseCreate(BaseModel):
-    amount: float
-    description: str
-    category: Optional[str] = "general"
+# Pydantic models
+class LedgerEntryCreate(BaseModel):
+    contact_name: Optional[str] = None
+    amount: Decimal
+    direction: str  # 'owe' or 'owed'
 
-class ExpenseUpdate(BaseModel):
-    amount: Optional[float] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
+    class Config:
+        validate_assignment = True
 
-class ExpenseResponse(BaseModel):
+class LedgerEntryUpdate(BaseModel):
+    contact_name: Optional[str] = None
+    amount: Optional[Decimal] = None
+    direction: Optional[str] = None
+
+    class Config:
+        validate_assignment = True
+
+class LedgerEntryResponse(BaseModel):
     id: str
-    amount: float
-    description: str
-    category: str
     user_id: str
+    contact_name: Optional[str]
+    amount: Decimal
+    direction: str
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
 
-@router.post("/expenses", response_model=ExpenseResponse)
-async def create_expense(
-    expense_data: ExpenseCreate,
+@router.post("/", response_model=LedgerEntryResponse)
+async def create_ledger_entry(
+    entry_data: LedgerEntryCreate,
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    """Create a new expense."""
+    """Create a new ledger entry."""
     try:
-        expense = Expense(
-            amount=expense_data.amount,
-            description=expense_data.description,
-            category=expense_data.category,
-            user_id=current_user["uid"]
-        )
-        
-        db.add(expense)
-        db.commit()
-        db.refresh(expense)
-        
-        logger.info(f"Created expense: {expense.id} for user: {current_user['uid']}")
-        return expense
-        
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Create expense error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-@router.get("/expenses", response_model=List[ExpenseResponse])
-async def get_expenses(
-    category: Optional[str] = None,
-    current_user: dict = Depends(verify_firebase_token),
-    db: Session = Depends(get_db)
-):
-    """Get all expenses for the current user."""
-    try:
-        query = db.query(Expense).filter(Expense.user_id == current_user["uid"])
-        
-        if category:
-            query = query.filter(Expense.category == category)
-        
-        expenses = query.order_by(Expense.created_at.desc()).all()
-        return expenses
-        
-    except Exception as e:
-        logger.error(f"Get expenses error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-@router.get("/expenses/{expense_id}", response_model=ExpenseResponse)
-async def get_expense(
-    expense_id: str,
-    current_user: dict = Depends(verify_firebase_token),
-    db: Session = Depends(get_db)
-):
-    """Get a specific expense."""
-    try:
-        expense = db.query(Expense).filter(
-            Expense.id == expense_id,
-            Expense.user_id == current_user["uid"]
-        ).first()
-        
-        if not expense:
+        # Validate direction
+        if entry_data.direction not in ['owe', 'owed']:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Expense not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Direction must be either 'owe' or 'owed'"
             )
         
-        return expense
+        user_id = current_user["uid"]
+        
+        entry = LedgerEntry(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            contact_name=entry_data.contact_name,
+            amount=entry_data.amount,
+            direction=entry_data.direction
+        )
+        
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        
+        logger.info(f"Created ledger entry: {entry.id} for user: {user_id}")
+        return LedgerEntryResponse(
+            id=str(entry.id),
+            user_id=str(entry.user_id),
+            contact_name=entry.contact_name,
+            amount=entry.amount,
+            direction=entry.direction,
+            created_at=entry.created_at
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get expense error: {e}")
+        db.rollback()
+        logger.error(f"Create ledger entry error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-@router.put("/expenses/{expense_id}", response_model=ExpenseResponse)
-async def update_expense(
-    expense_id: str,
-    expense_data: ExpenseUpdate,
+@router.get("/", response_model=List[LedgerEntryResponse])
+async def get_ledger_entries(
+    direction: Optional[str] = None,
+    contact_name: Optional[str] = None,
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    """Update an expense."""
+    """Get all ledger entries for the current user."""
     try:
-        expense = db.query(Expense).filter(
-            Expense.id == expense_id,
-            Expense.user_id == current_user["uid"]
+        user_id = current_user["uid"]
+        query = db.query(LedgerEntry).filter(LedgerEntry.user_id == user_id)
+        
+        if direction:
+            if direction not in ['owe', 'owed']:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Direction must be either 'owe' or 'owed'"
+                )
+            query = query.filter(LedgerEntry.direction == direction)
+        
+        if contact_name:
+            query = query.filter(LedgerEntry.contact_name.ilike(f"%{contact_name}%"))
+        
+        entries = query.order_by(LedgerEntry.created_at.desc()).all()
+        
+        return [
+            LedgerEntryResponse(
+                id=str(entry.id),
+                user_id=str(entry.user_id),
+                contact_name=entry.contact_name,
+                amount=entry.amount,
+                direction=entry.direction,
+                created_at=entry.created_at
+            )
+            for entry in entries
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get ledger entries error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/{entry_id}", response_model=LedgerEntryResponse)
+async def get_ledger_entry(
+    entry_id: str,
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Get a specific ledger entry."""
+    try:
+        user_id = current_user["uid"]
+        entry = db.query(LedgerEntry).filter(
+            LedgerEntry.id == entry_id,
+            LedgerEntry.user_id == user_id
         ).first()
         
-        if not expense:
+        if not entry:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Expense not found"
+                detail="Ledger entry not found"
+            )
+        
+        return LedgerEntryResponse(
+            id=str(entry.id),
+            user_id=str(entry.user_id),
+            contact_name=entry.contact_name,
+            amount=entry.amount,
+            direction=entry.direction,
+            created_at=entry.created_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get ledger entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.put("/{entry_id}", response_model=LedgerEntryResponse)
+async def update_ledger_entry(
+    entry_id: str,
+    entry_data: LedgerEntryUpdate,
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Update a ledger entry."""
+    try:
+        # Validate direction if provided
+        if entry_data.direction and entry_data.direction not in ['owe', 'owed']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Direction must be either 'owe' or 'owed'"
+            )
+        
+        user_id = current_user["uid"]
+        entry = db.query(LedgerEntry).filter(
+            LedgerEntry.id == entry_id,
+            LedgerEntry.user_id == user_id
+        ).first()
+        
+        if not entry:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ledger entry not found"
             )
         
         # Update fields if provided
-        update_data = expense_data.dict(exclude_unset=True)
+        update_data = entry_data.dict(exclude_unset=True)
         for field, value in update_data.items():
-            setattr(expense, field, value)
+            setattr(entry, field, value)
         
         db.commit()
-        db.refresh(expense)
+        db.refresh(entry)
         
-        logger.info(f"Updated expense: {expense_id}")
-        return expense
+        logger.info(f"Updated ledger entry: {entry_id}")
+        return LedgerEntryResponse(
+            id=str(entry.id),
+            user_id=str(entry.user_id),
+            contact_name=entry.contact_name,
+            amount=entry.amount,
+            direction=entry.direction,
+            created_at=entry.created_at
+        )
         
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Update expense error: {e}")
+        logger.error(f"Update ledger entry error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-@router.delete("/expenses/{expense_id}")
-async def delete_expense(
-    expense_id: str,
+@router.delete("/{entry_id}")
+async def delete_ledger_entry(
+    entry_id: str,
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    """Delete an expense."""
+    """Delete a ledger entry."""
     try:
-        expense = db.query(Expense).filter(
-            Expense.id == expense_id,
-            Expense.user_id == current_user["uid"]
+        user_id = current_user["uid"]
+        entry = db.query(LedgerEntry).filter(
+            LedgerEntry.id == entry_id,
+            LedgerEntry.user_id == user_id
         ).first()
         
-        if not expense:
+        if not entry:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Expense not found"
+                detail="Ledger entry not found"
             )
         
-        db.delete(expense)
+        db.delete(entry)
         db.commit()
         
-        logger.info(f"Deleted expense: {expense_id}")
-        return {"message": "Expense deleted successfully"}
+        logger.info(f"Deleted ledger entry: {entry_id}")
+        return {"message": "Ledger entry deleted successfully"}
         
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Delete expense error: {e}")
+        logger.error(f"Delete ledger entry error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/summary/balance", response_model=dict)
+async def get_balance_summary(
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Get balance summary (total owed and owed to user)."""
+    try:
+        user_id = current_user["uid"]
+        
+        # Calculate total amount user owes to others
+        total_owe = db.query(LedgerEntry).filter(
+            LedgerEntry.user_id == user_id,
+            LedgerEntry.direction == 'owe'
+        ).with_entities(db.func.sum(LedgerEntry.amount)).scalar() or 0
+        
+        # Calculate total amount owed to user
+        total_owed = db.query(LedgerEntry).filter(
+            LedgerEntry.user_id == user_id,
+            LedgerEntry.direction == 'owed'
+        ).with_entities(db.func.sum(LedgerEntry.amount)).scalar() or 0
+        
+        net_balance = total_owed - total_owe
+        
+        return {
+            "total_owe": float(total_owe),
+            "total_owed": float(total_owed),
+            "net_balance": float(net_balance),
+            "status": "positive" if net_balance > 0 else "negative" if net_balance < 0 else "balanced"
+        }
+        
+    except Exception as e:
+        logger.error(f"Get balance summary error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
