@@ -104,7 +104,8 @@ INTENT_MODEL_PATH=./models/intent
 CHAT_MODEL_PATH=./models/bloom-560m
 
 # Database
-DATABASE_URL=sqlite:///./eindr.db
+DATABASE_URL=postgresql://postgres:admin123@localhost:5432/eindr
+
 ```
 
 ### 3. AI Models Setup

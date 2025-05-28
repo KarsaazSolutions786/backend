@@ -1,42 +1,44 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from models.models import Reminder
 from connect_db import get_db
 from firebase_auth import verify_firebase_token
 from utils.logger import logger
+import uuid
 
 router = APIRouter()
 
 # Pydantic models
 class ReminderCreate(BaseModel):
-    title: str
+    title: Optional[str] = None
     description: Optional[str] = None
-    scheduled_time: datetime
-    is_recurring: bool = False
-    recurrence_pattern: Optional[str] = None  # daily, weekly, monthly
+    time: datetime
+    repeat_pattern: Optional[str] = None
+    timezone: Optional[str] = None
+    is_shared: Optional[bool] = False
 
 class ReminderUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    scheduled_time: Optional[datetime] = None
-    is_recurring: Optional[bool] = None
-    recurrence_pattern: Optional[str] = None
-    is_completed: Optional[bool] = None
+    time: Optional[datetime] = None
+    repeat_pattern: Optional[str] = None
+    timezone: Optional[str] = None
+    is_shared: Optional[bool] = None
 
 class ReminderResponse(BaseModel):
     id: str
-    title: str
-    description: Optional[str]
-    scheduled_time: datetime
-    is_recurring: bool
-    recurrence_pattern: Optional[str]
-    is_completed: bool
     user_id: str
+    title: Optional[str]
+    description: Optional[str]
+    time: Optional[datetime]
+    repeat_pattern: Optional[str]
+    timezone: Optional[str]
+    is_shared: Optional[bool]
+    created_by: Optional[str]
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -49,21 +51,37 @@ async def create_reminder(
 ):
     """Create a new reminder."""
     try:
+        user_id = current_user["uid"]
+        
         reminder = Reminder(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
             title=reminder_data.title,
             description=reminder_data.description,
-            scheduled_time=reminder_data.scheduled_time,
-            is_recurring=reminder_data.is_recurring,
-            recurrence_pattern=reminder_data.recurrence_pattern,
-            user_id=current_user["uid"]
+            time=reminder_data.time,
+            repeat_pattern=reminder_data.repeat_pattern,
+            timezone=reminder_data.timezone,
+            is_shared=reminder_data.is_shared,
+            created_by=user_id
         )
         
         db.add(reminder)
         db.commit()
         db.refresh(reminder)
         
-        logger.info(f"Created reminder: {reminder.id} for user: {current_user['uid']}")
-        return reminder
+        logger.info(f"Created reminder: {reminder.id} for user: {user_id}")
+        return ReminderResponse(
+            id=str(reminder.id),
+            user_id=str(reminder.user_id),
+            title=reminder.title,
+            description=reminder.description,
+            time=reminder.time,
+            repeat_pattern=reminder.repeat_pattern,
+            timezone=reminder.timezone,
+            is_shared=reminder.is_shared,
+            created_by=str(reminder.created_by) if reminder.created_by else None,
+            created_at=reminder.created_at
+        )
         
     except Exception as e:
         db.rollback()
@@ -75,19 +93,35 @@ async def create_reminder(
 
 @router.get("/", response_model=List[ReminderResponse])
 async def get_reminders(
-    completed: Optional[bool] = None,
+    shared: Optional[bool] = None,
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
     """Get all reminders for the current user."""
     try:
-        query = db.query(Reminder).filter(Reminder.user_id == current_user["uid"])
+        user_id = current_user["uid"]
+        query = db.query(Reminder).filter(Reminder.user_id == user_id)
         
-        if completed is not None:
-            query = query.filter(Reminder.is_completed == completed)
+        if shared is not None:
+            query = query.filter(Reminder.is_shared == shared)
         
-        reminders = query.order_by(Reminder.scheduled_time).all()
-        return reminders
+        reminders = query.order_by(Reminder.time).all()
+        
+        return [
+            ReminderResponse(
+                id=str(reminder.id),
+                user_id=str(reminder.user_id),
+                title=reminder.title,
+                description=reminder.description,
+                time=reminder.time,
+                repeat_pattern=reminder.repeat_pattern,
+                timezone=reminder.timezone,
+                is_shared=reminder.is_shared,
+                created_by=str(reminder.created_by) if reminder.created_by else None,
+                created_at=reminder.created_at
+            )
+            for reminder in reminders
+        ]
         
     except Exception as e:
         logger.error(f"Get reminders error: {e}")
@@ -104,9 +138,10 @@ async def get_reminder(
 ):
     """Get a specific reminder."""
     try:
+        user_id = current_user["uid"]
         reminder = db.query(Reminder).filter(
             Reminder.id == reminder_id,
-            Reminder.user_id == current_user["uid"]
+            Reminder.user_id == user_id
         ).first()
         
         if not reminder:
@@ -115,7 +150,18 @@ async def get_reminder(
                 detail="Reminder not found"
             )
         
-        return reminder
+        return ReminderResponse(
+            id=str(reminder.id),
+            user_id=str(reminder.user_id),
+            title=reminder.title,
+            description=reminder.description,
+            time=reminder.time,
+            repeat_pattern=reminder.repeat_pattern,
+            timezone=reminder.timezone,
+            is_shared=reminder.is_shared,
+            created_by=str(reminder.created_by) if reminder.created_by else None,
+            created_at=reminder.created_at
+        )
         
     except HTTPException:
         raise
@@ -135,9 +181,10 @@ async def update_reminder(
 ):
     """Update a reminder."""
     try:
+        user_id = current_user["uid"]
         reminder = db.query(Reminder).filter(
             Reminder.id == reminder_id,
-            Reminder.user_id == current_user["uid"]
+            Reminder.user_id == user_id
         ).first()
         
         if not reminder:
@@ -155,7 +202,18 @@ async def update_reminder(
         db.refresh(reminder)
         
         logger.info(f"Updated reminder: {reminder_id}")
-        return reminder
+        return ReminderResponse(
+            id=str(reminder.id),
+            user_id=str(reminder.user_id),
+            title=reminder.title,
+            description=reminder.description,
+            time=reminder.time,
+            repeat_pattern=reminder.repeat_pattern,
+            timezone=reminder.timezone,
+            is_shared=reminder.is_shared,
+            created_by=str(reminder.created_by) if reminder.created_by else None,
+            created_at=reminder.created_at
+        )
         
     except HTTPException:
         raise
@@ -175,9 +233,10 @@ async def delete_reminder(
 ):
     """Delete a reminder."""
     try:
+        user_id = current_user["uid"]
         reminder = db.query(Reminder).filter(
             Reminder.id == reminder_id,
-            Reminder.user_id == current_user["uid"]
+            Reminder.user_id == user_id
         ).first()
         
         if not reminder:
@@ -197,6 +256,45 @@ async def delete_reminder(
     except Exception as e:
         db.rollback()
         logger.error(f"Delete reminder error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.get("/upcoming/today", response_model=List[ReminderResponse])
+async def get_today_reminders(
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Get today's reminders."""
+    try:
+        user_id = current_user["uid"]
+        today = datetime.now().date()
+        
+        reminders = db.query(Reminder).filter(
+            Reminder.user_id == user_id,
+            Reminder.time >= today,
+            Reminder.time < today + timedelta(days=1)
+        ).order_by(Reminder.time).all()
+        
+        return [
+            ReminderResponse(
+                id=str(reminder.id),
+                user_id=str(reminder.user_id),
+                title=reminder.title,
+                description=reminder.description,
+                time=reminder.time,
+                repeat_pattern=reminder.repeat_pattern,
+                timezone=reminder.timezone,
+                is_shared=reminder.is_shared,
+                created_by=str(reminder.created_by) if reminder.created_by else None,
+                created_at=reminder.created_at
+            )
+            for reminder in reminders
+        ]
+        
+    except Exception as e:
+        logger.error(f"Get today's reminders error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

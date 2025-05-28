@@ -1,86 +1,110 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import timedelta
 from sqlalchemy.orm import Session
-from models.models import User
+from models.models import User, Preferences
 from connect_db import get_db
-from core.security import (
-    verify_password, 
-    get_password_hash, 
-    create_access_token, 
-    get_current_user
-)
+from firebase_auth import verify_firebase_token
 from core.config import settings
 from utils.logger import logger
+import uuid
 
 router = APIRouter()
 
 # Pydantic models
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
-    full_name: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+class UserPreferencesCreate(BaseModel):
+    allow_friends: Optional[bool] = True
+    receive_shared_notes: Optional[bool] = True
+    notification_sound: Optional[str] = "default"
+    tts_language: Optional[str] = "en"
+    chat_history_enabled: Optional[bool] = True
 
 class UserResponse(BaseModel):
     id: str
     email: str
-    full_name: Optional[str] = None
-    is_active: bool = True
+    language: Optional[str] = None
+    timezone: Optional[str] = None
+    created_at: str
 
     class Config:
         from_attributes = True
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+class PreferencesResponse(BaseModel):
+    user_id: str
+    allow_friends: Optional[bool]
+    receive_shared_notes: Optional[bool]
+    notification_sound: Optional[str]
+    tts_language: Optional[str]
+    chat_history_enabled: Optional[bool]
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str
+    class Config:
+        from_attributes = True
+
+class UserWithPreferencesResponse(BaseModel):
     user: UserResponse
+    preferences: Optional[PreferencesResponse] = None
+
+def get_user_by_id(user_id: str, db: Session):
+    """Get user by ID from database."""
+    return db.query(User).filter(User.id == user_id).first()
 
 def get_user_by_email(email: str, db: Session):
     """Get user by email from database."""
     return db.query(User).filter(User.email == email).first()
 
-def create_new_user(user_data: UserCreate, db: Session):
+def create_new_user(user_data: UserCreate, firebase_uid: str, db: Session):
     """Create a new user in the database."""
-    import uuid
     user = User(
-        id=str(uuid.uuid4()),
+        id=firebase_uid,  # Use Firebase UID as the database ID
         email=user_data.email,
-        full_name=user_data.full_name or "",
-        hashed_password=get_password_hash(user_data.password),
-        is_active=True
+        language=user_data.language,
+        timezone=user_data.timezone
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     return user
 
-def authenticate_user(email: str, password: str, db: Session):
-    """Authenticate user with email and password."""
-    user = get_user_by_email(email, db)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
+def create_user_preferences(user_id: str, preferences_data: UserPreferencesCreate, db: Session):
+    """Create default preferences for a user."""
+    preferences = Preferences(
+        user_id=user_id,
+        allow_friends=preferences_data.allow_friends,
+        receive_shared_notes=preferences_data.receive_shared_notes,
+        notification_sound=preferences_data.notification_sound,
+        tts_language=preferences_data.tts_language,
+        chat_history_enabled=preferences_data.chat_history_enabled
+    )
+    db.add(preferences)
+    db.commit()
+    db.refresh(preferences)
+    return preferences
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=UserWithPreferencesResponse)
 async def register(
     user_data: UserCreate,
+    preferences_data: UserPreferencesCreate = UserPreferencesCreate(),
+    current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    """Register a new user."""
+    """Register a new user with Firebase authentication."""
     try:
+        firebase_uid = current_user["uid"]
+        
         # Check if user already exists
+        if get_user_by_id(firebase_uid, db):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already registered"
+            )
+        
+        # Check if email is already used
         if get_user_by_email(user_data.email, db):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -88,15 +112,35 @@ async def register(
             )
         
         # Create new user
-        user = create_new_user(user_data, db)
+        user = create_new_user(user_data, firebase_uid, db)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create user"
             )
         
-        logger.info(f"New user registered: {user_data.email}")
-        return user
+        # Create user preferences
+        preferences = create_user_preferences(firebase_uid, preferences_data, db)
+        
+        logger.info(f"New user registered: {user_data.email} with ID: {firebase_uid}")
+        
+        return UserWithPreferencesResponse(
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                language=user.language,
+                timezone=user.timezone,
+                created_at=user.created_at.isoformat()
+            ),
+            preferences=PreferencesResponse(
+                user_id=preferences.user_id,
+                allow_friends=preferences.allow_friends,
+                receive_shared_notes=preferences.receive_shared_notes,
+                notification_sound=preferences.notification_sound,
+                tts_language=preferences.tts_language,
+                chat_history_enabled=preferences.chat_history_enabled
+            )
+        )
         
     except HTTPException:
         raise
@@ -108,157 +152,97 @@ async def register(
             detail=str(e)
         )
 
-@router.post("/login", response_model=LoginResponse)
-async def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    """Login user with form data and return access token with user info."""
-    try:
-        user = authenticate_user(form_data.username, form_data.password, db)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account is inactive"
-            )
-        
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user.id}, expires_delta=access_token_expires
-        )
-        
-        logger.info(f"User logged in: {user.email}")
-        return LoginResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=UserResponse(
-                id=user.id,
-                email=user.email,
-                full_name=user.full_name,
-                is_active=user.is_active
-            )
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Login error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-@router.post("/login-json", response_model=LoginResponse)
-async def login_json(
-    login_data: UserLogin,
-    db: Session = Depends(get_db)
-):
-    """Login user with JSON payload and return access token with user info."""
-    try:
-        user = authenticate_user(login_data.email, login_data.password, db)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
-            )
-        
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User account is inactive"
-            )
-        
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user.id}, expires_delta=access_token_expires
-        )
-        
-        logger.info(f"User logged in (JSON): {user.email}")
-        return LoginResponse(
-            access_token=access_token,
-            token_type="bearer",
-            user=UserResponse(
-                id=user.id,
-                email=user.email,
-                full_name=user.full_name,
-                is_active=user.is_active
-            )
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Login JSON error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-@router.get("/me", response_model=UserResponse)
+@router.get("/me", response_model=UserWithPreferencesResponse)
 async def get_current_user_info(
-    current_user_id: str = Depends(get_current_user),
+    current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    """Get current user information."""
+    """Get current user information with preferences."""
     try:
-        user = db.query(User).filter(User.id == current_user_id).first()
+        user_id = current_user["uid"]
+        user = get_user_by_id(user_id, db)
+        
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="User not found"
             )
         
-        return user
+        # Get user preferences
+        preferences = db.query(Preferences).filter(Preferences.user_id == user_id).first()
+        
+        preferences_response = None
+        if preferences:
+            preferences_response = PreferencesResponse(
+                user_id=preferences.user_id,
+                allow_friends=preferences.allow_friends,
+                receive_shared_notes=preferences.receive_shared_notes,
+                notification_sound=preferences.notification_sound,
+                tts_language=preferences.tts_language,
+                chat_history_enabled=preferences.chat_history_enabled
+            )
+        
+        return UserWithPreferencesResponse(
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                language=user.language,
+                timezone=user.timezone,
+                created_at=user.created_at.isoformat()
+            ),
+            preferences=preferences_response
+        )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Get user info error: {e}")
+        logger.error(f"Get current user error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 
-@router.post("/refresh-token", response_model=Token)
-async def refresh_token(current_user_id: str = Depends(get_current_user)):
-    """Refresh access token."""
+@router.put("/preferences", response_model=PreferencesResponse)
+async def update_preferences(
+    preferences_data: UserPreferencesCreate,
+    current_user: dict = Depends(verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Update user preferences."""
     try:
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": current_user_id}, expires_delta=access_token_expires
+        user_id = current_user["uid"]
+        
+        # Get existing preferences
+        preferences = db.query(Preferences).filter(Preferences.user_id == user_id).first()
+        
+        if not preferences:
+            # Create new preferences if they don't exist
+            preferences = create_user_preferences(user_id, preferences_data, db)
+        else:
+            # Update existing preferences
+            update_data = preferences_data.dict(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(preferences, field, value)
+            
+            db.commit()
+            db.refresh(preferences)
+        
+        logger.info(f"Updated preferences for user: {user_id}")
+        
+        return PreferencesResponse(
+            user_id=preferences.user_id,
+            allow_friends=preferences.allow_friends,
+            receive_shared_notes=preferences.receive_shared_notes,
+            notification_sound=preferences.notification_sound,
+            tts_language=preferences.tts_language,
+            chat_history_enabled=preferences.chat_history_enabled
         )
         
-        logger.info(f"Token refreshed for user: {current_user_id}")
-        return {"access_token": access_token, "token_type": "bearer"}
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Token refresh error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-
-@router.post("/logout")
-async def logout(current_user_id: str = Depends(get_current_user)):
-    """Logout user."""
-    try:
-        # In a real application, you would:
-        # 1. Add the token to a blacklist
-        # 2. Clear any session data
-        # 3. Log the logout event
-        
-        logger.info(f"User logged out: {current_user_id}")
-        return {"message": "Successfully logged out"}
-        
-    except Exception as e:
-        logger.error(f"Logout error: {e}")
+        db.rollback()
+        logger.error(f"Update preferences error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
