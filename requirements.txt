@@ -17,4 +17,15 @@ pandas
 scikit-learn
 python-dotenv
 requests
-aiofiles 
+aiofiles
+# Coqui STT for speech-to-text
+stt
+# Audio processing dependencies
+librosa
+soundfile
+pydub
+# Alternative speech recognition
+SpeechRecognition
+# For microphone support (optional)
+pyaudio
+pydantic-settings 
