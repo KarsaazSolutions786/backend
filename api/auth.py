@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import timedelta
+from datetime import timedelta, datetime
 from sqlalchemy.orm import Session
 from models.models import User, Preferences
 from connect_db import get_db
@@ -9,11 +9,24 @@ from firebase_auth import verify_firebase_token
 from core.config import settings
 from utils.logger import logger
 import uuid
+import hashlib
+import secrets
+import jwt
 
 router = APIRouter()
 
 # Pydantic models
 class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    language: Optional[str] = "en"
+    timezone: Optional[str] = "UTC"
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class FirebaseUserCreate(BaseModel):
     email: EmailStr
     language: Optional[str] = None
     timezone: Optional[str] = None
@@ -50,6 +63,37 @@ class UserWithPreferencesResponse(BaseModel):
     user: UserResponse
     preferences: Optional[PreferencesResponse] = None
 
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA256 with salt."""
+    salt = secrets.token_hex(16)
+    password_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return f"{salt}:{password_hash}"
+
+def verify_password(password: str, hashed_password: str) -> bool:
+    """Verify password against hash."""
+    try:
+        salt, password_hash = hashed_password.split(":")
+        return hashlib.sha256((password + salt).encode()).hexdigest() == password_hash
+    except:
+        return False
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """Create JWT access token."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
 def get_user_by_id(user_id: str, db: Session):
     """Get user by ID from database."""
     return db.query(User).filter(User.id == user_id).first()
@@ -58,10 +102,28 @@ def get_user_by_email(email: str, db: Session):
     """Get user by email from database."""
     return db.query(User).filter(User.email == email).first()
 
-def create_new_user(user_data: UserCreate, firebase_uid: str, db: Session):
+def create_new_user(user_data: UserCreate, user_id: str, db: Session, password_hash: Optional[str] = None):
     """Create a new user in the database."""
     user = User(
-        id=firebase_uid,  # Use Firebase UID as the database ID
+        id=user_id,
+        email=user_data.email,
+        language=user_data.language,
+        timezone=user_data.timezone
+    )
+    
+    # Add password field if it exists in User model (you may need to add this)
+    if hasattr(User, 'password_hash') and password_hash:
+        user.password_hash = password_hash
+    
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+def create_firebase_user(user_data: FirebaseUserCreate, firebase_uid: str, db: Session):
+    """Create a new user from Firebase data."""
+    user = User(
+        id=firebase_uid,
         email=user_data.email,
         language=user_data.language,
         timezone=user_data.timezone
@@ -86,9 +148,133 @@ def create_user_preferences(user_id: str, preferences_data: UserPreferencesCreat
     db.refresh(preferences)
     return preferences
 
-@router.post("/register", response_model=UserWithPreferencesResponse)
+# === NON-AUTHENTICATED ENDPOINTS (Traditional Auth) ===
+
+@router.post("/register", response_model=LoginResponse)
 async def register(
     user_data: UserCreate,
+    db: Session = Depends(get_db)
+):
+    """Register a new user with email and password (no Firebase required)."""
+    try:
+        # Check if email is already used
+        if get_user_by_email(user_data.email, db):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+        
+        # Generate user ID
+        user_id = str(uuid.uuid4())
+        
+        # Hash password
+        password_hash = hash_password(user_data.password)
+        
+        # Create new user
+        user = create_new_user(user_data, user_id, db, password_hash)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user"
+            )
+        
+        # Create default preferences
+        preferences_data = UserPreferencesCreate()
+        create_user_preferences(user_id, preferences_data, db)
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.id, "email": user.email},
+            expires_delta=access_token_expires
+        )
+        
+        logger.info(f"New user registered: {user_data.email} with ID: {user_id}")
+        
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                language=user.language,
+                timezone=user.timezone,
+                created_at=user.created_at.isoformat()
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    user_credentials: UserLogin,
+    db: Session = Depends(get_db)
+):
+    """Login user with email and password."""
+    try:
+        # Get user by email
+        user = get_user_by_email(user_credentials.email, db)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+        
+        # Verify password (if password field exists)
+        if hasattr(user, 'password_hash'):
+            if not verify_password(user_credentials.password, user.password_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid email or password"
+                )
+        else:
+            # For now, if no password field exists, just check if user exists
+            # This is for backward compatibility
+            logger.warning(f"User {user.email} exists but no password verification available")
+        
+        # Create access token
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.id, "email": user.email},
+            expires_delta=access_token_expires
+        )
+        
+        logger.info(f"User logged in: {user_credentials.email}")
+        
+        return LoginResponse(
+            access_token=access_token,
+            token_type="bearer",
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                language=user.language,
+                timezone=user.timezone,
+                created_at=user.created_at.isoformat()
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# === FIREBASE ENDPOINTS (Firebase Auth Required) ===
+
+@router.post("/firebase/register", response_model=UserWithPreferencesResponse)
+async def firebase_register(
+    user_data: FirebaseUserCreate,
     preferences_data: UserPreferencesCreate = UserPreferencesCreate(),
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
@@ -112,7 +298,7 @@ async def register(
             )
         
         # Create new user
-        user = create_new_user(user_data, firebase_uid, db)
+        user = create_firebase_user(user_data, firebase_uid, db)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -122,7 +308,7 @@ async def register(
         # Create user preferences
         preferences = create_user_preferences(firebase_uid, preferences_data, db)
         
-        logger.info(f"New user registered: {user_data.email} with ID: {firebase_uid}")
+        logger.info(f"New Firebase user registered: {user_data.email} with ID: {firebase_uid}")
         
         return UserWithPreferencesResponse(
             user=UserResponse(
@@ -146,11 +332,13 @@ async def register(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Registration error: {e}")
+        logger.error(f"Firebase registration error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+# === AUTHENTICATED ENDPOINTS ===
 
 @router.get("/me", response_model=UserWithPreferencesResponse)
 async def get_current_user_info(

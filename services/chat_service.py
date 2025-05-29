@@ -1,6 +1,11 @@
 from typing import List, Dict, Optional
+from sqlalchemy.orm import Session
+from models.models import HistoryLog
+from connect_db import SessionLocal
 from core.config import settings
 from utils.logger import logger
+import uuid
+from datetime import datetime
 
 class ChatService:
     """Chat service using Bloom 560M for conversational AI."""
@@ -8,7 +13,6 @@ class ChatService:
     def __init__(self):
         self.model = None
         self.tokenizer = None
-        self.conversation_history = {}
         self._load_model()
     
     def _load_model(self):
@@ -88,7 +92,7 @@ class ChatService:
             # Generate contextual dummy responses
             response = self._generate_contextual_response(message, context)
             
-            # Update conversation history
+            # Update conversation history in database
             self._update_conversation_history(user_id, message, response)
             
             logger.info(f"Generated chat response for user {user_id}")
@@ -135,22 +139,56 @@ class ChatService:
     
     def _get_conversation_history(self, user_id: str) -> List[Dict]:
         """Get conversation history for a user."""
-        return self.conversation_history.get(user_id, [])
+        db = SessionLocal()
+        try:
+            history_logs = db.query(HistoryLog).filter(
+                HistoryLog.user_id == user_id,
+                HistoryLog.interaction_type == "chat"
+            ).order_by(HistoryLog.created_at.desc()).limit(20).all()
+            
+            conversations = []
+            for log in reversed(history_logs):  # Reverse to get chronological order
+                # Parse content which should be in format "User: message\nAssistant: response"
+                if log.content and "\nAssistant:" in log.content:
+                    parts = log.content.split("\nAssistant:", 1)
+                    user_msg = parts[0].replace("User: ", "")
+                    assistant_msg = parts[1]
+                    conversations.append({
+                        "user": user_msg,
+                        "assistant": assistant_msg,
+                        "timestamp": log.created_at.isoformat()
+                    })
+            
+            return conversations[-10:]  # Keep only last 10 exchanges
+        except Exception as e:
+            logger.error(f"Error getting conversation history: {e}")
+            return []
+        finally:
+            db.close()
     
     def _update_conversation_history(self, user_id: str, message: str, response: str):
         """Update conversation history for a user."""
-        if user_id not in self.conversation_history:
-            self.conversation_history[user_id] = []
-        
-        self.conversation_history[user_id].append({
-            "user": message,
-            "assistant": response,
-            "timestamp": __import__("datetime").datetime.utcnow().isoformat()
-        })
-        
-        # Keep only last 10 exchanges to manage memory
-        if len(self.conversation_history[user_id]) > 10:
-            self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
+        db = SessionLocal()
+        try:
+            # Store conversation in content field as formatted text
+            content = f"User: {message}\nAssistant: {response}"
+            
+            new_log = HistoryLog(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                content=content,
+                interaction_type="chat"
+            )
+            
+            db.add(new_log)
+            db.commit()
+            
+            logger.info(f"Saved chat history for user {user_id}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error saving conversation history: {e}")
+        finally:
+            db.close()
     
     def _create_prompt(self, message: str, conversation: List[Dict], context: Optional[Dict] = None) -> str:
         """Create a prompt for the model with conversation context."""
@@ -197,9 +235,19 @@ class ChatService:
     
     def clear_conversation_history(self, user_id: str):
         """Clear conversation history for a user."""
-        if user_id in self.conversation_history:
-            del self.conversation_history[user_id]
+        db = SessionLocal()
+        try:
+            db.query(HistoryLog).filter(
+                HistoryLog.user_id == user_id,
+                HistoryLog.interaction_type == "chat"
+            ).delete()
+            db.commit()
             logger.info(f"Cleared conversation history for user {user_id}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error clearing conversation history: {e}")
+        finally:
+            db.close()
     
     def is_ready(self) -> bool:
         """Check if the chat service is ready."""

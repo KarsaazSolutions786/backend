@@ -11,7 +11,7 @@ load_dotenv()
 # PostgreSQL Database URL
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:admin123@localhost:5432/eindr"
+    "postgresql://postgres@localhost:5432/eindr"
 )
 
 # Create SQLAlchemy engine with proper configuration
@@ -31,10 +31,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def get_db():
-    """Dependency to get database session."""
+    """Dependency to get database session with proper transaction handling."""
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

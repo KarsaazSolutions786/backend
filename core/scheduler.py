@@ -1,12 +1,13 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.executors.asyncio import AsyncIOExecutor
 from datetime import datetime
 from utils.logger import logger
+from connect_db import DATABASE_URL
 
-# Configure scheduler
+# Configure scheduler with database job store
 jobstores = {
-    'default': MemoryJobStore()
+    'default': SQLAlchemyJobStore(url=DATABASE_URL)
 }
 
 executors = {

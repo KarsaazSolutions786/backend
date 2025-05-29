@@ -10,6 +10,7 @@ class User(Base):
 
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=True)  # Optional for Firebase users
     language = Column(String)
     timezone = Column(String)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
