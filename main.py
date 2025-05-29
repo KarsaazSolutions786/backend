@@ -5,14 +5,15 @@ import uvicorn
 from contextlib import asynccontextmanager
 
 # Import services for initialization
-# from services.stt_service import SpeechToTextService
-# from services.tts_service import TextToSpeechService
-# from services.intent_service import IntentService
-# from services.chat_service import ChatService
+from services.stt_service import SpeechToTextService
+from services.tts_service import TextToSpeechService
+from services.intent_service import IntentService
+from services.chat_service import ChatService
 from core.config import settings
 from core.scheduler import scheduler
 from core.dependencies import set_services
 from utils.logger import logger
+from api import stt
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,11 +24,22 @@ async def lifespan(app: FastAPI):
     # Initialize AI services
     try:
         logger.info("Loading AI models...")
-        # AI services temporarily disabled
-        stt_service = None
-        tts_service = None
-        intent_service = None
-        chat_service = None
+        
+        # Initialize STT service
+        logger.info("Initializing Speech-to-Text service...")
+        stt_service = SpeechToTextService()
+        
+        # Initialize TTS service
+        logger.info("Initializing Text-to-Speech service...")
+        tts_service = TextToSpeechService()
+        
+        # Initialize Intent service
+        logger.info("Initializing Intent classification service...")
+        intent_service = IntentService()
+        
+        # Initialize Chat service
+        logger.info("Initializing Chat service...")
+        chat_service = ChatService()
         
         # Set services in dependencies module
         set_services(stt_service, tts_service, intent_service, chat_service)
@@ -71,8 +83,7 @@ app.add_middleware(
 )
 
 # Import routers after app creation to avoid circular imports
-from api import auth, reminders, notes, ledger, friends, users, embeddings, history
-# from api import stt  # Temporarily disabled
+from api import auth, reminders, notes, ledger, friends, stt, users, embeddings, history, intent_processor
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
@@ -83,7 +94,8 @@ app.include_router(ledger.router, prefix="/api/v1/ledger", tags=["Ledger"])
 app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
 app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
 app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
-# app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])  # Temporarily disabled
+app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])
+app.include_router(intent_processor.router, prefix="/api/v1/intent-processor", tags=["Intent Processing"])
 
 @app.get("/")
 async def root():
@@ -93,28 +105,6 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
-
-@app.get("/test-users")
-async def test_users():
-    """Test endpoint to verify database connectivity - shows user count."""
-    from connect_db import SessionLocal
-    from models.models import User
-    
-    db = SessionLocal()
-    try:
-        users = db.query(User).all()
-        return {
-            "message": "Database connection test",
-            "total_users": len(users),
-            "users": [{"id": u.id, "email": u.email} for u in users]
-        }
-    except Exception as e:
-        return {
-            "message": "Database connection failed",
-            "error": str(e)
-        }
-    finally:
-        db.close()
 
 @app.get("/health")
 async def health_check():
