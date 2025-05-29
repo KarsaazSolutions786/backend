@@ -1971,3 +1971,22 @@ FROM users ORDER BY users.created_at DESC
 2025-05-29 12:37:21,976 - eindr - INFO - Loading AI models...
 2025-05-29 12:37:22,010 - apscheduler.scheduler - INFO - Scheduler started
 2025-05-29 12:37:22,010 - eindr - INFO - All services initialized successfully!
+2025-05-29 12:38:04,351 - watchfiles.main - INFO - 15 changes detected
+2025-05-29 12:38:22,717 - watchfiles.main - INFO - 1 change detected
+2025-05-29 12:38:22,872 - eindr - INFO - Shutting down Eindr Backend...
+2025-05-29 12:38:22,873 - apscheduler.scheduler - INFO - Scheduler has been shut down
+2025-05-29 12:38:23,239 - watchfiles.main - INFO - 1 change detected
+2025-05-29 12:38:23,651 - watchfiles.main - INFO - 3 changes detected
+2025-05-29 12:38:23,922 - eindr - INFO - Starting Eindr Backend...
+2025-05-29 12:38:23,923 - eindr - INFO - Loading AI models...
+2025-05-29 12:38:23,964 - apscheduler.scheduler - INFO - Scheduler started
+2025-05-29 12:38:23,965 - eindr - INFO - All services initialized successfully!
+2025-05-29 12:38:29,778 - watchfiles.main - INFO - 55 changes detected
+2025-05-29 12:38:53,375 - watchfiles.main - INFO - 3 changes detected
+2025-05-29 12:39:08,332 - watchfiles.main - INFO - 3 changes detected
+2025-05-29 12:39:10,256 - watchfiles.main - INFO - 16 changes detected
+2025-05-29 12:39:12,387 - watchfiles.main - INFO - 15 changes detected
+2025-05-29 12:39:13,633 - watchfiles.main - INFO - 16 changes detected
+2025-05-29 12:39:26,336 - watchfiles.main - INFO - 7 changes detected
+2025-05-29 12:40:03,358 - watchfiles.main - INFO - 7 changes detected
+2025-05-29 12:40:04,921 - watchfiles.main - INFO - 7 changes detected
