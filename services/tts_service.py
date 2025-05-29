@@ -4,34 +4,67 @@ from typing import Optional
 from core.config import settings
 from utils.logger import logger
 
+# Import compatible TTS libraries
+try:
+    import pyttsx3
+    PYTTSX3_AVAILABLE = True
+    logger.info("pyttsx3 library available")
+except ImportError:
+    PYTTSX3_AVAILABLE = False
+    logger.warning("pyttsx3 library not available")
+
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+    logger.info("gTTS library available")
+except ImportError:
+    GTTS_AVAILABLE = False
+    logger.warning("gTTS library not available")
+
 class TextToSpeechService:
-    """Text-to-Speech service using Coqui TTS."""
+    """Text-to-Speech service using pyttsx3 and gTTS."""
     
     def __init__(self):
-        self.model = None
-        self._load_model()
+        self.pyttsx3_engine = None
+        self.preferred_engine = None
+        self._load_engines()
     
-    def _load_model(self):
-        """Load the TTS model."""
+    def _load_engines(self):
+        """Load available TTS engines."""
         try:
-            logger.info(f"Loading TTS model from {settings.TTS_MODEL_PATH}")
+            # Try to initialize pyttsx3 (offline TTS)
+            if PYTTSX3_AVAILABLE:
+                try:
+                    self.pyttsx3_engine = pyttsx3.init()
+                    
+                    # Configure voice settings
+                    voices = self.pyttsx3_engine.getProperty('voices')
+                    if voices:
+                        # Use first available voice
+                        self.pyttsx3_engine.setProperty('voice', voices[0].id)
+                    
+                    # Set speech rate (words per minute)
+                    self.pyttsx3_engine.setProperty('rate', 180)
+                    
+                    # Set volume (0.0 to 1.0)
+                    self.pyttsx3_engine.setProperty('volume', 0.9)
+                    
+                    self.preferred_engine = "pyttsx3"
+                    logger.info("pyttsx3 TTS engine loaded successfully")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize pyttsx3: {e}")
+                    self.pyttsx3_engine = None
             
-            # For demo purposes, we'll simulate model loading
-            # In production, uncomment and modify the following:
-            """
-            from TTS.api import TTS
-            self.model = TTS(model_path=settings.TTS_MODEL_PATH)
-            """
+            # Fallback to gTTS if pyttsx3 is not available
+            if not self.pyttsx3_engine and GTTS_AVAILABLE:
+                self.preferred_engine = "gtts"
+                logger.info("Using gTTS as TTS engine")
             
-            # Dummy model for demo
-            self.model = "tts_model_loaded"
-            
-            logger.info("TTS model loaded successfully")
-            
+            if not self.preferred_engine:
+                logger.error("No TTS engines available")
+                
         except Exception as e:
-            logger.error(f"Failed to load TTS model: {e}")
-            # For demo, continue with dummy model
-            self.model = "dummy_tts_model"
+            logger.error(f"Failed to load TTS engines: {e}")
     
     async def synthesize_speech(self, text: str, voice: str = "default") -> Optional[bytes]:
         """
@@ -45,87 +78,175 @@ class TextToSpeechService:
             Audio data as bytes (WAV format) or None if synthesis fails
         """
         try:
-            if not self.model:
-                logger.error("TTS model not loaded")
+            if not self.preferred_engine:
+                logger.error("No TTS engine available")
                 return None
             
-            # For demo purposes, return dummy audio data
-            # In production, implement actual TTS synthesis:
-            """
-            # Generate speech
-            wav = self.model.tts(text=text, speaker=voice)
+            # Use pyttsx3 for offline TTS
+            if self.preferred_engine == "pyttsx3" and self.pyttsx3_engine:
+                return await self._synthesize_with_pyttsx3(text, voice)
             
-            # Convert to bytes
-            audio_buffer = io.BytesIO()
-            # Save as WAV format
-            import soundfile as sf
-            sf.write(audio_buffer, wav, settings.AUDIO_SAMPLE_RATE, format='WAV')
-            audio_buffer.seek(0)
-            return audio_buffer.read()
-            """
+            # Use gTTS for online TTS
+            elif self.preferred_engine == "gtts" and GTTS_AVAILABLE:
+                return await self._synthesize_with_gtts(text, voice)
             
-            # Generate dummy audio data (silence)
-            duration_seconds = len(text) * 0.1  # Rough estimate
-            samples = int(settings.AUDIO_SAMPLE_RATE * duration_seconds)
-            
-            # Create dummy audio (sine wave for demo)
-            t = np.linspace(0, duration_seconds, samples)
-            frequency = 440  # A4 note
-            audio_data = np.sin(2 * np.pi * frequency * t) * 0.3
-            
-            # Convert to 16-bit PCM
-            audio_int16 = (audio_data * 32767).astype(np.int16)
-            
-            # Create WAV file in memory
-            audio_buffer = io.BytesIO()
-            
-            # Write WAV header manually for demo
-            import struct
-            
-            # WAV file header
-            audio_buffer.write(b'RIFF')
-            audio_buffer.write(struct.pack('<I', 36 + len(audio_int16) * 2))
-            audio_buffer.write(b'WAVE')
-            audio_buffer.write(b'fmt ')
-            audio_buffer.write(struct.pack('<I', 16))  # PCM format
-            audio_buffer.write(struct.pack('<H', 1))   # Audio format
-            audio_buffer.write(struct.pack('<H', 1))   # Channels
-            audio_buffer.write(struct.pack('<I', settings.AUDIO_SAMPLE_RATE))
-            audio_buffer.write(struct.pack('<I', settings.AUDIO_SAMPLE_RATE * 2))
-            audio_buffer.write(struct.pack('<H', 2))   # Block align
-            audio_buffer.write(struct.pack('<H', 16))  # Bits per sample
-            audio_buffer.write(b'data')
-            audio_buffer.write(struct.pack('<I', len(audio_int16) * 2))
-            audio_buffer.write(audio_int16.tobytes())
-            
-            audio_buffer.seek(0)
-            audio_bytes = audio_buffer.read()
-            
-            logger.info(f"TTS synthesis completed for text: '{text[:50]}...'")
-            return audio_bytes
+            logger.error("No working TTS engine available")
+            return None
             
         except Exception as e:
             logger.error(f"TTS synthesis failed: {e}")
             return None
     
+    async def _synthesize_with_pyttsx3(self, text: str, voice: str = "default") -> Optional[bytes]:
+        """Synthesize speech using pyttsx3."""
+        try:
+            import tempfile
+            import os
+            
+            # Create temporary file for audio output
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                temp_path = temp_file.name
+            
+            try:
+                # Set voice if specified and available
+                if voice != "default":
+                    voices = self.pyttsx3_engine.getProperty('voices')
+                    for v in voices:
+                        if voice.lower() in v.name.lower() or voice.lower() in v.id.lower():
+                            self.pyttsx3_engine.setProperty('voice', v.id)
+                            break
+                
+                # Save speech to file
+                self.pyttsx3_engine.save_to_file(text, temp_path)
+                self.pyttsx3_engine.runAndWait()
+                
+                # Read the generated audio file
+                if os.path.exists(temp_path):
+                    with open(temp_path, 'rb') as f:
+                        audio_data = f.read()
+                    
+                    logger.info(f"pyttsx3 TTS synthesis completed for text: '{text[:50]}...'")
+                    return audio_data
+                else:
+                    logger.error("pyttsx3 failed to generate audio file")
+                    return None
+                    
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                        
+        except Exception as e:
+            logger.error(f"pyttsx3 synthesis failed: {e}")
+            return None
+    
+    async def _synthesize_with_gtts(self, text: str, voice: str = "default") -> Optional[bytes]:
+        """Synthesize speech using gTTS."""
+        try:
+            import tempfile
+            import os
+            
+            # Map voice parameter to gTTS language codes
+            lang_map = {
+                "default": "en",
+                "english": "en",
+                "spanish": "es",
+                "french": "fr",
+                "german": "de",
+                "italian": "it",
+                "portuguese": "pt",
+                "chinese": "zh",
+                "japanese": "ja",
+                "korean": "ko"
+            }
+            
+            lang = lang_map.get(voice.lower(), "en")
+            
+            # Create gTTS object
+            tts = gTTS(text=text, lang=lang, slow=False)
+            
+            # Create temporary file for audio output
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                temp_path = temp_file.name
+            
+            try:
+                # Save TTS audio to temporary file
+                tts.save(temp_path)
+                
+                # Read the generated audio file
+                if os.path.exists(temp_path):
+                    with open(temp_path, 'rb') as f:
+                        audio_data = f.read()
+                    
+                    logger.info(f"gTTS synthesis completed for text: '{text[:50]}...'")
+                    return audio_data
+                else:
+                    logger.error("gTTS failed to generate audio file")
+                    return None
+                    
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                        
+        except Exception as e:
+            logger.error(f"gTTS synthesis failed: {e}")
+            return None
+    
     async def get_available_voices(self) -> list:
         """Get list of available voices."""
         try:
-            # In production, return actual available voices
-            # return self.model.list_speakers()
+            voices = []
             
-            # Dummy voices for demo
-            return [
-                "default",
-                "female_voice_1",
-                "male_voice_1",
-                "child_voice_1"
-            ]
+            if self.preferred_engine == "pyttsx3" and self.pyttsx3_engine:
+                # Get pyttsx3 voices
+                pyttsx3_voices = self.pyttsx3_engine.getProperty('voices')
+                for voice in pyttsx3_voices:
+                    voices.append({
+                        "id": voice.id,
+                        "name": voice.name,
+                        "engine": "pyttsx3"
+                    })
+            
+            elif self.preferred_engine == "gtts":
+                # gTTS supported languages
+                voices = [
+                    {"id": "en", "name": "English", "engine": "gtts"},
+                    {"id": "es", "name": "Spanish", "engine": "gtts"},
+                    {"id": "fr", "name": "French", "engine": "gtts"},
+                    {"id": "de", "name": "German", "engine": "gtts"},
+                    {"id": "it", "name": "Italian", "engine": "gtts"},
+                    {"id": "pt", "name": "Portuguese", "engine": "gtts"},
+                    {"id": "zh", "name": "Chinese", "engine": "gtts"},
+                    {"id": "ja", "name": "Japanese", "engine": "gtts"},
+                    {"id": "ko", "name": "Korean", "engine": "gtts"}
+                ]
+            
+            if not voices:
+                voices = [{"id": "default", "name": "Default", "engine": "fallback"}]
+            
+            return voices
             
         except Exception as e:
             logger.error(f"Failed to get available voices: {e}")
-            return ["default"]
+            return [{"id": "default", "name": "Default", "engine": "fallback"}]
     
     def is_ready(self) -> bool:
         """Check if the TTS service is ready."""
-        return self.model is not None 
+        return self.preferred_engine is not None
+    
+    def get_engine_info(self) -> dict:
+        """Get information about the TTS engine."""
+        return {
+            "engine": self.preferred_engine,
+            "pyttsx3_available": PYTTSX3_AVAILABLE,
+            "gtts_available": GTTS_AVAILABLE,
+            "offline_capable": self.preferred_engine == "pyttsx3",
+            "online_required": self.preferred_engine == "gtts"
+        } 
