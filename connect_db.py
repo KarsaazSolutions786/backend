@@ -12,6 +12,8 @@ load_dotenv()
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres@localhost:5432/eindr"
+    #  "postgresql://postgres:admin123@localhost:5433/eindr"
+
 )
 
 # Create SQLAlchemy engine with proper configuration
