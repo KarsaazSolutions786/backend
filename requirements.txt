@@ -10,8 +10,8 @@ python-decouple
 APScheduler
 # vosk  # Not compatible with Python 3.13. Use Python 3.10/3.11 for speech-to-text features.
 # TTS   # Not compatible with Python 3.13. Use Python 3.10/3.11 for text-to-speech features.
-transformers
-torch==2.2.2
+# transformers  # Temporarily disabled
+# torch  # Temporarily disabled
 numpy
 pandas
 scikit-learn
@@ -19,13 +19,13 @@ python-dotenv
 requests
 aiofiles
 # Coqui STT for speech-to-text
-stt
+# stt  # Temporarily disabled
 # Audio processing dependencies
-librosa
-soundfile
-pydub
+# librosa  # Temporarily disabled
+# soundfile  # Temporarily disabled
+# pydub  # Temporarily disabled
 # Alternative speech recognition
-SpeechRecognition
+# SpeechRecognition  # Temporarily disabled
 # For microphone support (optional)
-pyaudio
+# pyaudio  # Temporarily disabled
 pydantic-settings 

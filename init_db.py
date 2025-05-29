@@ -1,5 +1,5 @@
 from connect_db import init_db
-from models.models import User, Note, Reminder, Expense, Friendship
+from models.models import User, Note, Reminder, LedgerEntry, Friendship
 from utils.logger import logger
 
 if __name__ == "__main__":

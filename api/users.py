@@ -14,17 +14,19 @@ router = APIRouter()
 # Pydantic models for request/response
 class UserCreate(BaseModel):
     email: str
-    full_name: str
+    language: Optional[str] = None
+    timezone: Optional[str] = None
 
 class UserUpdate(BaseModel):
-    full_name: Optional[str] = None
+    language: Optional[str] = None
+    timezone: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: str
     email: str
-    full_name: str
+    language: Optional[str] = None
+    timezone: Optional[str] = None
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -56,7 +58,8 @@ async def register_user(
         new_user = User(
             id=current_user["uid"],
             email=current_user["email"],
-            full_name=current_user["name"] or ""
+            language=current_user.get("language", "en"),  # Default to English
+            timezone=current_user.get("timezone", "UTC")   # Default to UTC
         )
         
         db.add(new_user)
@@ -115,8 +118,10 @@ async def update_profile(
             )
 
         # Update fields if provided
-        if update_data.full_name is not None:
-            user.full_name = update_data.full_name
+        if update_data.language is not None:
+            user.language = update_data.language
+        if update_data.timezone is not None:
+            user.timezone = update_data.timezone
 
         db.commit()
         db.refresh(user)
@@ -138,9 +143,9 @@ async def update_profile(
 async def get_all_users(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(10, ge=1, le=100, description="Number of users per page"),
-    sort_by: str = Query("created_at", description="Sort by field (created_at, email, full_name)"),
+    sort_by: str = Query("created_at", description="Sort by field (created_at, email, language, timezone)"),
     sort_order: str = Query("desc", description="Sort order (asc or desc)"),
-    search: Optional[str] = Query(None, description="Search by email or full name"),
+    search: Optional[str] = Query(None, description="Search by email or language or timezone"),
     current_user: dict = Depends(verify_firebase_token),
     db: Session = Depends(get_db)
 ):
@@ -157,7 +162,8 @@ async def get_all_users(
             search_term = f"%{search}%"
             query = query.filter(
                 (User.email.ilike(search_term)) | 
-                (User.full_name.ilike(search_term))
+                (User.language.ilike(search_term)) | 
+                (User.timezone.ilike(search_term))
             )
 
         # Get total count before pagination

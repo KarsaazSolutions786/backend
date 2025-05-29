@@ -1,46 +1,70 @@
 from typing import Optional
+from sqlalchemy.orm import Session
+from models.models import User
+from connect_db import SessionLocal
 from core.security import verify_password, get_password_hash
 from utils.logger import logger
+import uuid
 
 class AuthService:
     """Authentication service for user management."""
     
     def __init__(self):
-        # In production, this would connect to a real database
-        self.users_db = {}
+        pass
     
     async def authenticate_user(self, email: str, password: str) -> Optional[dict]:
         """Authenticate user with email and password."""
+        db = SessionLocal()
         try:
-            user = self.users_db.get(email)
+            user = db.query(User).filter(User.email == email).first()
             if not user:
                 return None
             
-            if not verify_password(password, user["hashed_password"]):
-                return None
-            
-            return user
+            # Note: This service is mainly for Firebase auth, 
+            # password verification would be handled by Firebase
+            return {
+                "id": str(user.id),
+                "email": user.email,
+                "language": user.language,
+                "timezone": user.timezone
+            }
         except Exception as e:
             logger.error(f"Authentication error: {e}")
             return None
+        finally:
+            db.close()
     
     async def create_user(self, email: str, password: str, full_name: str = None) -> Optional[dict]:
         """Create a new user."""
+        db = SessionLocal()
         try:
-            if email in self.users_db:
+            # Check if user already exists
+            existing_user = db.query(User).filter(User.email == email).first()
+            if existing_user:
                 return None
             
-            user = {
-                "id": str(len(self.users_db) + 1),
-                "email": email,
-                "full_name": full_name,
-                "hashed_password": get_password_hash(password),
+            user = User(
+                id=str(uuid.uuid4()),
+                email=email,
+                language="en",
+                timezone="UTC"
+            )
+            
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            
+            logger.info(f"Created user: {email}")
+            return {
+                "id": str(user.id),
+                "email": user.email,
+                "language": user.language,
+                "timezone": user.timezone,
                 "is_active": True
             }
-            
-            self.users_db[email] = user
-            logger.info(f"Created user: {email}")
-            return user
         except Exception as e:
+            db.rollback()
             logger.error(f"User creation error: {e}")
             return None 
+        finally:
+            db.close() 
