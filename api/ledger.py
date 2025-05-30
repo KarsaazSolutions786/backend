@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -300,4 +300,111 @@ async def get_balance_summary(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+
+@router.put("/{ledger_id}/contact")
+async def update_ledger_contact(
+    ledger_id: str,
+    contact_name: str,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    """Update the contact name for a specific ledger entry."""
+    try:
+        user_id = current_user["uid"]
+        
+        db = SessionLocal()
+        try:
+            # Find the ledger entry
+            ledger_entry = db.query(LedgerEntry).filter(
+                LedgerEntry.id == ledger_id,
+                LedgerEntry.user_id == user_id
+            ).first()
+            
+            if not ledger_entry:
+                raise HTTPException(status_code=404, detail="Ledger entry not found")
+            
+            # Update the contact name
+            old_name = ledger_entry.contact_name
+            ledger_entry.contact_name = contact_name.strip()
+            
+            db.commit()
+            
+            logger.info(f"Updated ledger entry {ledger_id} contact from '{old_name}' to '{contact_name}'")
+            
+            return {
+                "success": True,
+                "message": "Contact name updated successfully",
+                "data": {
+                    "ledger_id": str(ledger_entry.id),
+                    "old_contact_name": old_name,
+                    "new_contact_name": contact_name,
+                    "amount": float(ledger_entry.amount),
+                    "direction": ledger_entry.direction
+                }
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating ledger contact: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update contact name: {str(e)}"
+        )
+
+@router.put("/bulk-update-contacts")
+async def bulk_update_unknown_contacts(
+    contact_mapping: Dict[str, str],  # ledger_id -> contact_name
+    current_user: dict = Depends(verify_firebase_token)
+):
+    """Bulk update contact names for multiple ledger entries."""
+    try:
+        user_id = current_user["uid"]
+        
+        db = SessionLocal()
+        try:
+            updated_entries = []
+            
+            for ledger_id, contact_name in contact_mapping.items():
+                # Find and update each ledger entry
+                ledger_entry = db.query(LedgerEntry).filter(
+                    LedgerEntry.id == ledger_id,
+                    LedgerEntry.user_id == user_id
+                ).first()
+                
+                if ledger_entry:
+                    old_name = ledger_entry.contact_name
+                    ledger_entry.contact_name = contact_name.strip()
+                    
+                    updated_entries.append({
+                        "ledger_id": str(ledger_entry.id),
+                        "old_contact_name": old_name,
+                        "new_contact_name": contact_name,
+                        "amount": float(ledger_entry.amount)
+                    })
+            
+            db.commit()
+            
+            logger.info(f"Bulk updated {len(updated_entries)} ledger entries for user {user_id}")
+            
+            return {
+                "success": True,
+                "message": f"Successfully updated {len(updated_entries)} ledger entries",
+                "updated_count": len(updated_entries),
+                "updated_entries": updated_entries
+            }
+            
+        finally:
+            db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk update: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to bulk update contacts: {str(e)}"
         ) 

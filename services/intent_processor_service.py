@@ -204,12 +204,14 @@ class IntentProcessorService:
                     'intent': 'create_ledger'
                 }
             
+            # For standalone monetary amounts, make person optional
+            # If no person is found, use a default placeholder
             if not person:
-                return {
-                    'success': False,
-                    'error': 'Could not extract person/contact name from the text',
-                    'intent': 'create_ledger'
-                }
+                person = "Unknown Contact"  # Default placeholder when no person found
+                if self._is_standalone_amount(original_text):
+                    logger.info(f"Standalone amount detected: '{original_text}', using Unknown Contact placeholder")
+                else:
+                    logger.info(f"No person found in '{original_text}', using Unknown Contact placeholder")
             
             # Create ledger entry
             ledger_entry = LedgerEntry(
@@ -225,6 +227,12 @@ class IntentProcessorService:
             
             logger.info(f"Created ledger entry {ledger_entry.id} for user {user_id}")
             
+            # Generate appropriate description
+            if person == "Unknown Contact":
+                description = f"Amount: ${amount} (direction: {direction})"
+            else:
+                description = f"{person} {direction}{'s' if direction == 'owe' else 'd'} ${amount}"
+            
             return {
                 'success': True,
                 'message': 'Ledger entry created successfully',
@@ -233,7 +241,7 @@ class IntentProcessorService:
                     'contact_name': person,
                     'amount': float(amount),
                     'direction': direction,
-                    'description': f"{person} {direction}{'s' if direction == 'owe' else 'd'} ${amount}"
+                    'description': description
                 },
                 'intent': 'create_ledger'
             }
@@ -398,11 +406,27 @@ class IntentProcessorService:
             if 'person' in entities:
                 return str(entities['person']).strip()
             
-            # Use regex patterns to find names in text
+            # Enhanced regex patterns to find names in text
             name_patterns = [
+                # Action + Name: "call John", "meet Sarah"
                 r'\b(?:call|contact|meet|see|tell|remind)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
+                
+                # Name + Owes: "John owes", "Sarah owed"
                 r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?)\b',
-                r'\b(?:to|about|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b'
+                
+                # Prepositions + Name: "to John", "with Sarah", "about Mike"
+                r'\b(?:to|about|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
+                
+                # Enhanced borrowing patterns: "Mike borrowed", "borrowed from John"
+                r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+borrowed\b',
+                r'\bborrowed\s+from\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
+                
+                # Lending patterns: "lent to John", "John lent"
+                r'\blent\s+to\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
+                r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+lent\b',
+                
+                # Record patterns: "record that John", "note that Sarah"
+                r'\b(?:record|note)\s+that\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
             ]
             
             for pattern in name_patterns:
@@ -497,4 +521,38 @@ class IntentProcessorService:
             
         except Exception as e:
             logger.error(f"Error generating title: {e}")
-            return "Reminder" 
+            return "Reminder"
+
+    def _is_standalone_amount(self, text: str) -> bool:
+        """Check if the text appears to be a standalone amount."""
+        import re
+        
+        text_clean = text.strip()
+        
+        # Patterns for standalone monetary amounts (no context words)
+        standalone_patterns = [
+            r'^\$\d+(?:,\d{3})*(?:\.\d{2})?$',  # $1000, $1,000, $1000.00
+            r'^\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?)$',  # 1000 dollars
+            r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',   # €1000
+            r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',   # £1000
+        ]
+        
+        # Check if text matches standalone amount pattern
+        for pattern in standalone_patterns:
+            if re.match(pattern, text_clean, re.IGNORECASE):
+                return True
+        
+        # Additional check: if text contains only amount-related words
+        words = text_clean.lower().split()
+        amount_words = {'dollars', 'dollar', 'bucks', 'buck', 'usd', '$'}
+        
+        # If all words are amount-related or numbers, it's standalone
+        if len(words) <= 3 and all(
+            word.replace('$', '').replace(',', '').replace('.', '').isdigit() or 
+            word in amount_words or
+            word.startswith('$')
+            for word in words
+        ):
+            return True
+            
+        return False 
