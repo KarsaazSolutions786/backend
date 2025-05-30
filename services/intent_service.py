@@ -11,6 +11,7 @@ class IntentService:
         self.intent_labels = [
             "create_reminder",
             "create_note", 
+            "create_ledger",
             "schedule_event",
             "add_expense",
             "add_friend",
@@ -92,6 +93,13 @@ class IntentService:
             elif any(word in text_lower for word in ["note", "write", "jot"]):
                 intent = "create_note"
                 confidence = 0.90
+            elif any(word in text_lower for word in ["owe", "owes", "owed", "debt", "ledger", "borrowed", "lent", "payback"]):
+                intent = "create_ledger"
+                confidence = 0.92
+            elif self._is_monetary_amount(text):
+                # Handle standalone monetary amounts as potential ledger entries
+                intent = "create_ledger"
+                confidence = 0.75  # Lower confidence since context is missing
             elif any(word in text_lower for word in ["schedule", "appointment", "meeting"]):
                 intent = "schedule_event"
                 confidence = 0.88
@@ -211,4 +219,34 @@ class IntentService:
     
     def is_ready(self) -> bool:
         """Check if the intent service is ready."""
-        return self.model is not None and self.tokenizer is not None 
+        return self.model is not None and self.tokenizer is not None
+    
+    def _is_monetary_amount(self, text: str) -> bool:
+        """Check if the text represents a standalone monetary amount."""
+        import re
+        
+        # Remove whitespace and convert to string if needed
+        text_clean = str(text).strip()
+        
+        # Patterns for monetary amounts
+        monetary_patterns = [
+            r'^\$\d+(?:,\d{3})*(?:\.\d{2})?$',  # $1000, $1,000, $1000.00
+            r'^\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?|usd)$',  # 1000 dollars
+            r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',   # €1000
+            r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',   # £1000
+            r'^\¥\d+(?:,\d{3})*(?:\.\d{2})?$',  # ¥1000
+        ]
+        
+        text_lower = text_clean.lower()
+        
+        # Check if text matches any monetary pattern
+        for pattern in monetary_patterns:
+            if re.match(pattern, text_lower):
+                return True
+        
+        # Additional check for pure dollar amounts (like "$10000")
+        if re.match(r'^\$\d+$', text_clean):
+            return True
+            
+        return False
+ 

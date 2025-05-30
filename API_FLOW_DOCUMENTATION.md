@@ -46,7 +46,7 @@
 | **Notes** | `/notes` | Note management | `POST /`, `GET /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}` |
 | **Ledger** | `/ledger` | Expense/money tracking | `POST /`, `GET /`, `GET /summary`, `DELETE /{id}` |
 | **Friends** | `/friends` | Friend system & sharing | `POST /invite`, `GET /`, `PUT /{id}/accept` |
-| **STT** | `/stt` | Speech-to-text processing | `POST /transcribe`, `GET /model-info`, `GET /voices` |
+| **STT** | `/stt` | Speech-to-text processing | `POST /transcribe`, `POST /transcribe-and-respond`, `GET /model-info`, `GET /voices` |
 | **Intent Processor** | `/intent-processor` | Intent classification & DB storage | `POST /process`, `GET /supported-intents` |
 | **Embeddings** | `/embeddings` | Vector search capabilities | `POST /generate`, `POST /search` |
 | **History** | `/history` | User interaction logs | `GET /`, `GET /search` |
@@ -156,10 +156,86 @@ Audio File → Validation → Temporary Storage → STT Processing → Intent Cl
 ```
 
 **Key Endpoints:**
-- `POST /stt/transcribe` - Convert audio to text
-- `POST /stt/transcribe-and-respond` - Full voice interaction
+- `POST /stt/transcribe` - Convert audio to text only
+- `POST /stt/transcribe-and-respond` - **ENHANCED: Complete voice-to-database pipeline**
 - `GET /stt/model-info` - Service capabilities
 - `GET /stt/voices` - Available TTS voices
+
+#### Enhanced Voice-to-Database Pipeline
+
+**`POST /stt/transcribe-and-respond`** - Complete pipeline that processes audio file through the entire workflow:
+
+**Pipeline Steps:**
+1. **Audio Validation** - Validates WAV format, sample rate, channels, bit depth
+2. **Speech-to-Text** - Transcribes audio using Coqui STT
+3. **Intent Classification** - Identifies user intent and extracts entities
+4. **Database Processing** - Saves data to appropriate table based on intent
+5. **AI Response** - Generates contextual response
+
+**Request:**
+```http
+POST /api/v1/stt/transcribe-and-respond
+Content-Type: multipart/form-data
+Authorization: Bearer <firebase_token>
+
+Form Data:
+- audio_file: <WAV file> (required)
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "pipeline_completed": true,
+  "processing_steps": {
+    "audio_validation": true,
+    "transcription": true,
+    "intent_classification": true,
+    "database_processing": true
+  },
+  "transcription": "add a reminder to call John at 5 PM",
+  "intent_result": {
+    "intent": "create_reminder",
+    "confidence": 0.95,
+    "entities": {
+      "person": "John",
+      "time": "5 PM"
+    }
+  },
+  "processing_result": {
+    "success": true,
+    "message": "Reminder created successfully",
+    "data": {
+      "reminder_id": "uuid-here",
+      "title": "Call John",
+      "time": "2024-01-15T17:00:00Z",
+      "person": "John"
+    },
+    "intent": "create_reminder"
+  },
+  "response_text": "I've created a reminder to call John at 5 PM.",
+  "user_id": "user_id",
+  "model_info": "coqui_stt_model_info",
+  "audio_requirements": {
+    "format": "WAV",
+    "sample_rate": "16000Hz",
+    "channels": "Mono",
+    "bit_depth": "16-bit PCM"
+  }
+}
+```
+
+**Error Handling:**
+- Validates each pipeline step independently
+- Returns specific error messages for each step failure
+- Automatic cleanup of temporary files
+- Detailed logging for troubleshooting
+
+**Database Integration:**
+- `create_reminder` → `reminders` table
+- `create_note` → `notes` table  
+- `create_ledger` → `ledger_entries` table
+- `chit_chat` → `history_logs` table
 
 ### Intent Classification Service
 
