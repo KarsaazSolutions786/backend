@@ -15,48 +15,47 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Eindr Backend...")
     
-    # Initialize services only if not in minimal mode
-    if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
-        try:
-            logger.info("Loading AI models...")
-            
-            # Import services for initialization
-            from services.stt_service import SpeechToTextService
-            from services.tts_service import TextToSpeechService
-            from services.intent_service import IntentService
-            from services.chat_service import ChatService
-            from core.dependencies import set_services
-            from core.scheduler import scheduler
-            
-            # Initialize STT service
-            logger.info("Initializing Speech-to-Text service...")
-            stt_service = SpeechToTextService()
-            
-            # Initialize TTS service
-            logger.info("Initializing Text-to-Speech service...")
-            tts_service = TextToSpeechService()
-            
-            # Initialize Intent service
-            logger.info("Initializing Intent classification service...")
-            intent_service = IntentService()
-            
-            # Initialize Chat service
-            logger.info("Initializing Chat service...")
-            chat_service = ChatService()
-            
-            # Set services in dependencies module
-            set_services(stt_service, tts_service, intent_service, chat_service)
-            
-            # Start scheduler
+    # Always try to initialize basic services for API functionality
+    try:
+        logger.info("Initializing services...")
+        
+        # Import services for initialization
+        from services.stt_service import SpeechToTextService
+        from services.tts_service import TextToSpeechService
+        from services.intent_service import IntentService
+        from services.chat_service import ChatService
+        from core.dependencies import set_services
+        from core.scheduler import scheduler
+        
+        # Initialize services (they have their own fallback mechanisms)
+        logger.info("Initializing Speech-to-Text service...")
+        stt_service = SpeechToTextService()
+        
+        logger.info("Initializing Text-to-Speech service...")
+        tts_service = TextToSpeechService()
+        
+        logger.info("Initializing Intent classification service...")
+        intent_service = IntentService()
+        
+        logger.info("Initializing Chat service...")
+        chat_service = ChatService()
+        
+        # Set services in dependencies module
+        set_services(stt_service, tts_service, intent_service, chat_service)
+        
+        # Only start scheduler if not in minimal mode (to avoid heavy background tasks)
+        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
             scheduler.start()
-            logger.info("All services initialized successfully!")
+            logger.info("Scheduler started")
+        else:
+            logger.info("Scheduler skipped in minimal mode")
             
-        except Exception as e:
-            logger.error(f"Failed to initialize services: {e}")
-            logger.warning("Continuing with limited functionality...")
-            # Don't raise - allow app to start with basic functionality
-    else:
-        logger.info("Running in minimal mode - skipping AI service initialization")
+        logger.info("All services initialized successfully!")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        logger.warning("Some services may not be available, but basic functionality should work")
+        # Don't raise - allow app to start with limited functionality
     
     yield
     

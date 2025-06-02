@@ -32,6 +32,7 @@ python-decouple==3.8
 
 # Basic audio support (minimal)
 soundfile==0.12.1
+SpeechRecognition==3.10.0  # Basic STT functionality
 
 # Utilities
 APScheduler==3.10.4
