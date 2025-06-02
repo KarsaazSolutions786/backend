@@ -8,6 +8,7 @@ uvicorn[standard]==0.24.0
 # Pydantic for data validation
 pydantic==2.5.0
 pydantic-settings==2.1.0
+email-validator==2.1.0  # Required for Pydantic email validation
 
 # Database
 sqlalchemy==2.0.23
@@ -36,4 +37,8 @@ soundfile==0.12.1
 APScheduler==3.10.4
 
 # AI services (optional)
-openai==1.3.7 
+openai==1.3.7
+
+# Additional dependencies for full API functionality
+numpy==1.24.4  # Required for various services
+python-dateutil==2.8.2  # Required for date handling 
