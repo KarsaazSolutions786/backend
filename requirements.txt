@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 pydantic
 sqlalchemy
+psycopg2-binary  # PostgreSQL adapter for SQLAlchemy
 alembic
 python-multipart
 python-jose[cryptography]
