@@ -22,7 +22,7 @@ class Settings(BaseModel):
     
     # Database - Railway provides DATABASE_URL automatically for PostgreSQL
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:admin123@localhost:5432/eindr")
-    
+
     # Development mode flag
     DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() == "true"
     
