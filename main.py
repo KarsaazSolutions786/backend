@@ -3,17 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
+import os
 
-# Import services for initialization
-from services.stt_service import SpeechToTextService
-from services.tts_service import TextToSpeechService
-from services.intent_service import IntentService
-from services.chat_service import ChatService
+# Import core modules
 from core.config import settings
-from core.scheduler import scheduler
-from core.dependencies import set_services
 from utils.logger import logger
-from api import stt, ledger  # Only essential APIs for voice-to-database pipeline
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,42 +15,59 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Eindr Backend...")
     
-    # Initialize AI services
-    try:
-        logger.info("Loading AI models...")
-        
-        # Initialize STT service
-        logger.info("Initializing Speech-to-Text service...")
-        stt_service = SpeechToTextService()
-        
-        # Initialize TTS service
-        logger.info("Initializing Text-to-Speech service...")
-        tts_service = TextToSpeechService()
-        
-        # Initialize Intent service
-        logger.info("Initializing Intent classification service...")
-        intent_service = IntentService()
-        
-        # Initialize Chat service
-        logger.info("Initializing Chat service...")
-        chat_service = ChatService()
-        
-        # Set services in dependencies module
-        set_services(stt_service, tts_service, intent_service, chat_service)
-        
-        # Start scheduler
-        scheduler.start()
-        logger.info("All services initialized successfully!")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize services: {e}")
-        raise
+    # Initialize services only if not in minimal mode
+    if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
+        try:
+            logger.info("Loading AI models...")
+            
+            # Import services for initialization
+            from services.stt_service import SpeechToTextService
+            from services.tts_service import TextToSpeechService
+            from services.intent_service import IntentService
+            from services.chat_service import ChatService
+            from core.dependencies import set_services
+            from core.scheduler import scheduler
+            
+            # Initialize STT service
+            logger.info("Initializing Speech-to-Text service...")
+            stt_service = SpeechToTextService()
+            
+            # Initialize TTS service
+            logger.info("Initializing Text-to-Speech service...")
+            tts_service = TextToSpeechService()
+            
+            # Initialize Intent service
+            logger.info("Initializing Intent classification service...")
+            intent_service = IntentService()
+            
+            # Initialize Chat service
+            logger.info("Initializing Chat service...")
+            chat_service = ChatService()
+            
+            # Set services in dependencies module
+            set_services(stt_service, tts_service, intent_service, chat_service)
+            
+            # Start scheduler
+            scheduler.start()
+            logger.info("All services initialized successfully!")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize services: {e}")
+            logger.warning("Continuing with limited functionality...")
+            # Don't raise - allow app to start with basic functionality
+    else:
+        logger.info("Running in minimal mode - skipping AI service initialization")
     
     yield
     
     # Cleanup
     logger.info("Shutting down Eindr Backend...")
-    scheduler.shutdown()
+    try:
+        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
+            from core.scheduler import scheduler
+            scheduler.shutdown()
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -82,30 +93,12 @@ app.add_middleware(
     allowed_hosts=settings.ALLOWED_HOSTS
 )
 
-# Import routers after app creation to avoid circular imports
-from api import auth, reminders, notes, ledger, friends, stt, users, embeddings, history, intent_processor
+# Include essential routers only
+from api import stt, ledger
 
-# Include routers
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Reminders"])
-app.include_router(notes.router, prefix="/api/v1/notes", tags=["Notes"])
-app.include_router(ledger.router, prefix="/api/v1/ledger", tags=["Ledger"])
-app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
-app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
-app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
+# Essential APIs for voice-to-database pipeline
 app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])
 app.include_router(ledger.router, prefix="/api/v1/ledger", tags=["Ledger"])
-
-# Commented out non-essential routers:
-# app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
-# app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
-# app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Reminders"])
-# app.include_router(notes.router, prefix="/api/v1/notes", tags=["Notes"])
-# app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
-# app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
-# app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
-# app.include_router(intent_processor.router, prefix="/api/v1/intent-processor", tags=["Intent Processing"])
 
 @app.get("/")
 async def root():
@@ -113,23 +106,57 @@ async def root():
     return {
         "message": "Welcome to Eindr API",
         "version": "1.0.0",
-        "status": "running"
+        "status": "running",
+        "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local"
     }
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
-    
-    return {
-        "status": "healthy",
-        "services": {
-            "stt": get_stt_service() is not None,
-            "tts": get_tts_service() is not None,
-            "intent": get_intent_service() is not None,
-            "chat": get_chat_service() is not None
+    try:
+        # Basic health check that doesn't depend on AI services
+        health_status = {
+            "status": "healthy",
+            "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local",
+            "services": {
+                "api": True,
+                "database": False  # Will be updated after DB check
+            }
         }
-    }
+        
+        # Check database connection
+        try:
+            from connect_db import engine
+            with engine.connect() as conn:
+                conn.execute("SELECT 1")
+            health_status["services"]["database"] = True
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            health_status["services"]["database"] = False
+        
+        # Check AI services if available
+        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
+            try:
+                from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
+                health_status["services"].update({
+                    "stt": get_stt_service() is not None,
+                    "tts": get_tts_service() is not None,
+                    "intent": get_intent_service() is not None,
+                    "chat": get_chat_service() is not None
+                })
+            except ImportError:
+                # Services not initialized yet
+                pass
+        
+        return health_status
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local"
+        }
 
 if __name__ == "__main__":
     uvicorn.run(

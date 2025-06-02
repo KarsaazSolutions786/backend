@@ -12,13 +12,17 @@ class Settings(BaseModel):
     HOST: str = os.getenv("HOST", "0.0.0.0")  # Railway needs 0.0.0.0
     PORT: int = int(os.getenv("PORT", "8000"))  # Railway sets PORT env var
     
+    # Environment detection
+    IS_RAILWAY: bool = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    MINIMAL_MODE: bool = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    
     # Security
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
-    # CORS
-    ALLOWED_HOSTS: List[str] = ["*"]
+    # CORS - More permissive for Railway
+    ALLOWED_HOSTS: List[str] = ["*"] if os.getenv("RAILWAY_ENVIRONMENT") else ["localhost", "127.0.0.1"]
     
     # Database - Railway provides DATABASE_URL automatically for PostgreSQL
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:admin123@localhost:5432/eindr")
@@ -26,7 +30,7 @@ class Settings(BaseModel):
     # Development mode flag
     DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() == "true"
     
-    # AI Models paths (assuming local models)
+    # AI Models paths (only used when not in minimal mode)
     COQUI_STT_MODEL_PATH: str = "./models/coqui-stt.tflite"
     TTS_MODEL_PATH: str = "./models/tts"
     INTENT_MODEL_PATH: str = "./models/intent"
