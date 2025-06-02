@@ -6,6 +6,7 @@ psycopg2-binary  # PostgreSQL adapter for SQLAlchemy
 alembic
 python-multipart
 python-jose[cryptography]
+PyJWT  # JWT token handling for Firebase auth
 passlib[bcrypt]
 python-decouple
 APScheduler
