@@ -567,6 +567,41 @@ railway run python scripts/init_db_railway.py
 RUN python download_coqui_model.py
 ```
 
+#### 6. Health Check Failures on Railway
+```bash
+# Common causes and solutions:
+
+# 1. App takes too long to start
+# - Uses MINIMAL_MODE=true to skip AI model loading
+# - Dockerfile uses requirements.railway.txt with minimal dependencies
+
+# 2. Check Railway logs
+railway logs --follow
+
+# 3. Verify environment variables
+railway run env | grep -E "(MINIMAL_MODE|PORT|DATABASE_URL)"
+
+# 4. Test health endpoint directly
+# Should return: {"status": "healthy", "environment": "railway"}
+```
+
+#### 7. MINIMAL_MODE Configuration
+```bash
+# For Railway deployment (automatically set in Dockerfile):
+MINIMAL_MODE=true
+
+# This disables:
+# - AI model loading during startup
+# - Heavy dependencies (librosa, scikit-learn, etc.)
+# - Coqui STT model download
+
+# Benefits:
+# - Faster startup time (< 30 seconds)
+# - Lower memory usage
+# - More reliable health checks
+# - Essential APIs still work (database, basic endpoints)
+```
+
 ### 📊 Monitoring
 
 #### View Logs
