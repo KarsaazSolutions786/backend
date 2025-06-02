@@ -251,11 +251,16 @@ credentials/
 *.p12
 *.pfx
 
-# AI Models (if any)
-models/
-*.model
-*.pkl
-*.pickle
+# AI Models (if any) - Allow Python files but ignore large model files
+models/*.tflite
+models/*.bin
+models/*.onnx
+models/*.h5
+models/*.pkl
+models/*.joblib
+# But allow Python files in models directory
+!models/*.py
+!models/__init__.py
 
 # Media files
 media/
