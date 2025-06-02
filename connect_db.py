@@ -11,9 +11,7 @@ load_dotenv()
 # PostgreSQL Database URL
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres@localhost:5432/eindr"
-    #  "postgresql://postgres:admin123@localhost:5433/eindr"
-
+    "postgresql://postgres:SFXMbavWxAsHrPlVMZXjsNvRUqZNajRz@metro.proxy.rlwy.net:54916/railway"
 )
 
 # Create SQLAlchemy engine with proper configuration

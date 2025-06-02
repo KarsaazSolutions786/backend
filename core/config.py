@@ -8,21 +8,23 @@ class Settings(BaseModel):
     # App settings
     APP_NAME: str = "Eindr Backend"
     VERSION: str = "1.0.0"
-    DEBUG: bool = True
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    HOST: str = os.getenv("HOST", "0.0.0.0")  # Railway needs 0.0.0.0
+    PORT: int = int(os.getenv("PORT", "8000"))  # Railway sets PORT env var
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # CORS
     ALLOWED_HOSTS: List[str] = ["*"]
     
-    # Database
-    DATABASE_URL: str = "postgresql://postgres:admin123@localhost:5432/eindr"
-
+    # Database - Railway provides DATABASE_URL automatically for PostgreSQL
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:admin123@localhost:5432/eindr")
+    
+    # Development mode flag
+    DEV_MODE: bool = os.getenv("DEV_MODE", "false").lower() == "true"
     
     # AI Models paths (assuming local models)
     COQUI_STT_MODEL_PATH: str = "./models/coqui-stt.tflite"
@@ -36,7 +38,7 @@ class Settings(BaseModel):
     AUDIO_BIT_DEPTH: int = 16
     
     # File upload settings
-    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 10MB
+    MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
     UPLOAD_DIR: str = "./uploads"
     
     # Supported audio formats for STT

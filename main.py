@@ -13,7 +13,7 @@ from core.config import settings
 from core.scheduler import scheduler
 from core.dependencies import set_services
 from utils.logger import logger
-from api import stt
+from api import stt, ledger  # Only essential APIs for voice-to-database pipeline
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,7 +95,17 @@ app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
 app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
 app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
 app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])
-app.include_router(intent_processor.router, prefix="/api/v1/intent-processor", tags=["Intent Processing"])
+app.include_router(ledger.router, prefix="/api/v1/ledger", tags=["Ledger"])
+
+# Commented out non-essential routers:
+# app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
+# app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
+# app.include_router(reminders.router, prefix="/api/v1/reminders", tags=["Reminders"])
+# app.include_router(notes.router, prefix="/api/v1/notes", tags=["Notes"])
+# app.include_router(friends.router, prefix="/api/v1/friends", tags=["Friends"])
+# app.include_router(embeddings.router, prefix="/api/v1/embeddings", tags=["Embeddings"])
+# app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
+# app.include_router(intent_processor.router, prefix="/api/v1/intent-processor", tags=["Intent Processing"])
 
 @app.get("/")
 async def root():
