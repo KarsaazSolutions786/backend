@@ -206,7 +206,7 @@ class IntentProcessorService:
             else:
                 # For unknown intents, save as chat interaction
                 logger.warning(f"Unknown intent: {intent}, treating as chat")
-                return await self._process_chat(original_text, user_id)
+                return await self._process_chat(original_text, entities, user_id)
                 
         except Exception as e:
             logger.error(f"Error processing single intent: {e}")
@@ -391,7 +391,7 @@ class IntentProcessorService:
         finally:
             db.close()
 
-    async def _process_chat(self, original_text: str, user_id: str) -> Dict[str, Any]:
+    async def _process_chat(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
         """Process chit_chat intent and save to history_logs table."""
         db = SessionLocal()
         try:
