@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional, List, Union
 from firebase_auth import verify_firebase_token
 from services.intent_processor_service import IntentProcessorService
 from utils.logger import logger
+from core.dependencies import get_intent_service
 
 router = APIRouter()
 
@@ -31,159 +32,174 @@ class ProcessIntentResponse(BaseModel):
     error: Optional[str] = None
     intent: str
 
+class IntentProcessRequest(BaseModel):
+    """Request model for intent processing."""
+    intent_data: Dict[str, Any]
+
+class MultiIntentTestRequest(BaseModel):
+    """Request model for testing multi-intent processing."""
+    text: str
+    multi_intent: bool = True
+
+class IntentProcessResponse(BaseModel):
+    """Response model for intent processing."""
+    success: bool
+    message: Optional[str] = None
+    results: Optional[List[Dict[str, Any]]] = None
+    total_intents: Optional[int] = None
+    successful_intents: Optional[int] = None
+    original_text: Optional[str] = None
+    error: Optional[str] = None
+
 # Initialize the service
 intent_processor = IntentProcessorService()
 
-@router.post("/process", response_model=ProcessIntentResponse)
+@router.post("/process", response_model=IntentProcessResponse)
 async def process_intent(
-    request: ProcessIntentRequest,
+    request: IntentProcessRequest,
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Process intent classification result and save to appropriate database table.
+    Process intent classification result and save to database.
+    Supports both single intent and multi-intent processing.
     
-    This endpoint takes intent classification results and:
-    - For create_reminder: saves to reminders table with extracted time and person
-    - For create_note: saves to notes table
-    - For create_ledger/add_expense: saves to ledger_entries table with amount and contact
-    - For chit_chat: saves to history_logs table
+    Expected input formats:
+    
+    Single intent:
+    {
+      "intent_data": {
+        "intent": "create_reminder",
+        "confidence": 0.95,
+        "entities": {"time": "5 PM", "person": "John"},
+        "original_text": "remind me to call John at 5 PM"
+      }
+    }
+    
+    Multi-intent:
+    {
+      "intent_data": {
+        "intents": [
+          {
+            "type": "create_reminder",
+            "confidence": 0.93,
+            "entities": {"time": "01:00", "title": "sleep"},
+            "text_segment": "Set a reminder for 1 a.m. to sleep"
+          },
+          {
+            "type": "create_note",
+            "confidence": 0.88,
+            "entities": {"content": "buy chocolate"},
+            "text_segment": "set a note to buy chocolate"
+          }
+        ],
+        "original_text": "set a reminder for 1 a.m. to sleep and set a note to buy chocolate"
+      }
+    }
     """
     try:
-        user_id = current_user["uid"]
+        current_user_id = current_user["uid"]
         
-        # Process the intent using the service
+        # Initialize intent processor
+        intent_processor = IntentProcessorService()
+        
+        # Process intent(s)
         result = await intent_processor.process_intent(
-            intent_data=request.intent_data.dict(),
-            user_id=user_id
+            intent_data=request.intent_data,
+            user_id=current_user_id
         )
         
-        logger.info(f"Intent processed for user {user_id}: {result['intent']}")
-        
-        return ProcessIntentResponse(**result)
+        return IntentProcessResponse(**result)
         
     except Exception as e:
-        logger.error(f"Error in process_intent endpoint: {e}")
+        logger.error(f"Error in intent processing endpoint: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process intent: {str(e)}"
         )
 
-@router.post("/process-batch")
-async def process_batch_intents(
-    intents: List[IntentData],
+@router.post("/test-multi-intent")
+async def test_multi_intent_processing(
+    request: MultiIntentTestRequest,
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Process multiple intent classification results in batch.
+    Test endpoint for multi-intent processing.
+    Takes raw text, classifies intents, and processes them.
+    
+    Example:
+    {
+      "text": "set a reminder for 1 a.m. to sleep and set a note to buy chocolate",
+      "multi_intent": true
+    }
     """
     try:
-        user_id = current_user["uid"]
-        results = []
+        current_user_id = current_user["uid"]
         
-        for intent_data in intents:
-            try:
-                result = await intent_processor.process_intent(
-                    intent_data=intent_data.dict(),
-                    user_id=user_id
-                )
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Error processing intent in batch: {e}")
-                results.append({
-                    'success': False,
-                    'error': str(e),
-                    'intent': intent_data.intent
-                })
+        # Get intent service
+        intent_service = get_intent_service()
+        if not intent_service:
+            raise HTTPException(
+                status_code=503,
+                detail="Intent classification service not available"
+            )
         
-        successful = sum(1 for r in results if r.get('success', False))
-        failed = len(results) - successful
+        # Classify intent(s)
+        logger.info(f"Testing multi-intent processing for text: '{request.text}'")
+        intent_result = await intent_service.classify_intent(
+            request.text, 
+            multi_intent=request.multi_intent
+        )
         
+        # Process intent(s)
+        intent_processor = IntentProcessorService()
+        processing_result = await intent_processor.process_intent(
+            intent_data=intent_result,
+            user_id=current_user_id
+        )
+        
+        # Return combined result
         return {
-            'total_processed': len(results),
-            'successful': successful,
-            'failed': failed,
-            'results': results
+            "success": True,
+            "text": request.text,
+            "multi_intent": request.multi_intent,
+            "intent_classification": intent_result,
+            "processing_result": processing_result
         }
         
     except Exception as e:
-        logger.error(f"Error in process_batch_intents endpoint: {e}")
+        logger.error(f"Error in multi-intent test endpoint: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to process batch intents: {str(e)}"
+            detail=f"Failed to test multi-intent processing: {str(e)}"
         )
 
 @router.get("/supported-intents")
-async def get_supported_intents():
-    """
-    Get list of supported intents and their expected entities.
-    """
-    return {
-        "supported_intents": {
-            "create_reminder": {
-                "description": "Create a new reminder",
-                "entities": {
-                    "time": "Time for the reminder (optional)",
-                    "person": "Person related to the reminder (optional)",
-                    "date": "Date for the reminder (optional)"
-                },
-                "examples": [
-                    "Remind me to call John at 3 PM",
-                    "Set a reminder for the meeting tomorrow",
-                    "Don't forget to buy groceries"
-                ]
+async def get_supported_intents(current_user: dict = Depends(verify_firebase_token)):
+    """Get list of supported intents and their handlers."""
+    try:
+        intent_processor = IntentProcessorService()
+        
+        return {
+            "supported_intents": list(intent_processor.intent_handlers.keys()),
+            "handler_mapping": {
+                intent: handler.__name__ for intent, handler in intent_processor.intent_handlers.items()
             },
-            "create_note": {
-                "description": "Create a new note",
-                "entities": {},
-                "examples": [
-                    "Note: Meeting notes from today",
-                    "Write down this important information",
-                    "Save this for later"
-                ]
-            },
-            "create_ledger": {
-                "description": "Create a ledger entry for money owed/owing",
-                "entities": {
-                    "amount": "Monetary amount",
-                    "person": "Person involved in the transaction"
-                },
-                "examples": [
-                    "John owes me $50",
-                    "I owe Sarah 25 dollars",
-                    "Lent Mike $100"
-                ]
-            },
-            "add_expense": {
-                "description": "Add an expense (same as create_ledger)",
-                "entities": {
-                    "amount": "Monetary amount",
-                    "person": "Person involved in the expense"
-                },
-                "examples": [
-                    "Added expense: John owes $30",
-                    "Track that Tom borrowed $75"
-                ]
-            },
-            "chit_chat": {
-                "description": "General conversation/chat",
-                "entities": {},
-                "examples": [
-                    "Hello, how are you?",
-                    "Thanks for your help",
-                    "What can you do?"
-                ]
-            },
-            "general_query": {
-                "description": "General questions (treated as chat)",
-                "entities": {},
-                "examples": [
-                    "What time is it?",
-                    "How's the weather?",
-                    "Help me with something"
-                ]
+            "database_tables": {
+                "create_reminder": "reminders",
+                "create_note": "notes", 
+                "create_ledger": "ledger_entries",
+                "add_expense": "ledger_entries",
+                "chit_chat": "history_logs",
+                "general_query": "history_logs"
             }
         }
-    }
+        
+    except Exception as e:
+        logger.error(f"Error getting supported intents: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get supported intents: {str(e)}"
+        )
 
 @router.get("/stats")
 async def get_processing_stats(
