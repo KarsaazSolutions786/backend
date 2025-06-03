@@ -548,6 +548,9 @@ class IntentProcessorService:
                 # Name + Owes: "John owes", "Sarah owed"
                 r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?)\b',
                 
+                # Name + Will Give/Pay: "John will give", "Sarah will pay"
+                r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:will\s+)?(?:give|pay)\b',
+                
                 # Prepositions + Name: "to John", "with Sarah", "about Mike"
                 r'\b(?:to|about|with)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',
                 
