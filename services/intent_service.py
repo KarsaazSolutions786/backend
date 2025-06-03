@@ -21,12 +21,25 @@ class IntentService:
             "list_reminders",
             "update_reminder"
         ]
-        # Multi-intent patterns
+        # Multi-intent patterns - Enhanced for better detection
         self.multi_intent_separators = [
-            r'\band\s+(?:also\s+)?(?:set|create|add|make)',  # "and set", "and also create"
-            r'\balso\s+(?:set|create|add|make)',  # "also set"
-            r'\bthen\s+(?:set|create|add|make)',  # "then set"
-            r'\bplus\s+(?:set|create|add|make)',  # "plus set"
+            # Primary action-based separators
+            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind)',  # "and set", "and also create", "and remind"
+            r'\balso\s+(?:set|create|add|make|remind)',  # "also set", "also remind"
+            r'\bthen\s+(?:set|create|add|make|remind)',  # "then set", "then remind"
+            r'\bplus\s+(?:set|create|add|make|remind)',  # "plus set", "plus remind"
+            
+            # Name-based separators (for ledger entries)
+            r'\band\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?|borrowed?|lent)',  # "and John owes"
+            r'\band\s+(?:I|i)\s+(?:owe|borrowed|lent)',  # "and I owe", "and i borrowed"
+            r'\band\s+([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',  # "and John will give", "and John pay"
+            
+            # General "and" separators for different intent types
+            r'\band\s+(?:I|i)\s+(?:want|need|have to|should)',  # "and i want", "and i need"
+            r'\band\s+(?:remind|note|track|record)',  # "and remind", "and note", "and track"
+            
+            # Monetary separators
+            r'\band\s+(?:\$\d+|\d+\s*dollars?)',  # "and $50", "and 50 dollars"
         ]
         self._load_model()
     
@@ -147,7 +160,7 @@ class IntentService:
 
     def _segment_text_for_multi_intent(self, text: str) -> List[str]:
         """
-        Segment text into multiple intent components.
+        Segment text into multiple intent components using enhanced logic.
         
         Args:
             text: Input text to segment
@@ -155,44 +168,83 @@ class IntentService:
         Returns:
             List of text segments, each potentially containing a separate intent
         """
-        segments = [text]  # Start with the full text
+        # First, try to find all separator positions
+        separator_positions = []
         
-        # Apply multi-intent separators
         for pattern in self.multi_intent_separators:
-            new_segments = []
-            for segment in segments:
-                # Split on the pattern but keep the separator with the second part
-                parts = re.split(f'({pattern})', segment, flags=re.IGNORECASE)
-                
-                if len(parts) > 1:
-                    # Reconstruct segments properly
-                    current_segment = parts[0]
-                    for i in range(1, len(parts), 2):
-                        if i + 1 < len(parts):
-                            # parts[i] is the separator, parts[i+1] is the content after
-                            if current_segment.strip():
-                                new_segments.append(current_segment.strip())
-                            # Combine separator with following content
-                            current_segment = parts[i] + parts[i + 1]
-                        else:
-                            current_segment += parts[i]
-                    
-                    if current_segment.strip():
-                        new_segments.append(current_segment.strip())
-                else:
-                    new_segments.append(segment)
-            
-            segments = new_segments
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                separator_positions.append({
+                    'start': match.start(),
+                    'end': match.end(),
+                    'match': match.group(),
+                    'pattern': pattern
+                })
         
-        # Clean up segments - remove separators from the beginning
+        # Sort separators by position
+        separator_positions.sort(key=lambda x: x['start'])
+        
+        # If no separators found, try fallback patterns
+        if not separator_positions:
+            # Look for standalone "and" that might separate different intents
+            and_positions = []
+            for match in re.finditer(r'\band\s+', text, re.IGNORECASE):
+                # Check if this "and" is followed by potential intent indicators
+                following_text = text[match.end():match.end()+50].lower()
+                if any(indicator in following_text for indicator in [
+                    'remind', 'note', 'owe', 'want', 'need', 'have to', 'should', 
+                    'i ', 'john', 'sarah', 'mike', '$', 'dollar', 'track', 'record'
+                ]):
+                    and_positions.append({
+                        'start': match.start(),
+                        'end': match.end(),
+                        'match': match.group(),
+                        'pattern': 'fallback_and'
+                    })
+            
+            separator_positions = and_positions
+        
+        # If still no separators, return the original text
+        if not separator_positions:
+            logger.info(f"Text segmentation: '{text}' -> 1 segment (no separators found)")
+            return [text]
+        
+        # Split text based on separator positions
+        segments = []
+        last_end = 0
+        
+        for sep in separator_positions:
+            # Add text before this separator
+            if sep['start'] > last_end:
+                segment = text[last_end:sep['start']].strip()
+                if segment:
+                    segments.append(segment)
+            
+            # Start next segment from this separator (including it)
+            last_end = sep['start']
+        
+        # Add remaining text after last separator
+        if last_end < len(text):
+            segment = text[last_end:].strip()
+            if segment:
+                segments.append(segment)
+        
+        # Clean up segments - remove leading separators and connectors
         cleaned_segments = []
         for segment in segments:
-            # Remove leading separators
-            for pattern in self.multi_intent_separators:
-                segment = re.sub(f'^{pattern}\\s*', '', segment, flags=re.IGNORECASE)
+            # Remove leading "and", "also", "then", "plus" etc.
+            cleaned = re.sub(r'^\s*(?:and|also|then|plus)\s+', '', segment, flags=re.IGNORECASE)
+            cleaned = cleaned.strip()
             
-            if segment.strip():
-                cleaned_segments.append(segment.strip())
+            # Skip very short segments that are likely artifacts
+            if len(cleaned) > 3:
+                cleaned_segments.append(cleaned)
+        
+        # If we ended up with just one segment, try a more aggressive approach
+        if len(cleaned_segments) <= 1:
+            # Split on any "and" that appears to separate different types of content
+            aggressive_segments = re.split(r'\s+and\s+', text, flags=re.IGNORECASE)
+            if len(aggressive_segments) > 1:
+                cleaned_segments = [seg.strip() for seg in aggressive_segments if seg.strip()]
         
         logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
         return cleaned_segments
@@ -224,37 +276,47 @@ class IntentService:
         intent = self.intent_labels[predicted_class_id]
         """
         
-        # Simple keyword-based classification for demo
+        # Enhanced keyword-based classification for demo
         text_lower = text.lower()
         
-        if any(word in text_lower for word in ["remind", "reminder", "alert"]):
+        # Check for reminder keywords first
+        if any(word in text_lower for word in ["remind", "reminder", "alert", "book a ticket", "book ticket"]):
             intent = "create_reminder"
             confidence = 0.95
+        # Check for note keywords
         elif any(word in text_lower for word in ["note", "write", "jot"]):
             intent = "create_note"
             confidence = 0.90
-        elif any(word in text_lower for word in ["owe", "owes", "owed", "debt", "ledger", "borrowed", "lent", "payback"]):
+        # Enhanced ledger detection - look for names + money terms or explicit debt language
+        elif (any(word in text_lower for word in ["owe", "owes", "owed", "debt", "ledger", "borrowed", "lent", "payback", "will give", "will pay", "giving", "paying", "pay me", "give me"]) or
+              self._has_name_and_money(text) or 
+              self._is_monetary_amount(text)):
             intent = "create_ledger"
             confidence = 0.92
-        elif self._is_monetary_amount(text):
-            # Handle standalone monetary amounts as potential ledger entries
-            intent = "create_ledger"
-            confidence = 0.75  # Lower confidence since context is missing
+        # Check for scheduling keywords
         elif any(word in text_lower for word in ["schedule", "appointment", "meeting"]):
             intent = "schedule_event"
             confidence = 0.88
+        # Check for expense keywords
         elif any(word in text_lower for word in ["expense", "cost", "spend", "money"]):
             intent = "add_expense"
             confidence = 0.85
+        # Check for friend/contact keywords
         elif any(word in text_lower for word in ["friend", "contact", "person"]):
             intent = "add_friend"
             confidence = 0.80
+        # Check for cancellation keywords
         elif any(word in text_lower for word in ["cancel", "delete", "remove"]):
             intent = "cancel_reminder"
             confidence = 0.87
+        # Check for listing keywords
         elif any(word in text_lower for word in ["list", "show", "display"]):
             intent = "list_reminders"
             confidence = 0.82
+        # Check for travel/general chat patterns
+        elif any(phrase in text_lower for phrase in ["i want to go", "want to go", "going to", "travel to", "visit"]):
+            intent = "general_query"
+            confidence = 0.75
         else:
             intent = "general_query"
             confidence = 0.60
@@ -273,7 +335,7 @@ class IntentService:
         return result
 
     def _extract_entities(self, text: str) -> Dict[str, any]:
-        """Extract entities from text (basic implementation)."""
+        """Extract entities from text (enhanced implementation)."""
         entities = {}
         text_lower = text.lower()
         
@@ -306,17 +368,43 @@ class IntentService:
                 entities["date"] = matches[0]
                 break
         
-        # Extract names (simple approach)
+        # Extract names (enhanced approach for different contexts)
         name_patterns = [
+            # General conversation patterns
             r'\bcall\s+([A-Z][a-z]+)\b',
             r'\bmeet\s+([A-Z][a-z]+)\b',
-            r'\bwith\s+([A-Z][a-z]+)\b'
+            r'\bwith\s+([A-Z][a-z]+)\b',
+            
+            # Ledger/financial patterns
+            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',  # "John owes", "John borrowed"
+            r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',     # "owes John", "borrowed from John"
+            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',        # "John will give", "John pay"
+            r'(?:give|pay)\s+([A-Z][a-z]+)',                      # "give John", "pay John"
+            r'\b([A-Z][a-z]+)\s+.*?\$\d+',                        # "John ... $50"
+            r'\$\d+.*?\b([A-Z][a-z]+)',                           # "$50 ... John"
+            
+            # Additional name patterns
+            r'\b([A-Z][a-z]+)\s+(?:and|&)',                       # "John and", "John &"
+            r'(?:from|to)\s+([A-Z][a-z]+)',                       # "from John", "to John"
         ]
         
         for pattern in name_patterns:
             matches = re.findall(pattern, text)
             if matches:
                 entities["person"] = matches[0]
+                break
+        
+        # Extract monetary amounts for ledger entries
+        money_patterns = [
+            r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)',     # $50, $1,000, $50.00
+            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*dollars?',  # 50 dollars, 1000 dollars
+            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*bucks?',    # 50 bucks
+        ]
+        
+        for pattern in money_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                entities["amount"] = matches[0]
                 break
         
         return entities
@@ -357,6 +445,35 @@ class IntentService:
         """Check if the intent service is ready."""
         return self.model is not None and self.tokenizer is not None
     
+    def _has_name_and_money(self, text: str) -> bool:
+        """Check if text contains both a person's name and a monetary amount."""
+        import re
+        
+        # Look for names (capitalized words that could be names)
+        name_patterns = [
+            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',  # "John owes"
+            r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',     # "owes John"
+            r'\b([A-Z][a-z]+)\s+(?:\$|\d+)',                      # "John $50"
+            r'(?:\$|\d+).*?([A-Z][a-z]+)',                        # "$50 John"
+            # Enhanced patterns for more flexible matching
+            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay|owes?|owed?)',  # "John will give", "John will pay"
+            r'\b([A-Z][a-z]+).*?(?:\$|\d+)',                      # "John ... $50" (flexible with text in between)
+            r'(?:\$|\d+).*?\b([A-Z][a-z]+)',                      # "$50 ... John" (flexible with text in between)
+        ]
+        
+        has_name = any(re.search(pattern, text) for pattern in name_patterns)
+        
+        # Look for monetary amounts
+        money_patterns = [
+            r'\$\d+',           # $50
+            r'\d+\s*dollars?',  # 50 dollars
+            r'\d+\s*bucks?',    # 50 bucks
+        ]
+        
+        has_money = any(re.search(pattern, text, re.IGNORECASE) for pattern in money_patterns)
+        
+        return has_name and has_money
+
     def _is_monetary_amount(self, text: str) -> bool:
         """Check if the text represents a standalone monetary amount."""
         import re
@@ -370,7 +487,7 @@ class IntentService:
             r'^\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?|usd)$',  # 1000 dollars
             r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',   # €1000
             r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',   # £1000
-            r'^\¥\d+(?:,\d{3})*(?:\.\d{2})?$',  # ¥1000
+            r'^¥\d+(?:,\d{3})*(?:\.\d{2})?$',  # ¥1000
         ]
         
         text_lower = text_clean.lower()
