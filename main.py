@@ -24,6 +24,7 @@ async def lifespan(app: FastAPI):
         from services.tts_service import TextToSpeechService
         from services.intent_service import IntentService
         from services.chat_service import ChatService
+        from services.intent_processor_service import IntentProcessorService
         from core.dependencies import set_services
         from core.scheduler import scheduler
         
@@ -34,14 +35,14 @@ async def lifespan(app: FastAPI):
         logger.info("Initializing Text-to-Speech service...")
         tts_service = TextToSpeechService()
         
-        logger.info("Initializing Intent classification service...")
-        intent_service = IntentService()
-        
         logger.info("Initializing Chat service...")
         chat_service = ChatService()
+
+        logger.info("Initializing Intent Processor service...")
+        intent_processor_service = IntentProcessorService()
         
         # Set services in dependencies module
-        set_services(stt_service, tts_service, intent_service, chat_service)
+        set_services(stt_service, tts_service, chat_service, intent_processor_service)
         
         # Only start scheduler if not in minimal mode (to avoid heavy background tasks)
         if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
@@ -146,12 +147,13 @@ async def health_check():
         # Check AI services if available
         if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
             try:
-                from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
+                from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service, get_intent_processor_service
                 health_status["services"].update({
                     "stt": get_stt_service() is not None,
                     "tts": get_tts_service() is not None,
-                    "intent": get_intent_service() is not None,
-                    "chat": get_chat_service() is not None
+                    "intent_en": get_intent_service("en") is not None,
+                    "chat": get_chat_service() is not None,
+                    "intent_processor": get_intent_processor_service() is not None
                 })
             except ImportError:
                 # Services not initialized yet

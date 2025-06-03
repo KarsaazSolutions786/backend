@@ -1,124 +1,137 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
-from typing import Optional
+from typing import Optional, Dict, Any
 import aiofiles
 import os
 import io
 from pathlib import Path
 from firebase_auth import verify_firebase_token
-from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
+from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service, get_intent_processor_service
 from utils.logger import logger
 from core.config import settings
 
+# Placeholder for a proper i18n/l10n library (same as in IntentProcessorService)
+def get_localized_string(key: str, lang: str, **kwargs) -> str:
+    translations_en = {
+        "reminder_created_successfully": "Perfect! I've created a reminder titled '{title}'",
+        "reminder_scheduled_successfully": "Perfect! I've created a reminder titled '{title}' scheduled for {time}. I'll make sure to notify you!",
+        "note_created_successfully": "Great! I've saved your note successfully. Your thoughts are now safely stored.",
+        "note_created_with_content_successfully": "Great! I've saved your note: '{preview}'. Your thoughts are now safely stored.",
+        "ledger_entry_created_successfully": "Excellent! I've recorded your ledger entry. Your financial records are now updated!",
+        "ledger_entry_created_with_details_successfully": "Excellent! I've recorded ${amount} with {person}. Your financial records are now updated!",
+        "ledger_entry_created_with_amount_successfully": "Excellent! I've recorded ${amount} in your ledger. Your financial records are now updated!",
+        "general_query_response": "I understand your request and I'm here to help! Is there anything specific you'd like me to assist you with regarding reminders, notes, or your ledger?",
+        "processed_successfully_default": "I've processed your request successfully! Is there anything else you'd like me to help you with today?",
+        "multi_intent_response_one": "Perfect! {response1}. Is there anything else I can help you with?",
+        "multi_intent_response_two": "Excellent! I've completed both tasks: {response1} and {response2}. Anything else I can do for you?",
+        "multi_intent_response_many": "Great! I've completed {count} tasks: {responses_list_str}, and {last_response}. Is there anything else you need help with?",
+        "multi_intent_no_results": "I wasn't able to process your request. Please try again.",
+        "multi_intent_all_failed": "I encountered some issues processing your requests. Please try again or be more specific.",
+        "multi_reminder_created": "✓ Created reminder: '{title}'",
+        "multi_reminder_created_with_time": "✓ Created reminder: '{title}' for {time}",
+        "multi_note_saved_preview": "✓ Saved note: '{preview}'",
+        "multi_note_saved": "✓ Saved your note",
+        "multi_ledger_recorded_details": "✓ Recorded ${amount} with {contact_name}",
+        "multi_ledger_recorded_amount": "✓ Recorded ${amount} in ledger",
+        "multi_ledger_recorded": "✓ Added ledger entry",
+        "multi_chat_logged": "✓ Noted your message",
+        "error_stt_not_available": "Speech-to-text service not available",
+        "error_stt_not_ready": "Speech-to-text service not ready",
+        "error_transcription_failed_requirements": "Transcription failed. Please ensure your audio file meets the requirements: WAV format, 16kHz sample rate, mono channel, 16-bit PCM",
+        "error_intent_classification_failed": "Intent classification failed: {error}",
+        "error_chat_service_not_available": "Chat service is not available or ready to generate a response.",
+        "error_processing_failed": "Processing failed: {error}",
+        "error_tts_failed": "Text-to-speech conversion failed: {error}"
+
+    }
+    if lang == "en":
+        return translations_en.get(key, key).format(**kwargs)
+    # Add other languages here
+    # elif lang == "es":
+    #     return translations_es.get(key, key).format(**kwargs)
+    return key.format(**kwargs) # Fallback
+
 router = APIRouter()
 
-def _generate_fallback_response(processing_result: dict) -> str:
-    """Generate fallback response when Bloom 560M is not available."""
+def _generate_fallback_response(processing_result: dict, language_code: str = "en") -> str:
     intent = processing_result.get("intent", "unknown")
     data = processing_result.get("data", {})
     
     if intent == "create_reminder":
-        response = f"Perfect! I've created a reminder titled '{data.get('title', 'your reminder')}'"
-        if data.get("time"):
-            response += f" scheduled for {data.get('time')}"
-        response += ". I'll make sure to notify you when the time comes!"
-        return response
+        title = data.get('title', 'your reminder') # Assuming title is already generated considering language
+        time = data.get("time")
+        if time:
+            return get_localized_string("reminder_scheduled_successfully", language_code, title=title, time=time)
+        return get_localized_string("reminder_created_successfully", language_code, title=title)
         
     elif intent == "create_note":
-        response = "Great! I've saved your note successfully. "
-        if data.get("content"):
-            response += "Your thoughts are now safely stored and you can access them anytime."
-        else:
-            response += "You can always come back to review or edit it later."
-        return response
+        content = data.get("content")
+        if content:
+            preview = content[:30] + "..." if len(content) > 30 else content
+            return get_localized_string("note_created_with_content_successfully", language_code, preview=preview)
+        return get_localized_string("note_created_successfully", language_code)
         
     elif intent in ["create_ledger", "add_expense"]:
-        response = "Excellent! I've recorded your ledger entry"
-        if data.get("amount") and data.get("person"):
-            response += f" for ${data.get('amount')} with {data.get('person')}"
-        elif data.get("amount"):
-            response += f" for ${data.get('amount')}"
-        response += ". Your financial records are now updated!"
-        return response
+        amount = data.get("amount")
+        person = data.get("person") # or contact_name from processor
+        if amount and person:
+            return get_localized_string("ledger_entry_created_with_details_successfully", language_code, amount=amount, person=person)
+        elif amount:
+            return get_localized_string("ledger_entry_created_with_amount_successfully", language_code, amount=amount)
+        return get_localized_string("ledger_entry_created_successfully", language_code)
         
     elif intent == "general_query":
-        return "I understand your request and I'm here to help! Is there anything specific you'd like me to assist you with regarding reminders, notes, or your ledger?"
+        return get_localized_string("general_query_response", language_code)
         
     else:
-        return "I've processed your request successfully! Is there anything else you'd like me to help you with today?"
+        return get_localized_string("processed_successfully_default", language_code)
 
-def _generate_multi_intent_fallback_response(processing_result: dict) -> str:
-    """Generate fallback response for both single and multi-intent processing results."""
-    
-    # Check if this is a multi-intent result
+def _generate_multi_intent_fallback_response(processing_result: dict, language_code: str = "en") -> str:
     if "results" in processing_result and isinstance(processing_result.get("results"), list):
-        return _generate_multi_intent_response(processing_result)
+        return _generate_multi_intent_response(processing_result, language_code)
     else:
-        # Single intent - use original function
-        return _generate_fallback_response(processing_result)
+        return _generate_fallback_response(processing_result, language_code)
 
-def _generate_multi_intent_response(processing_result: dict) -> str:
-    """Generate response for multi-intent processing results."""
+def _generate_multi_intent_response(processing_result: dict, language_code: str = "en") -> str:
     results = processing_result.get("results", [])
-    total_intents = processing_result.get("total_intents", 0)
     successful_intents = processing_result.get("successful_intents", 0)
     
-    if not results:
-        return "I wasn't able to process your request. Please try again."
+    if not results: return get_localized_string("multi_intent_no_results", language_code)
+    if successful_intents == 0: return get_localized_string("multi_intent_all_failed", language_code)
     
-    if successful_intents == 0:
-        return "I encountered some issues processing your requests. Please try again or be more specific."
-    
-    # Generate responses for each successful intent
     responses = []
-    
     for result in results:
-        if not result.get("success", False):
-            continue
-            
-        intent = result.get("intent", "unknown")
-        data = result.get("data", {})
+        if not result.get("success", False): continue
+        intent = result.get("intent", "unknown"); data = result.get("data", {})
         
         if intent == "create_reminder":
-            if data.get("title"):
-                response = f"✓ Created reminder: '{data.get('title')}'"
-                if data.get("time"):
-                    response += f" for {data.get('time')}"
-            else:
-                response = "✓ Created your reminder"
-            responses.append(response)
-            
+            title = data.get('title', 'your reminder')
+            time = data.get("time")
+            key = "multi_reminder_created_with_time" if time else "multi_reminder_created"
+            responses.append(get_localized_string(key, language_code, title=title, time=time))
         elif intent == "create_note":
-            if data.get("content"):
-                content_preview = data.get("content", "")[:30]
-                if len(data.get("content", "")) > 30:
-                    content_preview += "..."
-                response = f"✓ Saved note: '{content_preview}'"
+            content = data.get("content", "")
+            if content:
+                preview = content[:30] + "..." if len(content) > 30 else content
+                responses.append(get_localized_string("multi_note_saved_preview", language_code, preview=preview))
             else:
-                response = "✓ Saved your note"
-            responses.append(response)
-            
+                responses.append(get_localized_string("multi_note_saved", language_code))
         elif intent in ["create_ledger", "add_expense"]:
-            if data.get("amount") and data.get("contact_name"):
-                response = f"✓ Recorded ${data.get('amount')} with {data.get('contact_name')}"
-            elif data.get("amount"):
-                response = f"✓ Recorded ${data.get('amount')} in ledger"
-            else:
-                response = "✓ Added ledger entry"
-            responses.append(response)
-            
+            amount = data.get("amount"); contact_name = data.get("contact_name")
+            if amount and contact_name:
+                responses.append(get_localized_string("multi_ledger_recorded_details", language_code, amount=amount, contact_name=contact_name))
+            elif amount:
+                responses.append(get_localized_string("multi_ledger_recorded_amount", language_code, amount=amount))
+            else: responses.append(get_localized_string("multi_ledger_recorded", language_code))
         elif intent in ["chit_chat", "general_query"]:
-            response = "✓ Noted your message"
-            responses.append(response)
+            responses.append(get_localized_string("multi_chat_logged", language_code))
     
-    # Combine responses
-    if len(responses) == 1:
-        return f"Perfect! {responses[0]}. Is there anything else I can help you with?"
-    elif len(responses) == 2:
-        return f"Excellent! I've completed both tasks: {responses[0]} and {responses[1]}. Anything else I can do for you?"
-    else:
-        main_response = f"Great! I've completed {len(responses)} tasks: " + ", ".join(responses[:-1]) + f", and {responses[-1]}"
-        return main_response + ". Is there anything else you need help with?"
+    if not responses: return get_localized_string("multi_intent_all_failed", language_code) # if all successful intents had no response string
+    if len(responses) == 1: return get_localized_string("multi_intent_response_one", language_code, response1=responses[0])
+    if len(responses) == 2: return get_localized_string("multi_intent_response_two", language_code, response1=responses[0], response2=responses[1])
+    
+    responses_list_str = ", ".join(responses[:-1])
+    return get_localized_string("multi_intent_response_many", language_code, count=len(responses), responses_list_str=responses_list_str, last_response=responses[-1])
 
 @router.post("/transcribe")
 async def transcribe_audio(
@@ -301,314 +314,137 @@ async def get_model_info(current_user: dict = Depends(verify_firebase_token)):
 @router.post("/transcribe-and-respond")
 async def transcribe_and_respond(
     audio_file: UploadFile = File(...),
+    language_code: Optional[str] = Query("en", description="ISO 639-1 language code for STT, Intent, and TTS processing"),
     current_user: dict = Depends(verify_firebase_token)
 ):
-    """
-    Complete voice-to-database pipeline: transcribe audio, classify intent, and save to database.
-    
-    This endpoint performs the full pipeline:
-    1. Validates and processes uploaded WAV audio file
-    2. Uses Coqui STT to transcribe audio to text
-    3. Classifies intent and extracts entities from transcription
-    4. Processes and saves data to appropriate database table based on intent
-    5. Returns the complete processing result
-    
-    Requirements:
-    - File format: WAV (.wav)
-    - Sample rate: 16 kHz
-    - Channels: Mono (1 channel)
-    - Bit depth: 16-bit PCM
-    """
-    temp_file_path = None
-    processing_steps = {
-        "audio_validation": False,
-        "transcription": False,
-        "intent_classification": False,
-        "database_processing": False
-    }
+    current_user_id = current_user["uid"]
+    logger.info(f"User {current_user_id} called /transcribe-and-respond with language: {language_code}")
+
+    # File validation (remains the same)
+    if not audio_file.content_type or not audio_file.content_type.startswith('audio/'):
+        raise HTTPException(status_code=400, detail="File must be an audio file")
+    file_ext = Path(audio_file.filename).suffix.lower()
+    if file_ext not in settings.SUPPORTED_AUDIO_FORMATS:
+        raise HTTPException(status_code=400, detail=f"Unsupported audio format. Supported: {settings.SUPPORTED_AUDIO_FORMATS}")
+    if audio_file.size and audio_file.size > settings.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large.")
+
+    temp_filename = f"temp_{current_user_id}_{Path(audio_file.filename).name}"
+    file_path = settings.UPLOAD_DIR / temp_filename
     
     try:
-        # Get current user ID from Firebase token
-        current_user_id = current_user["uid"]
-        logger.info(f"Starting transcribe-and-respond pipeline for user: {current_user_id}")
+        async with aiofiles.open(file_path, 'wb') as f:
+            await f.write(await audio_file.read())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save uploaded file: {e}")
+
+    transcription = None
+    intent_result = None
+    processing_result = None
+    response_text = None
+    final_response_audio_url = None
+
+    try:
+        stt_service = get_stt_service() # STT service might need lang later
+        if not stt_service or not stt_service.is_ready():
+            raise HTTPException(status_code=503, detail=get_localized_string("error_stt_not_available", language_code))
         
-        # === STEP 1: AUDIO FILE VALIDATION ===
-        logger.info("Step 1: Validating audio file")
-        
-        # Validate file type
-        if not audio_file.content_type:
-            raise HTTPException(
-                status_code=400, 
-                detail="File content type not specified"
-            )
-        
-        # Check if it's an audio file
-        if not audio_file.content_type.startswith('audio/'):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File must be an audio file, got {audio_file.content_type}"
-            )
-        
-        # Check file extension
-        file_ext = Path(audio_file.filename).suffix.lower()
-        if file_ext not in settings.SUPPORTED_AUDIO_FORMATS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unsupported audio format '{file_ext}'. Supported formats: {', '.join(settings.SUPPORTED_AUDIO_FORMATS)}"
-            )
-        
-        # Check file size
-        if audio_file.size and audio_file.size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE / (1024*1024):.1f}MB"
-            )
-        
-        # Create unique temporary file path
-        temp_filename = f"temp_{current_user_id}_{audio_file.filename}"
-        temp_file_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
-        
-        # Save uploaded file temporarily
-        try:
-            async with aiofiles.open(temp_file_path, 'wb') as f:
-                content = await audio_file.read()
-                await f.write(content)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to save uploaded file: {str(e)}"
-            )
-        
-        processing_steps["audio_validation"] = True
-        logger.info("Step 1: Audio validation completed successfully")
-        
-        # === STEP 2: SPEECH-TO-TEXT TRANSCRIPTION ===
-        logger.info("Step 2: Starting STT transcription")
-        
-        # Get STT service and check if it's ready
-        stt_service = get_stt_service()
-        if not stt_service:
-            raise HTTPException(
-                status_code=503, 
-                detail="Speech-to-text service not available"
-            )
-        
-        if not stt_service.is_ready():
-            raise HTTPException(
-                status_code=503,
-                detail="Speech-to-text service not ready"
-            )
-        
-        # Perform transcription
-        try:
-            transcription = await stt_service.transcribe_file(temp_file_path)
-        except Exception as e:
-            logger.error(f"Transcription failed: {e}")
-            transcription = None
-        
-        if transcription is None or transcription.strip() == "":
-            raise HTTPException(
-                status_code=500, 
-                detail="Transcription failed or returned empty result. Please ensure your audio file meets the requirements: WAV format, 16kHz sample rate, mono channel, 16-bit PCM, and contains clear speech"
-            )
-        
-        processing_steps["transcription"] = True
-        logger.info(f"Step 2: Transcription completed successfully: '{transcription}'")
-        
-        # === STEP 3: INTENT CLASSIFICATION ===
-        logger.info("Step 3: Starting intent classification")
-        
-        intent_service = get_intent_service()
-        if not intent_service:
-            raise HTTPException(
-                status_code=503,
-                detail="Intent classification service not available"
-            )
-        
-        try:
-            # Use multi-intent classification (returns {"intents": [...]} or single intent for backward compatibility)
-            intent_result = await intent_service.classify_intent(transcription, multi_intent=True)
-        except Exception as e:
-            logger.error(f"Intent classification failed: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Intent classification failed: {str(e)}"
-            )
-        
-        # Validate intent result
-        has_intents = "intents" in intent_result and isinstance(intent_result.get("intents"), list) and len(intent_result.get("intents", [])) > 0
-        has_single_intent = "intent" in intent_result and intent_result.get("intent")
-        
-        if not has_intents and not has_single_intent:
-            raise HTTPException(
-                status_code=500,
-                detail="Intent classification returned invalid result"
-            )
-        
-        processing_steps["intent_classification"] = True
-        
-        # Log intent results
-        if has_intents:
-            intents_info = [f"{intent['type']} ({intent.get('confidence', 0.0):.2f})" for intent in intent_result['intents']]
-            logger.info(f"Step 3: Multi-intent classification completed: {len(intent_result['intents'])} intents - {', '.join(intents_info)}")
+        # STT service should eventually take language_code
+        transcription = await stt_service.transcribe_file(str(file_path), language_code=language_code)
+        if transcription is None:
+            raise HTTPException(status_code=500, detail=get_localized_string("error_transcription_failed_requirements", language_code))
+        logger.info(f"Transcription ('{language_code}'): {transcription}")
+
+        # Intent Service - now language aware
+        intent_service = get_intent_service(language_code=language_code) 
+        if not intent_service or not intent_service.is_ready():
+            logger.warning(f"Intent service not available/ready for lang {language_code}. Proceeding without intent classification.")
         else:
-            logger.info(f"Step 3: Single intent classification completed: {intent_result['intent']} (confidence: {intent_result.get('confidence', 0.0)})")
-        
-        # === STEP 4: DATABASE PROCESSING ===
-        logger.info("Step 4: Starting database processing")
-        
-        # Prepare intent data for processing (support both single and multi-intent)
-        from services.intent_processor_service import IntentProcessorService
-        intent_processor = IntentProcessorService()
-        
-        # The intent_result already contains the correct format for the processor
-        # - For multi-intent: {"intents": [...], "original_text": "..."}
-        # - For single-intent: {"intent": "...", "confidence": 0.95, "entities": {...}, "original_text": "..."}
-        
-        try:
-            processing_result = await intent_processor.process_intent(
-                intent_data=intent_result,
-                user_id=current_user_id
-            )
-        except Exception as e:
-            logger.error(f"Database processing failed: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database processing failed: {str(e)}"
-            )
-        
-        if not processing_result.get("success", False):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database processing failed: {processing_result.get('error', 'Unknown error')}"
-            )
-        
-        processing_steps["database_processing"] = True
-        
-        # Log processing results
-        if "results" in processing_result:
-            # Multi-intent processing result
-            total = processing_result.get("total_intents", 0)
-            successful = processing_result.get("successful_intents", 0)
-            logger.info(f"Step 4: Multi-intent database processing completed: {successful}/{total} intents processed successfully")
-        else:
-            # Single intent processing result
-            logger.info(f"Step 4: Single intent database processing completed successfully for intent: {processing_result.get('intent')}")
-        
-        # === STEP 5: GENERATE AI RESPONSE WITH BLOOM 560M ===
-        logger.info("Step 5: Generating AI response with Bloom 560M")
-        
-        # Get chat service for conversational AI response
-        chat_service = get_chat_service()
-        if chat_service and chat_service.is_ready():
             try:
-                # Generate conversational response using Bloom 560M
-                enhanced_response = await chat_service.generate_response(
-                    message=transcription,  # Original user transcription
-                    user_id=current_user_id,
-                    context={
-                        "intent_result": intent_result,
-                        "processing_result": processing_result
-                    }
-                )
-                
-                if enhanced_response and enhanced_response.strip():
-                    response_text = enhanced_response
-                    logger.info(f"Bloom 560M generated response: {response_text[:100]}...")
-                else:
-                    logger.warning("Bloom 560M returned empty response, using fallback")
-                    response_text = _generate_multi_intent_fallback_response(processing_result)
-                    
+                intent_result = await intent_service.classify_intent(transcription)
+                logger.info(f"Intent result ('{language_code}'): {intent_result}")
             except Exception as e:
-                logger.warning(f"Bloom 560M response generation failed, using fallback: {e}")
-                response_text = _generate_multi_intent_fallback_response(processing_result)
-        else:
-            logger.warning("Chat service not available, using fallback response")
-            response_text = _generate_multi_intent_fallback_response(processing_result)
+                logger.error(f"Intent classification failed for lang {language_code}: {e}")
+                # Not raising HTTPException here, will try to respond with just transcription
         
-        logger.info("Step 5: AI response generated successfully")
-        
-        # === STEP 6: GENERATE TTS AUDIO RESPONSE ===
-        logger.info("Step 6: Generating TTS audio response")
-        
-        audio_response_url = None
-        audio_response_data = None
-        
-        tts_service = get_tts_service()
-        if tts_service and tts_service.is_ready():
+        # Intent Processing Service - now language aware
+        if intent_result:
+            intent_processor_service = get_intent_processor_service() # This is a singleton, language is passed to process_intent
             try:
-                # Generate TTS audio for the AI response
-                audio_data = await tts_service.synthesize_speech(response_text, voice="default")
-                
-                if audio_data:
-                    # Save audio data to return in response
-                    audio_response_data = audio_data
-                    # Create a URL for audio streaming
-                    audio_response_url = f"/api/v1/stt/response-audio/{response_text[:50]}..."
-                    logger.info("TTS audio generated successfully")
-                else:
-                    logger.warning("TTS audio generation failed")
-                    
+                processing_result = await intent_processor_service.process_intent(intent_result, current_user_id, language_code)
+                logger.info(f"Processing result ('{language_code}'): {processing_result}")
             except Exception as e:
-                logger.warning(f"TTS audio generation failed: {e}")
-        else:
-            logger.warning("TTS service not available")
+                logger.error(f"Intent processing failed for lang {language_code}: {e}")
+                # Fallback or error response might be generated based on this partial failure
         
-        logger.info("Step 6: TTS processing completed")
-        
-        # === PREPARE FINAL RESPONSE ===
-        final_response = {
-            "success": True,
-            "pipeline_completed": True,
-            "processing_steps": processing_steps,
-            "transcription": transcription,
-            "intent_result": intent_result,
-            "processing_result": processing_result,
-            "ai_response": {
-                "text": response_text,
-                "audio_available": audio_response_data is not None,
-                "audio_url": audio_response_url,
-                "generated_by": "bloom_560m" if chat_service and chat_service.is_ready() else "fallback"
-            },
-            "user_id": current_user_id,
-            "model_info": {
-                "stt": stt_service.get_model_info() if stt_service else None,
-                "chat": chat_service.get_model_info() if chat_service else None,
-                "tts": tts_service.get_engine_info() if tts_service else None
-            },
-            "audio_requirements": {
-                "format": "WAV",
-                "sample_rate": f"{settings.AUDIO_SAMPLE_RATE}Hz",
-                "channels": "Mono",
-                "bit_depth": f"{settings.AUDIO_BIT_DEPTH}-bit PCM"
-            }
-        }
-        
-        # Include audio data if available (base64 encoded for JSON response)
-        if audio_response_data:
-            import base64
-            final_response["ai_response"]["audio_base64"] = base64.b64encode(audio_response_data).decode('utf-8')
-        
-        logger.info(f"Complete voice-to-response pipeline completed successfully for user {current_user_id}")
-        return final_response
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
+        # Response Generation
+        # Use chat service if intent is general_query or no specific intent was processed successfully
+        # This part needs careful thought on when to use chat vs. fallback for multilingual.
+        should_use_chat = False
+        if processing_result and "results" in processing_result: # Multi-intent
+            successful_actions = sum(1 for r in processing_result["results"] if r.get("success") and r.get("intent") not in ["general_query", "chit_chat"])
+            if successful_actions == 0: should_use_chat = True
+        elif processing_result and processing_result.get("intent") in ["general_query", "chit_chat"]:
+            should_use_chat = True
+        elif not processing_result and intent_result and intent_result.get("intent") in ["general_query", "chit_chat"]:
+            should_use_chat = True
+        elif not processing_result and not intent_result: # Only transcription available
+             should_use_chat = True # Or a specific message like "I have your transcription, what next?"
+
+        if should_use_chat and settings.ENABLE_CHAT_SERVICE:
+            chat_service = get_chat_service() # Chat service might also need language_code
+            if chat_service and chat_service.is_ready():
+                try:
+                    # Chat service should ideally take language_code for its own NLU/NLG if any
+                    response_text = await chat_service.generate_response(transcription, current_user_id, language_code=language_code)
+                    logger.info(f"Chat service response ('{language_code}'): {response_text}")
+                except Exception as e:
+                    logger.error(f"Chat service failed for lang {language_code}: {e}")
+                    response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
+            else:
+                logger.warning(f"Chat service not available/ready for lang {language_code}. Using fallback response.")
+                response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
+        elif processing_result: # Use fallback based on processed intents
+            response_text = _generate_multi_intent_fallback_response(processing_result, language_code)
+        else: # Only transcription available, or intent classification failed but no processing occurred
+            response_text = get_localized_string("processed_successfully_default", language_code) # Generic fallback
+
+        # TTS Service for audio response
+        if settings.ENABLE_TTS_SERVICE and response_text:
+            tts_service = get_tts_service() # TTS service needs language_code & voice selection based on language
+            if tts_service and tts_service.is_ready():
+                try:
+                    # This is a simplified call. In reality, you'd select a voice compatible with language_code.
+                    audio_content_bytes = await tts_service.convert_text_to_speech(response_text, language_code=language_code)
+                    # Save to a publicly accessible URL or stream directly (more complex with FastAPI)
+                    # For demo, assume a function to save and get URL:
+                    final_response_audio_url = await tts_service.save_speech_to_public_url(audio_content_bytes, current_user_id, language_code)
+                except Exception as e:
+                    logger.error(f"TTS service failed for lang {language_code}: {e}")
+                    # Proceed with text response only
+            else:
+                logger.warning(f"TTS service not available/ready for lang {language_code}.")
+
+    except HTTPException: # Re-raise HTTPExceptions directly
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in transcribe-and-respond pipeline: {e}")
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Internal server error during voice processing pipeline: {str(e)}"
-        )
+        logger.error(f"Unhandled error in /transcribe-and-respond for lang {language_code}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=get_localized_string("error_processing_failed", language_code, error=str(e)))
     finally:
-        # Always clean up temporary file
-        if temp_file_path and os.path.exists(temp_file_path):
-            try:
-                os.remove(temp_file_path)
-                logger.info(f"Cleaned up temporary file: {temp_file_path}")
-            except Exception as e:
-                logger.warning(f"Failed to remove temporary file {temp_file_path}: {e}")
+        if Path(file_path).exists():
+            try: os.remove(file_path)
+            except Exception as e: logger.warning(f"Failed to remove temp file {file_path}: {e}")
+
+    return {
+        "success": True,
+        "transcription": transcription,
+        "intent_result": intent_result, # Original intent classification result
+        "processing_result": processing_result, # Result from IntentProcessorService
+        "response_text": response_text,
+        "response_audio_url": final_response_audio_url,
+        "language_code": language_code,
+        "user_id": current_user_id
+    }
 
 @router.get("/response-audio/{text}")
 async def get_response_audio(

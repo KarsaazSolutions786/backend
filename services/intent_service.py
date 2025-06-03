@@ -6,7 +6,8 @@ import re
 class IntentService:
     """Intent classification service using MiniLM."""
     
-    def __init__(self):
+    def __init__(self, language_code: str = "en"):
+        self.language_code = language_code
         self.model = None
         self.tokenizer = None
         self.intent_labels = [
@@ -21,28 +22,111 @@ class IntentService:
             "list_reminders",
             "update_reminder"
         ]
-        # Multi-intent patterns - Enhanced for better detection
-        self.multi_intent_separators = [
-            # Primary action-based separators
-            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind)',  # "and set", "and also create", "and remind"
-            r'\balso\s+(?:set|create|add|make|remind)',  # "also set", "also remind"
-            r'\bthen\s+(?:set|create|add|make|remind)',  # "then set", "then remind"
-            r'\bplus\s+(?:set|create|add|make|remind)',  # "plus set", "plus remind"
-            
-            # Name-based separators (for ledger entries)
-            r'\band\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?|borrowed?|lent)',  # "and John owes"
-            r'\band\s+(?:I|i)\s+(?:owe|borrowed|lent)',  # "and I owe", "and i borrowed"
-            r'\band\s+([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',  # "and John will give", "and John pay"
-            
-            # General "and" separators for different intent types
-            r'\band\s+(?:I|i)\s+(?:want|need|have to|should)',  # "and i want", "and i need"
-            r'\band\s+(?:remind|note|track|record)',  # "and remind", "and note", "and track"
-            
-            # Monetary separators
-            r'\band\s+(?:\$\d+|\d+\s*dollars?)',  # "and $50", "and 50 dollars"
-        ]
+        # Language-specific resources will be loaded here
+        self.multi_intent_separators: List[str] = []
+        self.intent_keywords: Dict[str, List[str]] = {}
+        self.entity_patterns: Dict[str, List[str]] = {}
+        self.fallback_intent_indicators: List[str] = []
+
+        self._load_language_resources(language_code)
         self._load_model()
     
+    def _load_language_resources(self, lang_code: str):
+        """Load language-specific keywords and patterns."""
+        logger.info(f"Loading language resources for: {lang_code}")
+        # Default to English if the specified language is not (yet) supported
+        if lang_code == "en":
+            self.multi_intent_separators = [
+                r'\band\s+(?:also\s+)?(?:set|create|add|make|remind)',
+                r'\balso\s+(?:set|create|add|make|remind)',
+                r'\bthen\s+(?:set|create|add|make|remind)',
+                r'\bplus\s+(?:set|create|add|make|remind)',
+                r'\band\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?|borrowed?|lent)',
+                r'\band\s+(?:I|i)\s+(?:owe|borrowed|lent)',
+                r'\band\s+([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',
+                r'\band\s+(?:I|i)\s+(?:want|need|have to|should)',
+                r'\band\s+(?:remind|note|track|record)',
+                r'\band\s+(?:\$\d+|\d+\s*dollars?)',
+            ]
+            
+            self.intent_keywords = {
+                "create_reminder": ["remind", "reminder", "alert", "book a ticket", "book ticket"],
+                "create_note": ["note", "write", "jot"],
+                "create_ledger": ["owe", "owes", "owed", "debt", "ledger", "borrowed", "lent", "payback", "will give", "will pay", "giving", "paying", "pay me", "give me"],
+                "schedule_event": ["schedule", "appointment", "meeting"],
+                "add_expense": ["expense", "cost", "spend", "money"], # Often overlaps with ledger
+                "add_friend": ["friend", "contact", "person"],
+                "cancel_reminder": ["cancel", "delete", "remove"],
+                "list_reminders": ["list", "show", "display"],
+                "general_query_phrases": ["i want to go", "want to go", "going to", "travel to", "visit"]
+            }
+
+            self.entity_patterns = {
+                "time": [
+                    r'\b(\d{1,2}):(\d{2})\s*(am|pm)?\b',
+                    r'\b(\d{1,2})\s*(am|pm)\b',
+                    r'\bat\s+(\d{1,2}):?(\d{2})?\s*(am|pm)?\b'
+                ],
+                "date": [
+                    r'\b(today|tomorrow|yesterday)\b',
+                    r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+                    r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b'
+                ],
+                "name_general": [
+                    r'\bcall\s+([A-Z][a-z]+)\b',
+                    r'\bmeet\s+([A-Z][a-z]+)\b',
+                    r'\bwith\s+([A-Z][a-z]+)\b',
+                ],
+                "name_ledger": [
+                    r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',
+                    r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',
+                    r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',
+                    r'(?:give|pay)\s+([A-Z][a-z]+)',
+                    r'\b([A-Z][a-z]+)\s+.*?\$\d+',
+                    r'\$\d+.*?\b([A-Z][a-z]+)',
+                ],
+                "name_additional": [
+                    r'\b([A-Z][a-z]+)\s+(?:and|&)',
+                    r'(?:from|to)\s+([A-Z][a-z]+)',
+                ],
+                "money": [
+                    r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)',
+                    r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*dollars?',
+                    r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*bucks?',
+                ],
+                "money_standalone": [ # For _is_monetary_amount
+                    r'^$\d+(?:,\d{3})*(?:\.\d{2})?$',
+                    r'^(\d+(?:,\d{3})*(?:\.\d{2})?)\s*(?:dollars?|bucks?|usd)$',
+                    # Add other currencies here, e.g., Euro, Pound, Yen
+                    r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',
+                    r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',
+                    r'^¥\d+(?:,\d{3})*(?:\.\d{2})?$',
+                ],
+                "name_for_has_name_and_money": [ # For _has_name_and_money
+                    r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',
+                    r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',
+                    r'\b([A-Z][a-z]+)\s+(?:\$|\d+)', # Name $amount or Name amount
+                    r'(?:$|\\d+).*?([A-Z][a-z]+)', # $amount ... Name
+                    r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay|owes?|owed?)',
+                    r'\b([A-Z][a-z]+).*?(?:$|\\d+)',
+                    r'(?:$|\\d+).*?\b([A-Z][a-z]+)',
+                ]
+            }
+            self.fallback_intent_indicators = [
+                'remind', 'note', 'owe', 'want', 'need', 'have to', 'should', 
+                'i ', 'john', 'sarah', 'mike', '$', 'dollar', 'track', 'record' # Example names/terms
+            ]
+        else:
+            # Placeholder for other languages - ideally load from JSON files or a dedicated i18n module
+            logger.warning(f"Language resources for '{lang_code}' not implemented. Falling back to English defaults.")
+            if lang_code != "en": # Avoid infinite recursion if "en" fails
+                self._load_language_resources("en") # Fallback to English
+            else: # If English itself failed, use minimal defaults to avoid crashing
+                self.multi_intent_separators = [r'\band\s+'] 
+                self.intent_keywords = {"general_query": ["."]} # Match anything
+                self.entity_patterns = {}
+                self.fallback_intent_indicators = []
+
     def _load_model(self):
         """Load the intent classification model."""
         try:
@@ -75,7 +159,7 @@ class IntentService:
     
     async def classify_intent(self, text: str, multi_intent: bool = True) -> Dict[str, any]:
         """
-        Classify the intent(s) of the given text.
+        Classify the intent(s) of the given text using the service's configured language.
         
         Args:
             text: Input text to classify
@@ -88,7 +172,7 @@ class IntentService:
         """
         try:
             if not self.model or not self.tokenizer:
-                logger.error("Intent model not loaded")
+                logger.error(f"Intent model not loaded for language {self.language_code}")
                 if multi_intent:
                     return {"intents": [{"type": "general_query", "confidence": 0.0, "entities": {}}], "original_text": text}
                 else:
@@ -100,7 +184,7 @@ class IntentService:
                 return await self._classify_single_intent(text)
                 
         except Exception as e:
-            logger.error(f"Intent classification failed: {e}")
+            logger.error(f"Intent classification failed for language {self.language_code}: {e}")
             if multi_intent:
                 return {"intents": [{"type": "general_query", "confidence": 0.0, "entities": {}}], "original_text": text}
             else:
@@ -116,7 +200,7 @@ class IntentService:
         Returns:
             Dictionary with array of intents: {"intents": [...], "original_text": "..."}
         """
-        logger.info(f"Multi-intent classification for: '{text}'")
+        logger.info(f"Multi-intent classification for ('{self.language_code}'): '{text}'")
         
         # Split text into segments based on multi-intent patterns
         segments = self._segment_text_for_multi_intent(text)
@@ -141,7 +225,7 @@ class IntentService:
             if not segment:
                 continue
                 
-            logger.info(f"Processing segment: '{segment}'")
+            logger.info(f"Processing segment ('{self.language_code}'): '{segment}'")
             single_result = await self._classify_single_intent(segment)
             
             intents.append({
@@ -151,7 +235,7 @@ class IntentService:
                 "text_segment": segment
             })
         
-        logger.info(f"Multi-intent result: {len(intents)} intents detected")
+        logger.info(f"Multi-intent result ('{self.language_code}'): {len(intents)} intents detected")
         
         return {
             "intents": intents,
@@ -190,10 +274,7 @@ class IntentService:
             for match in re.finditer(r'\band\s+', text, re.IGNORECASE):
                 # Check if this "and" is followed by potential intent indicators
                 following_text = text[match.end():match.end()+50].lower()
-                if any(indicator in following_text for indicator in [
-                    'remind', 'note', 'owe', 'want', 'need', 'have to', 'should', 
-                    'i ', 'john', 'sarah', 'mike', '$', 'dollar', 'track', 'record'
-                ]):
+                if any(indicator in following_text for indicator in self.fallback_intent_indicators):
                     and_positions.append({
                         'start': match.start(),
                         'end': match.end(),
@@ -205,7 +286,7 @@ class IntentService:
         
         # If still no separators, return the original text
         if not separator_positions:
-            logger.info(f"Text segmentation: '{text}' -> 1 segment (no separators found)")
+            logger.info(f"Text segmentation ('{self.language_code}'): '{text}' -> 1 segment (no separators found)")
             return [text]
         
         # Split text based on separator positions
@@ -246,7 +327,7 @@ class IntentService:
             if len(aggressive_segments) > 1:
                 cleaned_segments = [seg.strip() for seg in aggressive_segments if seg.strip()]
         
-        logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
+        logger.info(f"Text segmentation ('{self.language_code}'): '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
         return cleaned_segments
 
     async def _classify_single_intent(self, text: str) -> Dict[str, any]:
@@ -331,7 +412,7 @@ class IntentService:
             "original_text": text
         }
         
-        logger.info(f"Intent classification: {intent} (confidence: {confidence:.2f})")
+        logger.info(f"Intent classification ('{self.language_code}'): {intent} (confidence: {confidence:.2f}) for text: '{text}'")
         return result
 
     def _extract_entities(self, text: str) -> Dict[str, any]:
@@ -339,74 +420,38 @@ class IntentService:
         entities = {}
         text_lower = text.lower()
         
-        # Extract time entities
-        import re
+        # Use language-specific entity patterns
+        lang_entity_patterns = self.entity_patterns
+
+        if not lang_entity_patterns: # No patterns for this language
+            return entities
+
+        # Time
+        for pattern_str in lang_entity_patterns.get("time", []):
+            if matches := re.findall(pattern_str, text_lower):
+                entities["time"] = matches[0]; break
+        # Date
+        for pattern_str in lang_entity_patterns.get("date", []):
+            if matches := re.findall(pattern_str, text_lower): # Note: some date words might be caught by mistake
+                entities["date"] = matches[0]; break
         
-        # Time patterns
-        time_patterns = [
-            r'\b(\d{1,2}):(\d{2})\s*(am|pm)?\b',
-            r'\b(\d{1,2})\s*(am|pm)\b',
-            r'\bat\s+(\d{1,2}):?(\d{2})?\s*(am|pm)?\b'
-        ]
+        # Names (combining general, ledger, additional for simplicity here)
+        # This needs more sophisticated NER for multilingual
+        name_patterns_combined = \
+            lang_entity_patterns.get("name_general", []) + \
+            lang_entity_patterns.get("name_ledger", []) + \
+            lang_entity_patterns.get("name_additional", [])
         
-        for pattern in time_patterns:
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                entities["time"] = matches[0]
-                break
+        for pattern_str in name_patterns_combined:
+            # Names are case-sensitive, so search in original text
+            if matches := re.findall(pattern_str, text): 
+                entities["person"] = matches[0]; break
         
-        # Date patterns
-        date_patterns = [
-            r'\b(today|tomorrow|yesterday)\b',
-            r'\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
-            r'\b(\d{1,2})/(\d{1,2})/(\d{4})\b'
-        ]
-        
-        for pattern in date_patterns:
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                entities["date"] = matches[0]
-                break
-        
-        # Extract names (enhanced approach for different contexts)
-        name_patterns = [
-            # General conversation patterns
-            r'\bcall\s+([A-Z][a-z]+)\b',
-            r'\bmeet\s+([A-Z][a-z]+)\b',
-            r'\bwith\s+([A-Z][a-z]+)\b',
-            
-            # Ledger/financial patterns
-            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',  # "John owes", "John borrowed"
-            r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',     # "owes John", "borrowed from John"
-            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',        # "John will give", "John pay"
-            r'(?:give|pay)\s+([A-Z][a-z]+)',                      # "give John", "pay John"
-            r'\b([A-Z][a-z]+)\s+.*?\$\d+',                        # "John ... $50"
-            r'\$\d+.*?\b([A-Z][a-z]+)',                           # "$50 ... John"
-            
-            # Additional name patterns
-            r'\b([A-Z][a-z]+)\s+(?:and|&)',                       # "John and", "John &"
-            r'(?:from|to)\s+([A-Z][a-z]+)',                       # "from John", "to John"
-        ]
-        
-        for pattern in name_patterns:
-            matches = re.findall(pattern, text)
-            if matches:
-                entities["person"] = matches[0]
-                break
-        
-        # Extract monetary amounts for ledger entries
-        money_patterns = [
-            r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)',     # $50, $1,000, $50.00
-            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*dollars?',  # 50 dollars, 1000 dollars
-            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*bucks?',    # 50 bucks
-        ]
-        
-        for pattern in money_patterns:
-            matches = re.findall(pattern, text_lower)
-            if matches:
-                entities["amount"] = matches[0]
-                break
-        
+        # Money
+        for pattern_str in lang_entity_patterns.get("money", []):
+            if matches := re.findall(pattern_str, text_lower):
+                entities["amount"] = matches[0]; break
+                
         return entities
     
     async def get_intent_suggestions(self, partial_text: str) -> List[str]:
@@ -447,58 +492,27 @@ class IntentService:
     
     def _has_name_and_money(self, text: str) -> bool:
         """Check if text contains both a person's name and a monetary amount."""
-        import re
-        
-        # Look for names (capitalized words that could be names)
-        name_patterns = [
-            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',  # "John owes"
-            r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',     # "owes John"
-            r'\b([A-Z][a-z]+)\s+(?:\$|\d+)',                      # "John $50"
-            r'(?:\$|\d+).*?([A-Z][a-z]+)',                        # "$50 John"
-            # Enhanced patterns for more flexible matching
-            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay|owes?|owed?)',  # "John will give", "John will pay"
-            r'\b([A-Z][a-z]+).*?(?:\$|\d+)',                      # "John ... $50" (flexible with text in between)
-            r'(?:\$|\d+).*?\b([A-Z][a-z]+)',                      # "$50 ... John" (flexible with text in between)
-        ]
-        
-        has_name = any(re.search(pattern, text) for pattern in name_patterns)
-        
-        # Look for monetary amounts
-        money_patterns = [
-            r'\$\d+',           # $50
-            r'\d+\s*dollars?',  # 50 dollars
-            r'\d+\s*bucks?',    # 50 bucks
-        ]
-        
-        has_money = any(re.search(pattern, text, re.IGNORECASE) for pattern in money_patterns)
-        
+        if self.language_code != "en": # This logic is too English-specific
+            # For other languages, this would need proper NER or more generic patterns
+            return False 
+
+        lang_entity_patterns = self.entity_patterns
+        has_name = any(re.search(p, text) for p in lang_entity_patterns.get("name_for_has_name_and_money",[]))
+        has_money = any(re.search(p, text, re.IGNORECASE) for p in lang_entity_patterns.get("money",[]))
         return has_name and has_money
 
     def _is_monetary_amount(self, text: str) -> bool:
         """Check if the text represents a standalone monetary amount."""
-        import re
-        
-        # Remove whitespace and convert to string if needed
         text_clean = str(text).strip()
-        
-        # Patterns for monetary amounts
-        monetary_patterns = [
-            r'^\$\d+(?:,\d{3})*(?:\.\d{2})?$',  # $1000, $1,000, $1000.00
-            r'^\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?|usd)$',  # 1000 dollars
-            r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',   # €1000
-            r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',   # £1000
-            r'^¥\d+(?:,\d{3})*(?:\.\d{2})?$',  # ¥1000
-        ]
-        
         text_lower = text_clean.lower()
         
-        # Check if text matches any monetary pattern
-        for pattern in monetary_patterns:
-            if re.match(pattern, text_lower):
+        # Uses patterns including common currency symbols, can be expanded
+        money_patterns = self.entity_patterns.get("money_standalone", [])
+        for pattern_str in money_patterns:
+            if re.match(pattern_str, text_lower):
                 return True
         
-        # Additional check for pure dollar amounts (like "$10000")
-        if re.match(r'^\$\d+$', text_clean):
+        if self.language_code == "en" and re.match(r'^$\d+$', text_clean): # English-specific quick check
             return True
             
         return False
