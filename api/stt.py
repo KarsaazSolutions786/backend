@@ -12,6 +12,41 @@ from core.config import settings
 
 router = APIRouter()
 
+def _generate_fallback_response(processing_result: dict) -> str:
+    """Generate fallback response when Bloom 560M is not available."""
+    intent = processing_result.get("intent", "unknown")
+    data = processing_result.get("data", {})
+    
+    if intent == "create_reminder":
+        response = f"Perfect! I've created a reminder titled '{data.get('title', 'your reminder')}'"
+        if data.get("time"):
+            response += f" scheduled for {data.get('time')}"
+        response += ". I'll make sure to notify you when the time comes!"
+        return response
+        
+    elif intent == "create_note":
+        response = "Great! I've saved your note successfully. "
+        if data.get("content"):
+            response += "Your thoughts are now safely stored and you can access them anytime."
+        else:
+            response += "You can always come back to review or edit it later."
+        return response
+        
+    elif intent in ["create_ledger", "add_expense"]:
+        response = "Excellent! I've recorded your ledger entry"
+        if data.get("amount") and data.get("person"):
+            response += f" for ${data.get('amount')} with {data.get('person')}"
+        elif data.get("amount"):
+            response += f" for ${data.get('amount')}"
+        response += ". Your financial records are now updated!"
+        return response
+        
+    elif intent == "general_query":
+        return "I understand your request and I'm here to help! Is there anything specific you'd like me to assist you with regarding reminders, notes, or your ledger?"
+        
+    else:
+        return "I've processed your request successfully! Is there anything else you'd like me to help you with today?"
+
 @router.post("/transcribe")
 async def transcribe_audio(
     audio_file: UploadFile = File(...),
@@ -370,43 +405,68 @@ async def transcribe_and_respond(
         processing_steps["database_processing"] = True
         logger.info(f"Step 4: Database processing completed successfully for intent: {processing_result.get('intent')}")
         
-        # === STEP 5: GENERATE AI RESPONSE (Optional) ===
-        logger.info("Step 5: Generating AI response")
+        # === STEP 5: GENERATE AI RESPONSE WITH BLOOM 560M ===
+        logger.info("Step 5: Generating AI response with Bloom 560M")
         
-        # Generate contextual response based on processing result
-        response_text = ""
-        if processing_result.get("intent") == "create_reminder":
-            data = processing_result.get("data", {})
-            response_text = f"I've created a reminder titled '{data.get('title', 'Reminder')}'"
-            if data.get("time"):
-                response_text += f" for {data.get('time')}"
-            response_text += "."
-        elif processing_result.get("intent") == "create_note":
-            response_text = "I've saved your note successfully."
-        elif processing_result.get("intent") in ["create_ledger", "add_expense"]:
-            data = processing_result.get("data", {})
-            response_text = f"I've recorded the ledger entry"
-            if data.get("amount") and data.get("person"):
-                response_text += f" for ${data.get('amount')} with {data.get('person')}"
-            response_text += "."
-        else:
-            response_text = "I've processed your request successfully."
-        
-        # Try to get chat service for enhanced response
+        # Get chat service for conversational AI response
         chat_service = get_chat_service()
-        if chat_service:
+        if chat_service and chat_service.is_ready():
             try:
+                # Generate conversational response using Bloom 560M
                 enhanced_response = await chat_service.generate_response(
-                    transcription, 
-                    current_user_id, 
-                    context=intent_result
+                    message=transcription,  # Original user transcription
+                    user_id=current_user_id,
+                    context={
+                        "intent": intent_result.get("intent"),
+                        "confidence": intent_result.get("confidence", 0.0),
+                        "entities": intent_result.get("entities", {}),
+                        "processing_result": processing_result
+                    }
                 )
+                
                 if enhanced_response and enhanced_response.strip():
                     response_text = enhanced_response
+                    logger.info(f"Bloom 560M generated response: {response_text[:100]}...")
+                else:
+                    logger.warning("Bloom 560M returned empty response, using fallback")
+                    response_text = _generate_fallback_response(processing_result)
+                    
             except Exception as e:
-                logger.warning(f"Enhanced response generation failed, using default: {e}")
+                logger.warning(f"Bloom 560M response generation failed, using fallback: {e}")
+                response_text = _generate_fallback_response(processing_result)
+        else:
+            logger.warning("Chat service not available, using fallback response")
+            response_text = _generate_fallback_response(processing_result)
         
         logger.info("Step 5: AI response generated successfully")
+        
+        # === STEP 6: GENERATE TTS AUDIO RESPONSE ===
+        logger.info("Step 6: Generating TTS audio response")
+        
+        audio_response_url = None
+        audio_response_data = None
+        
+        tts_service = get_tts_service()
+        if tts_service and tts_service.is_ready():
+            try:
+                # Generate TTS audio for the AI response
+                audio_data = await tts_service.synthesize_speech(response_text, voice="default")
+                
+                if audio_data:
+                    # Save audio data to return in response
+                    audio_response_data = audio_data
+                    # Create a URL for audio streaming
+                    audio_response_url = f"/api/v1/stt/response-audio/{response_text[:50]}..."
+                    logger.info("TTS audio generated successfully")
+                else:
+                    logger.warning("TTS audio generation failed")
+                    
+            except Exception as e:
+                logger.warning(f"TTS audio generation failed: {e}")
+        else:
+            logger.warning("TTS service not available")
+        
+        logger.info("Step 6: TTS processing completed")
         
         # === PREPARE FINAL RESPONSE ===
         final_response = {
@@ -416,9 +476,18 @@ async def transcribe_and_respond(
             "transcription": transcription,
             "intent_result": intent_result,
             "processing_result": processing_result,
-            "response_text": response_text,
+            "ai_response": {
+                "text": response_text,
+                "audio_available": audio_response_data is not None,
+                "audio_url": audio_response_url,
+                "generated_by": "bloom_560m" if chat_service and chat_service.is_ready() else "fallback"
+            },
             "user_id": current_user_id,
-            "model_info": stt_service.get_model_info() if stt_service else None,
+            "model_info": {
+                "stt": stt_service.get_model_info() if stt_service else None,
+                "chat": chat_service.get_model_info() if chat_service else None,
+                "tts": tts_service.get_engine_info() if tts_service else None
+            },
             "audio_requirements": {
                 "format": "WAV",
                 "sample_rate": f"{settings.AUDIO_SAMPLE_RATE}Hz",
@@ -427,7 +496,12 @@ async def transcribe_and_respond(
             }
         }
         
-        logger.info(f"Pipeline completed successfully for user {current_user_id}")
+        # Include audio data if available (base64 encoded for JSON response)
+        if audio_response_data:
+            import base64
+            final_response["ai_response"]["audio_base64"] = base64.b64encode(audio_response_data).decode('utf-8')
+        
+        logger.info(f"Complete voice-to-response pipeline completed successfully for user {current_user_id}")
         return final_response
         
     except HTTPException:
@@ -454,7 +528,7 @@ async def get_response_audio(
     voice: Optional[str] = "default",
     current_user: dict = Depends(verify_firebase_token)
 ):
-    """Generate TTS audio for given text."""
+    """Generate TTS audio for given text response."""
     try:
         tts_service = get_tts_service()
         if not tts_service:
@@ -468,7 +542,10 @@ async def get_response_audio(
         return StreamingResponse(
             io.BytesIO(audio_data),
             media_type="audio/wav",
-            headers={"Content-Disposition": "attachment; filename=response.wav"}
+            headers={
+                "Content-Disposition": f"attachment; filename=ai_response.wav",
+                "Content-Length": str(len(audio_data))
+            }
         )
         
     except HTTPException:
@@ -526,4 +603,114 @@ async def get_intent_suggestions(
         
     except Exception as e:
         logger.error(f"Intent suggestions error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") 
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/stream-conversation")
+async def stream_conversation(
+    audio_file: UploadFile = File(...),
+    return_audio: bool = True,
+    voice: str = "default",
+    current_user: dict = Depends(verify_firebase_token)
+):
+    """
+    Enhanced conversational endpoint: Audio in → Bloom 560M response → TTS Audio out
+    
+    This endpoint provides a complete voice-to-voice conversation experience:
+    1. STT: Convert uploaded audio to text
+    2. Bloom 560M: Generate conversational AI response
+    3. TTS: Convert AI response to audio
+    4. Return both text and audio responses
+    """
+    temp_file_path = None
+    
+    try:
+        current_user_id = current_user["uid"]
+        logger.info(f"Starting stream conversation for user: {current_user_id}")
+        
+        # === STEP 1: TRANSCRIBE AUDIO ===
+        # Validate and save audio file
+        if not audio_file.content_type or not audio_file.content_type.startswith('audio/'):
+            raise HTTPException(status_code=400, detail="File must be an audio file")
+        
+        file_ext = Path(audio_file.filename).suffix.lower()
+        if file_ext not in settings.SUPPORTED_AUDIO_FORMATS:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {file_ext}")
+        
+        # Save temporary file
+        temp_filename = f"conv_{current_user_id}_{audio_file.filename}"
+        temp_file_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
+        
+        async with aiofiles.open(temp_file_path, 'wb') as f:
+            content = await audio_file.read()
+            await f.write(content)
+        
+        # Transcribe audio
+        stt_service = get_stt_service()
+        if not stt_service:
+            raise HTTPException(status_code=503, detail="STT service not available")
+        
+        transcription = await stt_service.transcribe_file(temp_file_path)
+        if not transcription:
+            raise HTTPException(status_code=500, detail="Transcription failed")
+        
+        logger.info(f"Transcribed: {transcription}")
+        
+        # === STEP 2: GENERATE AI RESPONSE WITH BLOOM 560M ===
+        chat_service = get_chat_service()
+        if not chat_service:
+            raise HTTPException(status_code=503, detail="Chat service not available")
+        
+        # Generate conversational response
+        ai_response = await chat_service.generate_response(
+            message=transcription,
+            user_id=current_user_id,
+            context={"conversation_mode": True}
+        )
+        
+        logger.info(f"AI Response: {ai_response}")
+        
+        # === STEP 3: GENERATE TTS AUDIO ===
+        audio_data = None
+        if return_audio:
+            tts_service = get_tts_service()
+            if tts_service:
+                try:
+                    audio_data = await tts_service.synthesize_speech(ai_response, voice)
+                except Exception as e:
+                    logger.warning(f"TTS generation failed: {e}")
+        
+        # === PREPARE RESPONSE ===
+        response = {
+            "success": True,
+            "conversation": {
+                "user_input": transcription,
+                "ai_response": ai_response,
+                "audio_available": audio_data is not None
+            },
+            "models_used": {
+                "stt": stt_service.get_model_info() if stt_service else None,
+                "chat": chat_service.get_model_info() if chat_service else None,
+                "tts": tts_service.get_engine_info() if tts_service else None
+            }
+        }
+        
+        # Include audio data if available
+        if audio_data:
+            import base64
+            response["conversation"]["audio_base64"] = base64.b64encode(audio_data).decode('utf-8')
+            response["conversation"]["audio_url"] = f"/api/v1/stt/response-audio/{ai_response[:50]}"
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Stream conversation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Conversation processing failed: {str(e)}")
+    finally:
+        # Clean up temp file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to remove temp file: {e}") 
