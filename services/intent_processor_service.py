@@ -5,7 +5,7 @@ Intent Processor Service - Handles intent classification results and saves data 
 import re
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.orm import Session
@@ -32,50 +32,184 @@ class IntentProcessorService:
             'number': re.compile(r'(\d+(?:\.\d{2})?)\s*(?:dollars?|bucks?)', re.IGNORECASE),
             'written': re.compile(r'(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:dollars?|bucks?)', re.IGNORECASE)
         }
+        
+        # Handler registry for intent processing
+        self.intent_handlers = {
+            "create_reminder": self._process_reminder,
+            "create_note": self._process_note,
+            "create_ledger": self._process_ledger,
+            "add_expense": self._process_ledger,  # Route to ledger handler
+            "chit_chat": self._process_chat,
+            "general_query": self._process_chat,  # Route to chat handler
+        }
 
     async def process_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """
         Process intent classification result and save to appropriate database table.
+        This method supports both single intent and multi-intent processing.
+        
+        Args:
+            intent_data: Intent classification result from AI service
+                        Can be single intent: {"intent": "create_reminder", "confidence": 0.95, ...}
+                        Or multi-intent: {"intents": [{"type": "create_reminder", ...}, ...]}
+            user_id: User ID from authentication
+            
+        Returns:
+            Dictionary with operation result(s)
+        """
+        try:
+            # Check if this is multi-intent or single intent
+            if "intents" in intent_data and isinstance(intent_data["intents"], list):
+                return await self.process_multi_intent(intent_data, user_id)
+            else:
+                return await self.process_single_intent(intent_data, user_id)
+                
+        except Exception as e:
+            logger.error(f"Error processing intent data: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to process intent data: {str(e)}',
+                'intent_data': intent_data
+            }
+
+    async def process_multi_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """
+        Process multiple intents from a single utterance with independent transactions.
+        
+        Args:
+            intent_data: Multi-intent classification result with "intents" array
+            user_id: User ID from authentication
+            
+        Returns:
+            Dictionary with results array containing status of each intent processing
+        """
+        logger.info(f"Processing multi-intent for user: {user_id}")
+        
+        intents = intent_data.get("intents", [])
+        original_text = intent_data.get("original_text", "")
+        
+        if not intents:
+            return {
+                'success': False,
+                'error': 'No intents found in multi-intent data',
+                'results': []
+            }
+        
+        # Validate user exists once for all intents
+        if not await self._validate_user(user_id):
+            return {
+                'success': False,
+                'error': 'User not found',
+                'results': []
+            }
+        
+        results = []
+        overall_success = True
+        
+        # Process each intent independently
+        for i, intent_obj in enumerate(intents):
+            intent_type = intent_obj.get("type", "unknown")
+            confidence = intent_obj.get("confidence", 0.0)
+            entities = intent_obj.get("entities", {})
+            text_segment = intent_obj.get("text_segment", original_text)
+            
+            logger.info(f"Processing intent {i+1}/{len(intents)}: {intent_type} (confidence: {confidence:.2f})")
+            
+            try:
+                # Create single intent data structure for processing
+                single_intent_data = {
+                    "intent": intent_type,
+                    "confidence": confidence,
+                    "entities": entities,
+                    "original_text": text_segment
+                }
+                
+                # Process using independent transaction
+                result = await self._process_single_intent_with_transaction(
+                    single_intent_data, user_id, text_segment
+                )
+                
+                # Add intent info to result
+                result["intent"] = intent_type
+                result["text_segment"] = text_segment
+                result["position"] = i + 1
+                
+                results.append(result)
+                
+                if not result.get("success", False):
+                    overall_success = False
+                    logger.warning(f"Intent {i+1} failed: {result.get('error', 'Unknown error')}")
+                else:
+                    logger.info(f"Intent {i+1} processed successfully")
+                    
+            except Exception as e:
+                logger.error(f"Error processing intent {i+1} ({intent_type}): {e}")
+                results.append({
+                    "success": False,
+                    "error": f"Failed to process intent: {str(e)}",
+                    "intent": intent_type,
+                    "text_segment": text_segment,
+                    "position": i + 1
+                })
+                overall_success = False
+        
+        logger.info(f"Multi-intent processing completed: {len(results)} intents, overall_success: {overall_success}")
+        
+        return {
+            "success": overall_success,
+            "message": f"Processed {len(results)} intents" + (" (with some failures)" if not overall_success else " successfully"),
+            "results": results,
+            "total_intents": len(intents),
+            "successful_intents": sum(1 for r in results if r.get("success", False)),
+            "original_text": original_text
+        }
+
+    async def process_single_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """
+        Process single intent (backward compatibility method).
+        
+        Args:
+            intent_data: Single intent classification result
+            user_id: User ID from authentication
+            
+        Returns:
+            Dictionary with operation result
+        """
+        intent = intent_data.get('intent', '').lower()
+        original_text = intent_data.get('original_text', '')
+        
+        return await self._process_single_intent_with_transaction(intent_data, user_id, original_text)
+
+    async def _process_single_intent_with_transaction(self, intent_data: Dict[str, Any], user_id: str, original_text: str) -> Dict[str, Any]:
+        """
+        Process a single intent with its own database transaction.
         
         Args:
             intent_data: Intent classification result from AI service
             user_id: User ID from authentication
+            original_text: The text segment for this intent
             
         Returns:
             Dictionary with operation result
         """
         try:
             intent = intent_data.get('intent', '').lower()
-            original_text = intent_data.get('original_text', '')
             entities = intent_data.get('entities', {})
             confidence = intent_data.get('confidence', 0.0)
             
-            logger.info(f"Processing intent: {intent} for user: {user_id}")
-            
-            # Validate user exists
-            if not await self._validate_user(user_id):
-                return {
-                    'success': False,
-                    'error': 'User not found',
-                    'intent': intent
-                }
+            logger.info(f"Processing single intent: {intent} for user: {user_id}")
             
             # Route to appropriate handler based on intent
-            if intent == 'create_reminder':
-                return await self._process_reminder(original_text, entities, user_id)
-            elif intent == 'create_note':
-                return await self._process_note(original_text, entities, user_id)
-            elif intent in ['create_ledger', 'add_expense']:
-                return await self._process_ledger(original_text, entities, user_id)
-            elif intent in ['chit_chat', 'general_query']:
-                return await self._process_chat(original_text, user_id)
+            handler = self.intent_handlers.get(intent)
+            if handler:
+                return await handler(original_text, entities, user_id)
             else:
                 # For unknown intents, save as chat interaction
                 logger.warning(f"Unknown intent: {intent}, treating as chat")
                 return await self._process_chat(original_text, user_id)
                 
         except Exception as e:
-            logger.error(f"Error processing intent: {e}")
+            logger.error(f"Error processing single intent: {e}")
             return {
                 'success': False,
                 'error': f'Failed to process intent: {str(e)}',

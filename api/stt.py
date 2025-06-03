@@ -47,6 +47,79 @@ def _generate_fallback_response(processing_result: dict) -> str:
     else:
         return "I've processed your request successfully! Is there anything else you'd like me to help you with today?"
 
+def _generate_multi_intent_fallback_response(processing_result: dict) -> str:
+    """Generate fallback response for both single and multi-intent processing results."""
+    
+    # Check if this is a multi-intent result
+    if "results" in processing_result and isinstance(processing_result.get("results"), list):
+        return _generate_multi_intent_response(processing_result)
+    else:
+        # Single intent - use original function
+        return _generate_fallback_response(processing_result)
+
+def _generate_multi_intent_response(processing_result: dict) -> str:
+    """Generate response for multi-intent processing results."""
+    results = processing_result.get("results", [])
+    total_intents = processing_result.get("total_intents", 0)
+    successful_intents = processing_result.get("successful_intents", 0)
+    
+    if not results:
+        return "I wasn't able to process your request. Please try again."
+    
+    if successful_intents == 0:
+        return "I encountered some issues processing your requests. Please try again or be more specific."
+    
+    # Generate responses for each successful intent
+    responses = []
+    
+    for result in results:
+        if not result.get("success", False):
+            continue
+            
+        intent = result.get("intent", "unknown")
+        data = result.get("data", {})
+        
+        if intent == "create_reminder":
+            if data.get("title"):
+                response = f"✓ Created reminder: '{data.get('title')}'"
+                if data.get("time"):
+                    response += f" for {data.get('time')}"
+            else:
+                response = "✓ Created your reminder"
+            responses.append(response)
+            
+        elif intent == "create_note":
+            if data.get("content"):
+                content_preview = data.get("content", "")[:30]
+                if len(data.get("content", "")) > 30:
+                    content_preview += "..."
+                response = f"✓ Saved note: '{content_preview}'"
+            else:
+                response = "✓ Saved your note"
+            responses.append(response)
+            
+        elif intent in ["create_ledger", "add_expense"]:
+            if data.get("amount") and data.get("contact_name"):
+                response = f"✓ Recorded ${data.get('amount')} with {data.get('contact_name')}"
+            elif data.get("amount"):
+                response = f"✓ Recorded ${data.get('amount')} in ledger"
+            else:
+                response = "✓ Added ledger entry"
+            responses.append(response)
+            
+        elif intent in ["chit_chat", "general_query"]:
+            response = "✓ Noted your message"
+            responses.append(response)
+    
+    # Combine responses
+    if len(responses) == 1:
+        return f"Perfect! {responses[0]}. Is there anything else I can help you with?"
+    elif len(responses) == 2:
+        return f"Excellent! I've completed both tasks: {responses[0]} and {responses[1]}. Anything else I can do for you?"
+    else:
+        main_response = f"Great! I've completed {len(responses)} tasks: " + ", ".join(responses[:-1]) + f", and {responses[-1]}"
+        return main_response + ". Is there anything else you need help with?"
+
 @router.post("/transcribe")
 async def transcribe_audio(
     audio_file: UploadFile = File(...),
@@ -353,7 +426,8 @@ async def transcribe_and_respond(
             )
         
         try:
-            intent_result = await intent_service.classify_intent(transcription)
+            # Use multi-intent classification (returns {"intents": [...]} or single intent for backward compatibility)
+            intent_result = await intent_service.classify_intent(transcription, multi_intent=True)
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
             raise HTTPException(
@@ -361,32 +435,39 @@ async def transcribe_and_respond(
                 detail=f"Intent classification failed: {str(e)}"
             )
         
-        if not intent_result or not intent_result.get("intent"):
+        # Validate intent result
+        has_intents = "intents" in intent_result and isinstance(intent_result.get("intents"), list) and len(intent_result.get("intents", [])) > 0
+        has_single_intent = "intent" in intent_result and intent_result.get("intent")
+        
+        if not has_intents and not has_single_intent:
             raise HTTPException(
                 status_code=500,
                 detail="Intent classification returned invalid result"
             )
         
         processing_steps["intent_classification"] = True
-        logger.info(f"Step 3: Intent classification completed: {intent_result['intent']} (confidence: {intent_result.get('confidence', 0.0)})")
+        
+        # Log intent results
+        if has_intents:
+            intents_info = [f"{intent['type']} ({intent.get('confidence', 0.0):.2f})" for intent in intent_result['intents']]
+            logger.info(f"Step 3: Multi-intent classification completed: {len(intent_result['intents'])} intents - {', '.join(intents_info)}")
+        else:
+            logger.info(f"Step 3: Single intent classification completed: {intent_result['intent']} (confidence: {intent_result.get('confidence', 0.0)})")
         
         # === STEP 4: DATABASE PROCESSING ===
         logger.info("Step 4: Starting database processing")
         
-        # Prepare intent data for processing
+        # Prepare intent data for processing (support both single and multi-intent)
         from services.intent_processor_service import IntentProcessorService
         intent_processor = IntentProcessorService()
         
-        intent_data = {
-            "intent": intent_result.get("intent"),
-            "confidence": intent_result.get("confidence", 0.0),
-            "entities": intent_result.get("entities", {}),
-            "original_text": transcription
-        }
+        # The intent_result already contains the correct format for the processor
+        # - For multi-intent: {"intents": [...], "original_text": "..."}
+        # - For single-intent: {"intent": "...", "confidence": 0.95, "entities": {...}, "original_text": "..."}
         
         try:
             processing_result = await intent_processor.process_intent(
-                intent_data=intent_data,
+                intent_data=intent_result,
                 user_id=current_user_id
             )
         except Exception as e:
@@ -403,7 +484,16 @@ async def transcribe_and_respond(
             )
         
         processing_steps["database_processing"] = True
-        logger.info(f"Step 4: Database processing completed successfully for intent: {processing_result.get('intent')}")
+        
+        # Log processing results
+        if "results" in processing_result:
+            # Multi-intent processing result
+            total = processing_result.get("total_intents", 0)
+            successful = processing_result.get("successful_intents", 0)
+            logger.info(f"Step 4: Multi-intent database processing completed: {successful}/{total} intents processed successfully")
+        else:
+            # Single intent processing result
+            logger.info(f"Step 4: Single intent database processing completed successfully for intent: {processing_result.get('intent')}")
         
         # === STEP 5: GENERATE AI RESPONSE WITH BLOOM 560M ===
         logger.info("Step 5: Generating AI response with Bloom 560M")
@@ -417,9 +507,7 @@ async def transcribe_and_respond(
                     message=transcription,  # Original user transcription
                     user_id=current_user_id,
                     context={
-                        "intent": intent_result.get("intent"),
-                        "confidence": intent_result.get("confidence", 0.0),
-                        "entities": intent_result.get("entities", {}),
+                        "intent_result": intent_result,
                         "processing_result": processing_result
                     }
                 )
@@ -429,14 +517,14 @@ async def transcribe_and_respond(
                     logger.info(f"Bloom 560M generated response: {response_text[:100]}...")
                 else:
                     logger.warning("Bloom 560M returned empty response, using fallback")
-                    response_text = _generate_fallback_response(processing_result)
+                    response_text = _generate_multi_intent_fallback_response(processing_result)
                     
             except Exception as e:
                 logger.warning(f"Bloom 560M response generation failed, using fallback: {e}")
-                response_text = _generate_fallback_response(processing_result)
+                response_text = _generate_multi_intent_fallback_response(processing_result)
         else:
             logger.warning("Chat service not available, using fallback response")
-            response_text = _generate_fallback_response(processing_result)
+            response_text = _generate_multi_intent_fallback_response(processing_result)
         
         logger.info("Step 5: AI response generated successfully")
         
