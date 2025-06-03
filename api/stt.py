@@ -41,8 +41,8 @@ def get_localized_string(key: str, lang: str, **kwargs) -> str:
         "error_intent_classification_failed": "Intent classification failed: {error}",
         "error_chat_service_not_available": "Chat service is not available or ready to generate a response.",
         "error_processing_failed": "Processing failed: {error}",
-        "error_tts_failed": "Text-to-speech conversion failed: {error}"
-
+        "error_tts_failed": "Text-to-speech conversion failed: {error}",
+        "error_stt_failed_specific": "Speech-to-text processing failed: {error}"
     }
     if lang == "en":
         return translations_en.get(key, key).format(**kwargs)
@@ -350,13 +350,29 @@ async def transcribe_and_respond(
             raise HTTPException(status_code=503, detail=get_localized_string("error_stt_not_available", language_code))
         
         # STT service should eventually take language_code
-        transcription = await stt_service.transcribe_file(str(file_path), language_code=language_code)
-        if transcription is None:
-            raise HTTPException(status_code=500, detail=get_localized_string("error_transcription_failed_requirements", language_code))
+        try:
+            transcription = await stt_service.transcribe_file(str(file_path), language_code=language_code)
+            if transcription is None: # If transcribe_file can return None on non-exception failure
+                logger.warning(f"STT service returned None for transcription with lang {language_code}. File: {file_path}")
+                # Use a more general transcription failure message if STT returns None without an exception
+                raise HTTPException(status_code=500, detail=get_localized_string("error_transcription_failed_requirements", language_code))
+        except HTTPException: # Re-raise HTTPExceptions if stt_service itself raises one (e.g., from internal validation)
+            raise
+        except Exception as e:
+            logger.error(f"STT service failed during transcription for lang {language_code}: {e}", exc_info=True)
+            # Use the new specific error key
+            raise HTTPException(status_code=500, detail=get_localized_string("error_stt_failed_specific", language_code, error=str(e)))
+        
         logger.info(f"Transcription ('{language_code}'): {transcription}")
 
         # Intent Service - now language aware
-        intent_service = get_intent_service(language_code=language_code) 
+        intent_service = None
+        try:
+            intent_service = get_intent_service(language_code=language_code)
+        except Exception as e:
+            logger.error(f"Failed to get intent service for language {language_code}: {e}", exc_info=True)
+            # Continue without intent service - we'll handle this below
+        
         if not intent_service or not intent_service.is_ready():
             logger.warning(f"Intent service not available/ready for lang {language_code}. Proceeding without intent classification.")
         else:
@@ -364,18 +380,30 @@ async def transcribe_and_respond(
                 intent_result = await intent_service.classify_intent(transcription)
                 logger.info(f"Intent result ('{language_code}'): {intent_result}")
             except Exception as e:
-                logger.error(f"Intent classification failed for lang {language_code}: {e}")
+                logger.error(f"Intent classification failed for lang {language_code}: {e}", exc_info=True)
                 # Not raising HTTPException here, will try to respond with just transcription
+                intent_result = None
         
         # Intent Processing Service - now language aware
         if intent_result:
-            intent_processor_service = get_intent_processor_service() # This is a singleton, language is passed to process_intent
             try:
-                processing_result = await intent_processor_service.process_intent(intent_result, current_user_id, language_code)
-                logger.info(f"Processing result ('{language_code}'): {processing_result}")
+                intent_processor_service = get_intent_processor_service() # This is a singleton, language is passed to process_intent
+                if not intent_processor_service:
+                    logger.warning(f"Intent processor service not available for lang {language_code}")
+                    processing_result = None
+                else:
+                    try:
+                        processing_result = await intent_processor_service.process_intent(intent_result, current_user_id, language_code)
+                        logger.info(f"Processing result ('{language_code}'): {processing_result}")
+                    except Exception as e:
+                        logger.error(f"Intent processing failed for lang {language_code}: {e}", exc_info=True)
+                        # Continue without processing result - we'll generate a fallback response
+                        processing_result = None
             except Exception as e:
-                logger.error(f"Intent processing failed for lang {language_code}: {e}")
-                # Fallback or error response might be generated based on this partial failure
+                logger.error(f"Failed to get intent processor service for lang {language_code}: {e}", exc_info=True)
+                processing_result = None
+        else:
+            processing_result = None
         
         # Response Generation
         # Use chat service if intent is general_query or no specific intent was processed successfully
@@ -392,17 +420,24 @@ async def transcribe_and_respond(
              should_use_chat = True # Or a specific message like "I have your transcription, what next?"
 
         if should_use_chat and settings.ENABLE_CHAT_SERVICE:
-            chat_service = get_chat_service() # Chat service might also need language_code
-            if chat_service and chat_service.is_ready():
-                try:
-                    # Chat service should ideally take language_code for its own NLU/NLG if any
-                    response_text = await chat_service.generate_response(transcription, current_user_id, language_code=language_code)
-                    logger.info(f"Chat service response ('{language_code}'): {response_text}")
-                except Exception as e:
-                    logger.error(f"Chat service failed for lang {language_code}: {e}")
+            try:
+                chat_service = get_chat_service() # Chat service might also need language_code
+                if not chat_service:
+                    logger.warning(f"Chat service not available for lang {language_code}. Using fallback response.")
                     response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
-            else:
-                logger.warning(f"Chat service not available/ready for lang {language_code}. Using fallback response.")
+                elif not chat_service.is_ready():
+                    logger.warning(f"Chat service not ready for lang {language_code}. Using fallback response.")
+                    response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
+                else:
+                    try:
+                        # Chat service should ideally take language_code for its own NLU/NLG if any
+                        response_text = await chat_service.generate_response(transcription, current_user_id, language_code=language_code)
+                        logger.info(f"Chat service response ('{language_code}'): {response_text}")
+                    except Exception as e:
+                        logger.error(f"Chat service failed for lang {language_code}: {e}", exc_info=True)
+                        response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
+            except Exception as e:
+                logger.error(f"Failed to get chat service for lang {language_code}: {e}", exc_info=True)
                 response_text = _generate_multi_intent_fallback_response(processing_result if processing_result else {}, language_code)
         elif processing_result: # Use fallback based on processed intents
             response_text = _generate_multi_intent_fallback_response(processing_result, language_code)
@@ -411,19 +446,30 @@ async def transcribe_and_respond(
 
         # TTS Service for audio response
         if settings.ENABLE_TTS_SERVICE and response_text:
-            tts_service = get_tts_service() # TTS service needs language_code & voice selection based on language
-            if tts_service and tts_service.is_ready():
-                try:
-                    # This is a simplified call. In reality, you'd select a voice compatible with language_code.
-                    audio_content_bytes = await tts_service.convert_text_to_speech(response_text, language_code=language_code)
-                    # Save to a publicly accessible URL or stream directly (more complex with FastAPI)
-                    # For demo, assume a function to save and get URL:
-                    final_response_audio_url = await tts_service.save_speech_to_public_url(audio_content_bytes, current_user_id, language_code)
-                except Exception as e:
-                    logger.error(f"TTS service failed for lang {language_code}: {e}")
-                    # Proceed with text response only
-            else:
-                logger.warning(f"TTS service not available/ready for lang {language_code}.")
+            try:
+                tts_service = get_tts_service() # TTS service needs language_code & voice selection based on language
+                if not tts_service:
+                    logger.warning(f"TTS service not available for lang {language_code}.")
+                elif not tts_service.is_ready():
+                    logger.warning(f"TTS service not ready for lang {language_code}.")
+                else:
+                    try:
+                        # This is a simplified call. In reality, you'd select a voice compatible with language_code.
+                        audio_content_bytes = await tts_service.convert_text_to_speech(response_text, language_code=language_code)
+                        # Save to a publicly accessible URL or stream directly (more complex with FastAPI)
+                        # For demo, assume a function to save and get URL:
+                        if audio_content_bytes: # Ensure there is content to save
+                             final_response_audio_url = await tts_service.save_speech_to_public_url(audio_content_bytes, current_user_id, language_code)
+                        else:
+                            logger.warning(f"TTS service returned no audio content for lang {language_code}. Text: '{response_text[:50]}...'")
+                    except Exception as e:
+                        logger.error(f"TTS service failed for lang {language_code}: {e}", exc_info=True)
+                        # Proceed with text response only, do not raise an HTTPException that would become a 500 error for this part.
+                        # Instead, the client will see that response_audio_url is null.
+                        # If we wanted to return an error specifically for TTS failure while other parts succeeded, that would be a different design.
+            except Exception as e:
+                logger.error(f"Failed to get TTS service for lang {language_code}: {e}", exc_info=True)
+                # Continue without TTS
 
     except HTTPException: # Re-raise HTTPExceptions directly
         raise
