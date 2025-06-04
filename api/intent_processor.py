@@ -99,10 +99,6 @@ async def process_intent(
     try:
         current_user_id = current_user["uid"]
         
-        # Initialize intent processor
-        intent_processor = IntentProcessorService()
-        
-        # Process intent(s)
         result = await intent_processor.process_intent(
             intent_data=request.intent_data,
             user_id=current_user_id
@@ -151,7 +147,6 @@ async def test_multi_intent_processing(
         )
         
         # Process intent(s)
-        intent_processor = IntentProcessorService()
         processing_result = await intent_processor.process_intent(
             intent_data=intent_result,
             user_id=current_user_id
@@ -177,23 +172,21 @@ async def test_multi_intent_processing(
 async def get_supported_intents(current_user: dict = Depends(verify_firebase_token)):
     """Get list of supported intents and their handlers."""
     try:
-        intent_processor = IntentProcessorService()
-        
-    return {
+        return {
             "supported_intents": list(intent_processor.intent_handlers.keys()),
             "handler_mapping": {
                 intent: handler.__name__ for intent, handler in intent_processor.intent_handlers.items()
             },
             "database_tables": {
                 "create_reminder": "reminders",
-                "create_note": "notes", 
+                "create_note": "notes",
                 "create_ledger": "ledger_entries",
                 "add_expense": "ledger_entries",
                 "chit_chat": "history_logs",
                 "general_query": "history_logs"
             }
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting supported intents: {e}")
         raise HTTPException(
