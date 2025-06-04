@@ -118,55 +118,6 @@ async def root():
         "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
     }
 
-# @app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    try:
-        # Basic health check that doesn't depend on AI services
-        health_status = {
-            "status": "healthy",
-            "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local",
-            "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full",
-            "services": {
-                "api": True,
-                "database": False  # Will be updated after DB check
-            }
-        }
-        
-        # Check database connection
-        try:
-            from connect_db import engine
-            with engine.connect() as conn:
-                conn.execute("SELECT 1")
-            health_status["services"]["database"] = True
-        except Exception as e:
-            logger.error(f"Database health check failed: {e}")
-            health_status["services"]["database"] = False
-        
-        # Check AI services if available
-        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
-            try:
-                from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
-                health_status["services"].update({
-                    "stt": get_stt_service() is not None,
-                    "tts": get_tts_service() is not None,
-                    "intent": get_intent_service() is not None,
-                    "chat": get_chat_service() is not None
-                })
-            except ImportError:
-                # Services not initialized yet
-                pass
-        
-        return health_status
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local"
-        }
-
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
