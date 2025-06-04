@@ -149,7 +149,9 @@ class PyTorchIntentService:
         self.device = self._get_device()
         self.model = None
         self.tokenizer = None
-        self.model_path = Path("models/pytorch_intent_model")
+        
+        # Updated model paths to use the actual models directory
+        self.model_directory = Path("models")
         self.model_file = Path("models/pytorch_model.bin")
         
         # Intent labels matching your requirements
@@ -163,14 +165,15 @@ class PyTorchIntentService:
         self.label_to_id = {label: idx for idx, label in enumerate(self.intent_labels)}
         self.id_to_label = {idx: label for idx, label in enumerate(self.intent_labels)}
         
-        # Multi-intent patterns for text segmentation
+        # Enhanced multi-intent patterns for better text segmentation
         self.multi_intent_patterns = [
-            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind|schedule|note)',
-            r'\balso\s+(?:set|create|add|make|remind|schedule|note)',
-            r'\bthen\s+(?:set|create|add|make|remind|schedule|note)',
-            r'\bplus\s+(?:set|create|add|make|remind|schedule|note)',
+            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind|schedule|note|owe)',
+            r'\balso\s+(?:set|create|add|make|remind|schedule|note|owe)',
+            r'\bthen\s+(?:set|create|add|make|remind|schedule|note|owe)',
+            r'\bplus\s+(?:set|create|add|make|remind|schedule|note|owe)',
             r'\band\s+(?:[A-Z][a-z]+\s+)?(?:owes?|owed?|borrowed?|lent)',
-            r'(?:\.|;)\s+(?:Set|Create|Add|Make|Remind|Schedule|Note)',
+            r'(?:\.|;|,)\s+(?:Set|Create|Add|Make|Remind|Schedule|Note|[A-Z][a-z]+\s+owes?)',
+            r'\s+and\s+(?:note|reminder|owe)',
         ]
         
         # Initialize the service
@@ -221,28 +224,71 @@ class PyTorchIntentService:
     def _load_model_from_file(self):
         """Load the trained model from pytorch_model.bin."""
         try:
-            # Load tokenizer
-            model_name = "distilbert-base-uncased"  # Default, should be configurable
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            logger.info(f"Loading PyTorch model from {self.model_directory}")
             
-            # Load model state
-            state_dict = torch.load(self.model_file, map_location=self.device)
+            # Check if we have a saved tokenizer
+            tokenizer_path = self.model_directory / "tokenizer"
+            if tokenizer_path.exists():
+                logger.info(f"Loading tokenizer from {tokenizer_path}")
+                self.tokenizer = AutoTokenizer.from_pretrained(str(tokenizer_path))
+            else:
+                # Use default tokenizer
+                model_name = "distilbert-base-uncased"
+                logger.info(f"Using default tokenizer: {model_name}")
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             
-            # Initialize model architecture
+            # Load the model architecture first
+            model_name = "distilbert-base-uncased"
+            config = AutoConfig.from_pretrained(model_name)
+            config.num_labels = len(self.intent_labels)
+            
+            # Initialize model with correct config
             self.model = AutoModelForSequenceClassification.from_pretrained(
                 model_name,
-                num_labels=len(self.intent_labels),
-                state_dict=state_dict
+                config=config,
+                ignore_mismatched_sizes=True
             )
+            
+            # Now load the trained weights from pytorch_model.bin
+            if self.model_file.exists():
+                logger.info(f"Loading trained weights from {self.model_file}")
+                state_dict = torch.load(self.model_file, map_location=self.device)
+                
+                # Handle potential key mismatches
+                model_state_dict = self.model.state_dict()
+                filtered_state_dict = {}
+                
+                for key, value in state_dict.items():
+                    if key in model_state_dict and model_state_dict[key].shape == value.shape:
+                        filtered_state_dict[key] = value
+                    else:
+                        logger.warning(f"Skipping key {key} due to shape mismatch or missing key")
+                
+                # Load the filtered state dict
+                self.model.load_state_dict(filtered_state_dict, strict=False)
+                logger.info("Trained weights loaded successfully")
+            else:
+                logger.warning(f"pytorch_model.bin not found at {self.model_file}, using pretrained weights")
             
             self.model.to(self.device)
             self.model.eval()
             
-            logger.info("PyTorch model loaded successfully")
+            # Load label mappings if available
+            mappings_file = self.model_directory / "label_mappings.json"
+            if mappings_file.exists():
+                with open(mappings_file, 'r') as f:
+                    mappings = json.load(f)
+                    self.intent_labels = mappings.get("intent_labels", self.intent_labels)
+                    self.label_to_id = mappings.get("label_to_id", self.label_to_id)
+                    self.id_to_label = mappings.get("id_to_label", self.id_to_label)
+                logger.info("Label mappings loaded successfully")
+            
+            logger.info("PyTorch model loaded and ready for multi-intent classification")
             
         except Exception as e:
             logger.error(f"Failed to load model from file: {e}")
-            raise
+            logger.info("Falling back to rule-based classification")
+            self._initialize_fallback_classifier()
     
     def _initialize_new_model(self):
         """Initialize a new model for training."""
@@ -465,7 +511,7 @@ class PyTorchIntentService:
             
             # Save tokenizer
             if self.tokenizer and hasattr(self.tokenizer, 'save_pretrained'):
-                tokenizer_path = self.model_path / "tokenizer"
+                tokenizer_path = self.model_directory / "tokenizer"
                 tokenizer_path.mkdir(parents=True, exist_ok=True)
                 self.tokenizer.save_pretrained(tokenizer_path)
             
@@ -476,7 +522,7 @@ class PyTorchIntentService:
                 'id_to_label': self.id_to_label
             }
             
-            with open(self.model_path / "label_mappings.json", 'w') as f:
+            with open(self.model_directory / "label_mappings.json", 'w') as f:
                 json.dump(mappings, f, indent=2)
             
             logger.info(f"Model saved to {self.model_file}")
@@ -600,25 +646,30 @@ class PyTorchIntentService:
             return self._create_error_response(text, str(e))
     
     async def _classify_multi_intent(self, text: str) -> Dict[str, Any]:
-        """Detect and classify multiple intents in text."""
+        """Detect and classify multiple intents in text (enhanced for fallback mode)."""
         try:
-            # First, check if text contains multiple intents
+            # Enhanced multi-intent detection for fallback mode
             segments = self._segment_text_for_multi_intent(text)
             
             if len(segments) <= 1:
-                # Single intent
-                result = await self._classify_single_intent(text)
-                return {
-                    "type": "single_intent",
-                    "intent": result["intent"],
-                    "confidence": result["confidence"],
-                    "entities": result["entities"],
-                    "original_text": text,
-                    "segments": [text],
-                    "results": [result]
-                }
+                # Single intent - but still check if it should be multi-intent
+                if self._should_be_multi_intent(text):
+                    # Force segmentation for known multi-intent patterns
+                    segments = self._force_segment_multi_intent(text)
+                
+                if len(segments) <= 1:
+                    result = await self._classify_single_intent(text)
+                    return {
+                        "type": "single_intent",
+                        "intent": result["intent"],
+                        "confidence": result["confidence"],
+                        "entities": result["entities"],
+                        "original_text": text,
+                        "segments": [text],
+                        "results": [result]
+                    }
             
-            # Multiple intents detected
+            # Multiple intents detected - classify each segment
             results = []
             for i, segment in enumerate(segments):
                 segment_result = await self._classify_single_intent(segment.strip())
@@ -626,59 +677,186 @@ class PyTorchIntentService:
                 segment_result["segment_text"] = segment.strip()
                 results.append(segment_result)
             
+            # Remove duplicate intents (keep highest confidence)
+            unique_results = self._deduplicate_intents(results)
+            
             # Determine overall confidence
-            overall_confidence = sum(r["confidence"] for r in results) / len(results)
+            overall_confidence = sum(r["confidence"] for r in unique_results) / len(unique_results)
             
             return {
                 "type": "multi_intent",
-                "intents": [r["intent"] for r in results],
+                "intents": [r["intent"] for r in unique_results],
                 "overall_confidence": overall_confidence,
                 "original_text": text,
-                "segments": segments,
-                "results": results,
-                "num_intents": len(results)
+                "segments": [r["segment_text"] for r in unique_results],
+                "results": unique_results,
+                "num_intents": len(unique_results)
             }
             
         except Exception as e:
             logger.error(f"Multi-intent classification failed: {e}")
             return self._create_error_response(text, str(e))
     
-    def _segment_text_for_multi_intent(self, text: str) -> List[str]:
-        """Segment text into potential multiple intents."""
-        segments = [text]  # Start with original text
+    def _should_be_multi_intent(self, text: str) -> bool:
+        """Check if text should be treated as multi-intent even if segmentation failed."""
+        text_lower = text.lower()
         
-        for pattern in self.multi_intent_patterns:
-            new_segments = []
-            for segment in segments:
-                # Split by pattern but keep the separator
-                parts = re.split(f'({pattern})', segment, flags=re.IGNORECASE)
+        # Count intent indicators
+        intent_indicators = {
+            'reminder': ['remind', 'reminder', 'set', 'schedule', 'appointment'],
+            'note': ['note', 'write', 'jot', 'list', 'buy'],
+            'ledger': ['owe', 'owes', 'owed', 'borrowed', 'lent', 'paid', 'dollar', '$'],
+        }
+        
+        found_intents = set()
+        for intent_type, keywords in intent_indicators.items():
+            if any(keyword in text_lower for keyword in keywords):
+                found_intents.add(intent_type)
+        
+        # If we found multiple intent types, it's likely multi-intent
+        return len(found_intents) > 1
+    
+    def _force_segment_multi_intent(self, text: str) -> List[str]:
+        """Force segmentation for texts that should be multi-intent."""
+        segments = []
+        
+        # More aggressive patterns for fallback mode
+        split_patterns = [
+            r'\s+and\s+(also\s+)?(set|create|add|make|remind|schedule|note|write|jot)',
+            r'\s+also\s+(set|create|add|make|remind|schedule|note|write|jot)',
+            r'\s+and\s+([A-Z][a-z]+\s+)?(owes?|owed?|borrowed?|lent)',
+            r'[.;,]\s*(?:and\s+)?(Set|Create|Add|Make|Remind|Schedule|Note|Write)',
+            r'\s+plus\s+(set|create|add|make|remind|schedule|note)',
+        ]
+        
+        current_text = text
+        for pattern in split_patterns:
+            match = re.search(pattern, current_text, re.IGNORECASE)
+            if match:
+                # Split at the match
+                before = current_text[:match.start()].strip()
+                after = current_text[match.start():].strip()
                 
-                if len(parts) > 1:
-                    current_segment = ""
-                    for i, part in enumerate(parts):
-                        if re.match(pattern, part, re.IGNORECASE):
-                            # This is a separator, start new segment
-                            if current_segment.strip():
-                                new_segments.append(current_segment.strip())
-                            current_segment = part
-                        else:
-                            current_segment += part
-                    
-                    if current_segment.strip():
-                        new_segments.append(current_segment.strip())
-                else:
-                    new_segments.append(segment)
+                if before and len(before) > 5:
+                    segments.append(before)
+                if after and len(after) > 5:
+                    # Clean up the beginning of the second segment
+                    after = re.sub(r'^(and\s+|also\s+|plus\s+|[.;,]\s*)', '', after, flags=re.IGNORECASE)
+                    if after:
+                        segments.append(after)
+                break
+        
+        return segments if len(segments) > 1 else [text]
+    
+    def _deduplicate_intents(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove duplicate intents, keeping the one with highest confidence."""
+        intent_map = {}
+        
+        for result in results:
+            intent = result["intent"]
+            if intent not in intent_map or result["confidence"] > intent_map[intent]["confidence"]:
+                intent_map[intent] = result
+        
+        return list(intent_map.values())
+    
+    def _segment_text_for_multi_intent(self, text: str) -> List[str]:
+        """Segment text into potential multiple intents using enhanced logic."""
+        original_text = text.strip()
+        segments = []
+        
+        # Define intent keywords at function level
+        intent_keywords = ['remind', 'note', 'owe', 'owes', 'create', 'set', 'add', 'schedule']
+        
+        # Enhanced multi-intent detection patterns
+        enhanced_patterns = [
+            # Conjunction patterns
+            (r'\s+and\s+(also\s+)?(set|create|add|make|remind|schedule|note)', ' AND '),
+            (r'\s+also\s+(set|create|add|make|remind|schedule|note)', ' ALSO '),
+            (r'\s+then\s+(set|create|add|make|remind|schedule|note)', ' THEN '),
+            (r'\s+plus\s+(set|create|add|make|remind|schedule|note)', ' PLUS '),
             
-            segments = new_segments
+            # Punctuation-based splits
+            (r'[.;]\s*(Set|Create|Add|Make|Remind|Schedule|Note)', '. '),
+            (r',\s+(and\s+)?(set|create|add|make|remind|schedule|note)', ', '),
+            
+            # Debt/money patterns
+            (r'\s+and\s+([A-Z][a-z]+\s+)?(owes?|owed?|borrowed?|lent)', ' AND '),
+            (r',\s+([A-Z][a-z]+\s+)?(owes?|owed?|borrowed?|lent)', ', '),
+        ]
         
-        # Clean up segments
-        cleaned_segments = []
+        # First, try to split on obvious separators
+        text_modified = original_text
+        for pattern, replacement in enhanced_patterns:
+            text_modified = re.sub(pattern, replacement, text_modified, flags=re.IGNORECASE)
+        
+        # Split on the replacement markers
+        potential_segments = []
+        for separator in [' AND ', ' ALSO ', ' THEN ', ' PLUS ', '. ', ', ']:
+            if separator in text_modified:
+                parts = text_modified.split(separator)
+                if len(parts) > 1:
+                    potential_segments = parts
+                    break
+        
+        # If no obvious separators, try more sophisticated splitting
+        if not potential_segments:
+            # Look for intent keywords that might indicate multiple intents
+            keyword_positions = []
+            
+            text_lower = original_text.lower()
+            for keyword in intent_keywords:
+                pos = text_lower.find(keyword)
+                if pos != -1:
+                    keyword_positions.append((pos, keyword))
+            
+            # Sort by position
+            keyword_positions.sort()
+            
+            # If we have multiple intent keywords, try to split
+            if len(keyword_positions) > 1:
+                # Look for natural split points between keywords
+                for i in range(len(keyword_positions) - 1):
+                    current_pos = keyword_positions[i][0]
+                    next_pos = keyword_positions[i + 1][0]
+                    
+                    # Look for conjunctions between keywords
+                    between_text = original_text[current_pos:next_pos].lower()
+                    if any(conj in between_text for conj in [' and ', ' also ', ' then ', ' plus ']):
+                        # Split here
+                        segment1 = original_text[:next_pos].strip()
+                        segment2 = original_text[next_pos:].strip()
+                        potential_segments = [segment1, segment2]
+                        break
+        
+        # Clean and validate segments
+        if potential_segments:
+            for segment in potential_segments:
+                segment = segment.strip()
+                # Remove leading conjunctions
+                segment = re.sub(r'^(and|also|then|plus)\s+', '', segment, flags=re.IGNORECASE)
+                segment = re.sub(r'^[.,;]\s*', '', segment)
+                
+                # Ensure segment has meaningful content
+                if len(segment) > 5 and any(keyword in segment.lower() for keyword in intent_keywords):
+                    segments.append(segment.strip())
+        
+        # If no segments found or only one segment, return original
+        if len(segments) <= 1:
+            return [original_text]
+        
+        # Validate that segments make sense
+        valid_segments = []
         for segment in segments:
-            segment = segment.strip()
-            if segment and len(segment) > 3:  # Minimum meaningful length
-                cleaned_segments.append(segment)
+            # Each segment should contain at least one intent keyword
+            if any(keyword in segment.lower() for keyword in intent_keywords):
+                valid_segments.append(segment)
         
-        return cleaned_segments if cleaned_segments else [text]
+        # Return original if validation fails
+        if len(valid_segments) <= 1:
+            return [original_text]
+        
+        logger.info(f"Multi-intent detected: {len(valid_segments)} segments from '{original_text}'")
+        return valid_segments
     
     def _extract_entities(self, text: str, intent: str) -> Dict[str, Any]:
         """Extract entities based on intent type."""
