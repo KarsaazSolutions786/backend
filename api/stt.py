@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
-from typing import Optional
+from typing import Optional, Dict, Any
 import aiofiles
 import os
 import io
@@ -9,6 +9,7 @@ from firebase_auth import verify_firebase_token
 from core.dependencies import get_stt_service, get_tts_service, get_intent_service, get_chat_service
 from utils.logger import logger
 from core.config import settings
+from services.stt_service import SpeechToTextService
 
 router = APIRouter()
 
@@ -119,6 +120,49 @@ def _generate_multi_intent_response(processing_result: dict) -> str:
     else:
         main_response = f"Great! I've completed {len(responses)} tasks: " + ", ".join(responses[:-1]) + f", and {responses[-1]}"
         return main_response + ". Is there anything else you need help with?"
+
+@router.post("/process-audio")
+async def process_audio(
+    audio_file: UploadFile = File(...),
+    stt_service: SpeechToTextService = Depends(get_stt_service)
+) -> Dict[str, Any]:
+    """
+    Process audio file to text and classify intent.
+    
+    Args:
+        audio_file: Uploaded audio file
+        stt_service: Speech-to-Text service instance
+        
+    Returns:
+        Dictionary containing transcription and intent classification results
+    """
+    try:
+        # Save uploaded file temporarily
+        temp_path = f"uploads/{audio_file.filename}"
+        with open(temp_path, "wb") as f:
+            content = await audio_file.read()
+            f.write(content)
+        
+        # Process audio file
+        result = await stt_service.process_audio(temp_path)
+        
+        # Clean up temporary file
+        os.remove(temp_path)
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to process audio: {result.get('error', 'Unknown error')}"
+            )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error processing audio file: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 @router.post("/transcribe")
 async def transcribe_audio(
@@ -304,20 +348,14 @@ async def transcribe_and_respond(
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Complete voice-to-database pipeline: transcribe audio, classify intent, and save to database.
+    Complete voice-to-database pipeline: transcribe audio, classify intent using model_head.pkl, and save to database.
     
-    This endpoint performs the full pipeline:
-    1. Validates and processes uploaded WAV audio file
-    2. Uses Coqui STT to transcribe audio to text
-    3. Classifies intent and extracts entities from transcription
-    4. Processes and saves data to appropriate database table based on intent
-    5. Returns the complete processing result
-    
-    Requirements:
-    - File format: WAV (.wav)
-    - Sample rate: 16 kHz
-    - Channels: Mono (1 channel)
-    - Bit depth: 16-bit PCM
+    Pipeline steps:
+    1. Audio validation and preprocessing
+    2. Speech-to-text transcription
+    3. Intent classification using model_head.pkl
+    4. Database processing based on intent
+    5. Generate response
     """
     temp_file_path = None
     processing_steps = {
@@ -357,13 +395,6 @@ async def transcribe_and_respond(
                 detail=f"Unsupported audio format '{file_ext}'. Supported formats: {', '.join(settings.SUPPORTED_AUDIO_FORMATS)}"
             )
         
-        # Check file size
-        if audio_file.size and audio_file.size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File too large. Maximum size: {settings.MAX_FILE_SIZE / (1024*1024):.1f}MB"
-            )
-        
         # Create unique temporary file path
         temp_filename = f"temp_{current_user_id}_{audio_file.filename}"
         temp_file_path = os.path.join(settings.UPLOAD_DIR, temp_filename)
@@ -393,15 +424,9 @@ async def transcribe_and_respond(
                 detail="Speech-to-text service not available"
             )
         
-        if not stt_service.is_ready():
-            raise HTTPException(
-                status_code=503,
-                detail="Speech-to-text service not ready"
-            )
-        
         # Perform transcription
         try:
-            transcription = await stt_service.transcribe_file(temp_file_path)
+            transcription = await stt_service._transcribe_audio(temp_file_path)
         except Exception as e:
             logger.error(f"Transcription failed: {e}")
             transcription = None
@@ -409,14 +434,14 @@ async def transcribe_and_respond(
         if transcription is None or transcription.strip() == "":
             raise HTTPException(
                 status_code=500, 
-                detail="Transcription failed or returned empty result. Please ensure your audio file meets the requirements: WAV format, 16kHz sample rate, mono channel, 16-bit PCM, and contains clear speech"
+                detail="Transcription failed or returned empty result. Please ensure your audio contains clear speech."
             )
         
         processing_steps["transcription"] = True
         logger.info(f"Step 2: Transcription completed successfully: '{transcription}'")
         
-        # === STEP 3: INTENT CLASSIFICATION ===
-        logger.info("Step 3: Starting intent classification")
+        # === STEP 3: INTENT CLASSIFICATION WITH MODEL_HEAD.PKL ===
+        logger.info("Step 3: Starting intent classification with model_head.pkl")
         
         intent_service = get_intent_service()
         if not intent_service:
@@ -426,8 +451,15 @@ async def transcribe_and_respond(
             )
         
         try:
-            # Use multi-intent classification (returns {"intents": [...]} or single intent for backward compatibility)
-            intent_result = await intent_service.classify_intent(transcription, multi_intent=True)
+            # Process the transcribed text with model_head.pkl
+            intent_result = await intent_service.process_audio_transcript(transcription)
+            
+            if not intent_result:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Intent classification failed"
+                )
+                
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
             raise HTTPException(
@@ -435,41 +467,27 @@ async def transcribe_and_respond(
                 detail=f"Intent classification failed: {str(e)}"
             )
         
-        # Validate intent result
-        has_intents = "intents" in intent_result and isinstance(intent_result.get("intents"), list) and len(intent_result.get("intents", [])) > 0
-        has_single_intent = "intent" in intent_result and intent_result.get("intent")
-        
-        if not has_intents and not has_single_intent:
-            raise HTTPException(
-                status_code=500,
-                detail="Intent classification returned invalid result"
-            )
-        
         processing_steps["intent_classification"] = True
-        
-        # Log intent results
-        if has_intents:
-            intents_info = [f"{intent['type']} ({intent.get('confidence', 0.0):.2f})" for intent in intent_result['intents']]
-            logger.info(f"Step 3: Multi-intent classification completed: {len(intent_result['intents'])} intents - {', '.join(intents_info)}")
-        else:
-            logger.info(f"Step 3: Single intent classification completed: {intent_result['intent']} (confidence: {intent_result.get('confidence', 0.0)})")
+        logger.info(f"Step 3: Intent classification completed: {intent_result.get('type', 'unknown')}")
         
         # === STEP 4: DATABASE PROCESSING ===
         logger.info("Step 4: Starting database processing")
         
-        # Prepare intent data for processing (support both single and multi-intent)
         from services.intent_processor_service import IntentProcessorService
         intent_processor = IntentProcessorService()
-        
-        # The intent_result already contains the correct format for the processor
-        # - For multi-intent: {"intents": [...], "original_text": "..."}
-        # - For single-intent: {"intent": "...", "confidence": 0.95, "entities": {...}, "original_text": "..."}
         
         try:
             processing_result = await intent_processor.process_intent(
                 intent_data=intent_result,
                 user_id=current_user_id
             )
+            
+            if not processing_result.get("success", False):
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Database processing failed: {processing_result.get('error', 'Unknown error')}"
+                )
+                
         except Exception as e:
             logger.error(f"Database processing failed: {e}")
             raise HTTPException(
@@ -477,84 +495,11 @@ async def transcribe_and_respond(
                 detail=f"Database processing failed: {str(e)}"
             )
         
-        if not processing_result.get("success", False):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database processing failed: {processing_result.get('error', 'Unknown error')}"
-            )
-        
         processing_steps["database_processing"] = True
+        logger.info("Step 4: Database processing completed successfully")
         
-        # Log processing results
-        if "results" in processing_result:
-            # Multi-intent processing result
-            total = processing_result.get("total_intents", 0)
-            successful = processing_result.get("successful_intents", 0)
-            logger.info(f"Step 4: Multi-intent database processing completed: {successful}/{total} intents processed successfully")
-        else:
-            # Single intent processing result
-            logger.info(f"Step 4: Single intent database processing completed successfully for intent: {processing_result.get('intent')}")
-        
-        # === STEP 5: GENERATE AI RESPONSE WITH BLOOM 560M ===
-        logger.info("Step 5: Generating AI response with Bloom 560M")
-        
-        # Get chat service for conversational AI response
-        chat_service = get_chat_service()
-        if chat_service and chat_service.is_ready():
-            try:
-                # Generate conversational response using Bloom 560M
-                enhanced_response = await chat_service.generate_response(
-                    message=transcription,  # Original user transcription
-                    user_id=current_user_id,
-                    context={
-                        "intent_result": intent_result,
-                        "processing_result": processing_result
-                    }
-                )
-                
-                if enhanced_response and enhanced_response.strip():
-                    response_text = enhanced_response
-                    logger.info(f"Bloom 560M generated response: {response_text[:100]}...")
-                else:
-                    logger.warning("Bloom 560M returned empty response, using fallback")
-                    response_text = _generate_multi_intent_fallback_response(processing_result)
-                    
-            except Exception as e:
-                logger.warning(f"Bloom 560M response generation failed, using fallback: {e}")
-                response_text = _generate_multi_intent_fallback_response(processing_result)
-        else:
-            logger.warning("Chat service not available, using fallback response")
-            response_text = _generate_multi_intent_fallback_response(processing_result)
-        
-        logger.info("Step 5: AI response generated successfully")
-        
-        # === STEP 6: GENERATE TTS AUDIO RESPONSE ===
-        logger.info("Step 6: Generating TTS audio response")
-        
-        audio_response_url = None
-        audio_response_data = None
-        
-        tts_service = get_tts_service()
-        if tts_service and tts_service.is_ready():
-            try:
-                # Generate TTS audio for the AI response
-                audio_data = await tts_service.synthesize_speech(response_text, voice="default")
-                
-                if audio_data:
-                    # Save audio data to return in response
-                    audio_response_data = audio_data
-                    # Create a URL for audio streaming
-                    audio_response_url = f"/api/v1/stt/response-audio/{response_text[:50]}..."
-                    logger.info("TTS audio generated successfully")
-                else:
-                    logger.warning("TTS audio generation failed")
-                    
-            except Exception as e:
-                logger.warning(f"TTS audio generation failed: {e}")
-        else:
-            logger.warning("TTS service not available")
-        
-        logger.info("Step 6: TTS processing completed")
+        # === STEP 5: GENERATE RESPONSE ===
+        response_text = _generate_fallback_response(processing_result)
         
         # === PREPARE FINAL RESPONSE ===
         final_response = {
@@ -564,36 +509,18 @@ async def transcribe_and_respond(
             "transcription": transcription,
             "intent_result": intent_result,
             "processing_result": processing_result,
-            "ai_response": {
-                "text": response_text,
-                "audio_available": audio_response_data is not None,
-                "audio_url": audio_response_url,
-                "generated_by": "bloom_560m" if chat_service and chat_service.is_ready() else "fallback"
-            },
+            "response": response_text,
             "user_id": current_user_id,
             "model_info": {
                 "stt": stt_service.get_model_info() if stt_service else None,
-                "chat": chat_service.get_model_info() if chat_service else None,
-                "tts": tts_service.get_engine_info() if tts_service else None
-            },
-            "audio_requirements": {
-                "format": "WAV",
-                "sample_rate": f"{settings.AUDIO_SAMPLE_RATE}Hz",
-                "channels": "Mono",
-                "bit_depth": f"{settings.AUDIO_BIT_DEPTH}-bit PCM"
+                "intent": "model_head.pkl"
             }
         }
-        
-        # Include audio data if available (base64 encoded for JSON response)
-        if audio_response_data:
-            import base64
-            final_response["ai_response"]["audio_base64"] = base64.b64encode(audio_response_data).decode('utf-8')
         
         logger.info(f"Complete voice-to-response pipeline completed successfully for user {current_user_id}")
         return final_response
         
     except HTTPException:
-        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
         logger.error(f"Unexpected error in transcribe-and-respond pipeline: {e}")

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from connect_db import SessionLocal
-from models.models import User, Reminder, Note, LedgerEntry, HistoryLog
+from models.models import User, Reminder, Note, LedgerEntry, HistoryLog, Expense, Contact
 from utils.logger import logger
 
 
@@ -33,36 +33,54 @@ class IntentProcessorService:
             'written': re.compile(r'(one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:dollars?|bucks?)', re.IGNORECASE)
         }
         
-        # Handler registry for intent processing
+        # Initialize intent handlers mapping
         self.intent_handlers = {
-            "create_reminder": self._process_reminder,
-            "create_note": self._process_note,
-            "create_ledger": self._process_ledger,
-            "add_expense": self._process_ledger,  # Route to ledger handler
-            "chit_chat": self._process_chat,
-            "general_query": self._process_chat,  # Route to chat handler
+            'create_reminder': self._process_reminder,
+            'create_note': self._process_note,
+            'create_ledger': self._process_ledger,
+            'add_expense': self._process_expense,
+            'add_friend': self._process_friend,
+            'general_query': self._process_chat,
+            'cancel_reminder': self._process_cancel_reminder,
+            'list_reminders': self._process_list_reminders,
+            'update_reminder': self._process_update_reminder
         }
 
     async def process_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """
-        Process intent classification result and save to appropriate database table.
-        This method supports both single intent and multi-intent processing.
+        Enhanced intent processing with better task execution and validation.
         
         Args:
-            intent_data: Intent classification result from AI service
-                        Can be single intent: {"intent": "create_reminder", "confidence": 0.95, ...}
-                        Or multi-intent: {"intents": [{"type": "create_reminder", ...}, ...]}
+            intent_data: Intent classification result (now supports multi-intent format)
             user_id: User ID from authentication
             
         Returns:
             Dictionary with operation result(s)
         """
         try:
-            # Check if this is multi-intent or single intent
+            # Validate user first
+            if not await self._validate_user(user_id):
+                return {
+                    'success': False,
+                    'error': 'User not found or unauthorized',
+                    'intent_data': intent_data
+                }
+
+            # Check if this is multi-intent format
             if "intents" in intent_data and isinstance(intent_data["intents"], list):
-                return await self.process_multi_intent(intent_data, user_id)
+                return await self._process_multi_intent(intent_data, user_id)
             else:
-                return await self.process_single_intent(intent_data, user_id)
+                # Legacy single intent format - convert to multi-intent
+                if "type" in intent_data:
+                    # Convert old single intent format to new multi-intent format
+                    converted_data = {
+                        "intents": [intent_data],
+                        "original_text": intent_data.get("text_segment", "")
+                    }
+                    return await self._process_multi_intent(converted_data, user_id)
+                else:
+                    # Handle as single intent for backward compatibility
+                    return await self._process_single_intent(intent_data, user_id)
                 
         except Exception as e:
             logger.error(f"Error processing intent data: {e}")
@@ -72,161 +90,125 @@ class IntentProcessorService:
                 'intent_data': intent_data
             }
 
-    async def process_multi_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    async def _process_multi_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """
-        Process multiple intents from a single utterance with independent transactions.
-        
-        Args:
-            intent_data: Multi-intent classification result with "intents" array
-            user_id: User ID from authentication
-            
-        Returns:
-            Dictionary with results array containing status of each intent processing
+        Enhanced multi-intent processing with parallel execution and better error handling.
         """
         logger.info(f"Processing multi-intent for user: {user_id}")
+        logger.info(f"Intent data received: {intent_data}")
         
         intents = intent_data.get("intents", [])
         original_text = intent_data.get("original_text", "")
         
         if not intents:
+            logger.error("No intents found in multi-intent data")
             return {
                 'success': False,
                 'error': 'No intents found in multi-intent data',
                 'results': []
             }
         
-        # Validate user exists once for all intents
-        if not await self._validate_user(user_id):
-            return {
-                'success': False,
-                'error': 'User not found',
-                'results': []
-            }
+        logger.info(f"Processing {len(intents)} intents: {[intent.get('type', 'unknown') for intent in intents]}")
         
         results = []
         overall_success = True
         
-        # Process each intent independently
+        # Process intents sequentially for better error tracking
         for i, intent_obj in enumerate(intents):
-            intent_type = intent_obj.get("type", "unknown")
-            confidence = intent_obj.get("confidence", 0.0)
-            entities = intent_obj.get("entities", {})
-            text_segment = intent_obj.get("text_segment", original_text)
-            
-            logger.info(f"Processing intent {i+1}/{len(intents)}: {intent_type} (confidence: {confidence:.2f})")
-            
             try:
-                # Create single intent data structure for processing
-                single_intent_data = {
-                    "intent": intent_type,
-                    "confidence": confidence,
-                    "entities": entities,
-                    "original_text": text_segment
-                }
-                
-                # Process using independent transaction
-                result = await self._process_single_intent_with_transaction(
-                    single_intent_data, user_id, text_segment
-                )
-                
-                # Add intent info to result
-                result["intent"] = intent_type
-                result["text_segment"] = text_segment
-                result["position"] = i + 1
-                
+                logger.info(f"Processing intent {i+1}: {intent_obj}")
+                result = await self._process_single_intent_safe(intent_obj, user_id, i + 1, original_text)
                 results.append(result)
                 
                 if not result.get("success", False):
                     overall_success = False
-                    logger.warning(f"Intent {i+1} failed: {result.get('error', 'Unknown error')}")
+                    logger.error(f"Intent {i+1} failed: {result}")
                 else:
-                    logger.info(f"Intent {i+1} processed successfully")
+                    logger.info(f"Intent {i+1} succeeded: {result.get('message', 'No message')}")
                     
             except Exception as e:
-                logger.error(f"Error processing intent {i+1} ({intent_type}): {e}")
+                logger.error(f"Exception processing intent {i+1}: {e}")
                 results.append({
                     "success": False,
-                    "error": f"Failed to process intent: {str(e)}",
-                    "intent": intent_type,
-                    "text_segment": text_segment,
+                    "error": f"Exception processing intent: {str(e)}",
+                    "intent": intent_obj.get("type", "unknown"),
+                    "text_segment": intent_obj.get("text_segment", ""),
                     "position": i + 1
                 })
                 overall_success = False
         
-        logger.info(f"Multi-intent processing completed: {len(results)} intents, overall_success: {overall_success}")
-        
-        return {
+        final_result = {
             "success": overall_success,
-            "message": f"Processed {len(results)} intents" + (" (with some failures)" if not overall_success else " successfully"),
+            "message": f"Processed {len(results)} intents" + 
+                      (" (with some failures)" if not overall_success else " successfully"),
             "results": results,
             "total_intents": len(intents),
             "successful_intents": sum(1 for r in results if r.get("success", False)),
             "original_text": original_text
         }
+        
+        logger.info(f"Multi-intent processing complete: {final_result}")
+        return final_result
 
-    async def process_single_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    async def _process_single_intent_safe(self, intent_obj: Dict[str, Any], user_id: str, 
+                                        position: int, original_text: str) -> Dict[str, Any]:
         """
-        Process single intent (backward compatibility method).
-        
-        Args:
-            intent_data: Single intent classification result
-            user_id: User ID from authentication
-            
-        Returns:
-            Dictionary with operation result
-        """
-        intent = intent_data.get('intent', '').lower()
-        original_text = intent_data.get('original_text', '')
-        
-        return await self._process_single_intent_with_transaction(intent_data, user_id, original_text)
-
-    async def _process_single_intent_with_transaction(self, intent_data: Dict[str, Any], user_id: str, original_text: str) -> Dict[str, Any]:
-        """
-        Process a single intent with its own database transaction.
-        
-        Args:
-            intent_data: Intent classification result from AI service
-            user_id: User ID from authentication
-            original_text: The text segment for this intent
-            
-        Returns:
-            Dictionary with operation result
+        Safely process a single intent with error handling and validation.
         """
         try:
-            intent = intent_data.get('intent', '').lower()
-            entities = intent_data.get('entities', {})
-            confidence = intent_data.get('confidence', 0.0)
+            intent_type = intent_obj.get("type", "unknown")
+            confidence = intent_obj.get("confidence", 0.0)
+            entities = intent_obj.get("entities", {})
+            text_segment = intent_obj.get("text_segment", original_text)
             
-            logger.info(f"Processing single intent: {intent} for user: {user_id}")
+            logger.info(f"Processing intent: type={intent_type}, confidence={confidence}, entities={entities}")
             
-            # Route to appropriate handler based on intent
-            handler = self.intent_handlers.get(intent)
-            if handler:
-                return await handler(original_text, entities, user_id)
-            else:
-                # For unknown intents, save as chat interaction
-                logger.warning(f"Unknown intent: {intent}, treating as chat")
-                return await self._process_chat(original_text, entities, user_id)
-                
+            # Skip low confidence intents
+            if confidence < 0.3:  # Lowered threshold for better detection
+                logger.warning(f"Intent confidence too low: {confidence}")
+                return {
+                    "success": False,
+                    "error": f"Intent confidence too low: {confidence}",
+                    "intent": intent_type,
+                    "text_segment": text_segment,
+                    "position": position
+                }
+            
+            # Get appropriate handler
+            handler = self.intent_handlers.get(intent_type)
+            if not handler:
+                logger.error(f"No handler found for intent: {intent_type}")
+                return {
+                    "success": False,
+                    "error": f"No handler found for intent: {intent_type}",
+                    "intent": intent_type,
+                    "text_segment": text_segment,
+                    "position": position
+                }
+            
+            logger.info(f"Calling handler for {intent_type} with text: '{text_segment}'")
+            
+            # Process with independent transaction
+            result = await handler(text_segment, entities, user_id)
+            
+            logger.info(f"Handler result for {intent_type}: {result}")
+            
+            # Add intent info to result
+            result["intent"] = intent_type
+            result["text_segment"] = text_segment
+            result["position"] = position
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error processing single intent: {e}")
+            logger.error(f"Error in safe intent processing: {e}", exc_info=True)
             return {
-                'success': False,
-                'error': f'Failed to process intent: {str(e)}',
-                'intent': intent_data.get('intent', 'unknown')
+                "success": False,
+                "error": f"Failed to process intent: {str(e)}",
+                "intent": intent_obj.get("type", "unknown"),
+                "text_segment": intent_obj.get("text_segment", ""),
+                "position": position
             }
-
-    async def _validate_user(self, user_id: str) -> bool:
-        """Validate that user exists in database."""
-        db = SessionLocal()
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            return user is not None
-        except Exception as e:
-            logger.error(f"Error validating user: {e}")
-            return False
-        finally:
-            db.close()
 
     async def _process_reminder(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
         """Process create_reminder intent and save to reminders table."""
@@ -430,6 +412,276 @@ class IntentProcessorService:
                 'error': f'Failed to log chat interaction: {str(e)}',
                 'intent': 'chit_chat'
             }
+        finally:
+            db.close()
+
+    async def _process_expense(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
+        """Process add_expense intent and save to expenses table."""
+        db = SessionLocal()
+        try:
+            # Extract amount
+            amount = self._extract_amount(original_text, entities)
+            if not amount:
+                return {
+                    'success': False,
+                    'error': 'No amount specified in expense'
+                }
+            
+            # Extract category/description
+            description = original_text.strip('"')
+            category = self._extract_expense_category(original_text, entities)
+            
+            # Create expense object
+            expense = Expense(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                amount=amount,
+                description=description,
+                category=category,
+                created_by=user_id
+            )
+            
+            db.add(expense)
+            db.commit()
+            
+            logger.info(f"Created expense {expense.id} for user {user_id}")
+            
+            return {
+                'success': True,
+                'message': 'Expense added successfully',
+                'data': {
+                    'expense_id': str(expense.id),
+                    'amount': amount,
+                    'description': description,
+                    'category': category
+                }
+            }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error adding expense: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to add expense: {str(e)}'
+            }
+        finally:
+            db.close()
+
+    async def _process_friend(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
+        """Process add_friend intent and save to contacts table."""
+        db = SessionLocal()
+        try:
+            # Extract friend name
+            friend_name = self._extract_person(entities, original_text)
+            if not friend_name:
+                return {
+                    'success': False,
+                    'error': 'No friend name specified'
+                }
+            
+            # Create contact object
+            contact = Contact(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                name=friend_name,
+                created_by=user_id
+            )
+            
+            db.add(contact)
+            db.commit()
+            
+            logger.info(f"Added friend {contact.id} for user {user_id}")
+            
+            return {
+                'success': True,
+                'message': 'Friend added successfully',
+                'data': {
+                    'contact_id': str(contact.id),
+                    'name': friend_name
+                }
+            }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error adding friend: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to add friend: {str(e)}'
+            }
+        finally:
+            db.close()
+
+    async def _process_cancel_reminder(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
+        """Process cancel_reminder intent."""
+        db = SessionLocal()
+        try:
+            # Extract reminder identifier (could be time, description, or ID)
+            reminder_id = self._extract_reminder_identifier(original_text, entities)
+            
+            # Find and delete the reminder
+            reminder = db.query(Reminder).filter(
+                Reminder.user_id == user_id,
+                Reminder.id == reminder_id
+            ).first()
+            
+            if not reminder:
+                return {
+                    'success': False,
+                    'error': 'Reminder not found'
+                }
+            
+            db.delete(reminder)
+            db.commit()
+            
+            logger.info(f"Cancelled reminder {reminder_id} for user {user_id}")
+            
+            return {
+                'success': True,
+                'message': 'Reminder cancelled successfully',
+                'data': {
+                    'reminder_id': str(reminder_id)
+                }
+            }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error cancelling reminder: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to cancel reminder: {str(e)}'
+            }
+        finally:
+            db.close()
+
+    async def _process_list_reminders(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
+        """Process list_reminders intent."""
+        db = SessionLocal()
+        try:
+            # Extract time range if specified
+            time_range = self._extract_time_range(original_text, entities)
+            
+            # Query reminders
+            query = db.query(Reminder).filter(Reminder.user_id == user_id)
+            
+            if time_range:
+                query = query.filter(
+                    Reminder.time >= time_range['start'],
+                    Reminder.time <= time_range['end']
+                )
+            
+            reminders = query.all()
+            
+            return {
+                'success': True,
+                'message': f'Found {len(reminders)} reminders',
+                'data': {
+                    'reminders': [{
+                        'id': str(r.id),
+                        'title': r.title,
+                        'description': r.description,
+                        'time': r.time.isoformat() if r.time else None
+                    } for r in reminders]
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error listing reminders: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to list reminders: {str(e)}'
+            }
+        finally:
+            db.close()
+
+    async def _process_update_reminder(self, original_text: str, entities: Dict, user_id: str) -> Dict[str, Any]:
+        """Process update_reminder intent."""
+        db = SessionLocal()
+        try:
+            # Extract reminder identifier
+            reminder_id = self._extract_reminder_identifier(original_text, entities)
+            
+            # Find the reminder
+            reminder = db.query(Reminder).filter(
+                Reminder.user_id == user_id,
+                Reminder.id == reminder_id
+            ).first()
+            
+            if not reminder:
+                return {
+                    'success': False,
+                    'error': 'Reminder not found'
+                }
+            
+            # Extract updated information
+            new_time = self._extract_time(original_text, entities)
+            new_title = self._generate_reminder_title(original_text)
+            new_description = original_text.strip('"')
+            
+            # Update fields if provided
+            if new_time:
+                reminder.time = new_time
+            if new_title:
+                reminder.title = new_title
+            if new_description:
+                reminder.description = new_description
+            
+            db.commit()
+            
+            logger.info(f"Updated reminder {reminder_id} for user {user_id}")
+            
+            return {
+                'success': True,
+                'message': 'Reminder updated successfully',
+                'data': {
+                    'reminder_id': str(reminder_id),
+                    'title': reminder.title,
+                    'description': reminder.description,
+                    'time': reminder.time.isoformat() if reminder.time else None
+                }
+            }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating reminder: {e}")
+            return {
+                'success': False,
+                'error': f'Failed to update reminder: {str(e)}'
+            }
+        finally:
+            db.close()
+
+    async def _validate_user(self, user_id: str) -> bool:
+        """
+        Validate that a user exists in the database and create if not exists.
+        
+        Args:
+            user_id: The ID of the user to validate
+            
+        Returns:
+            bool: True if user exists or was created, False otherwise
+        """
+        try:
+            db = SessionLocal()
+            user = db.query(User).filter(User.id == user_id).first()
+            
+            if user is None:
+                # Create new user
+                user = User(
+                    id=user_id,
+                    email=f"{user_id}@example.com",  # Placeholder email
+                    language="en",
+                    timezone="UTC"
+                )
+                db.add(user)
+                db.commit()
+                logger.info(f"Created new user with ID: {user_id}")
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error validating/creating user: {e}")
+            db.rollback()
+            return False
         finally:
             db.close()
 
@@ -669,7 +921,7 @@ class IntentProcessorService:
         # Patterns for standalone monetary amounts (no context words)
         standalone_patterns = [
             r'^\$\d+(?:,\d{3})*(?:\.\d{2})?$',  # $1000, $1,000, $1000.00
-            r'^\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?)$',  # 1000 dollars
+            r'\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:dollars?|bucks?)$',  # 1000 dollars
             r'^€\d+(?:,\d{3})*(?:\.\d{2})?$',   # €1000
             r'^£\d+(?:,\d{3})*(?:\.\d{2})?$',   # £1000
         ]
@@ -693,3 +945,135 @@ class IntentProcessorService:
             return True
             
         return False 
+
+    def _extract_expense_category(self, text: str, entities: Dict) -> str:
+        """Extract expense category from text or entities."""
+        # Common expense categories
+        categories = [
+            'food', 'groceries', 'dining', 'transportation', 'utilities',
+            'rent', 'entertainment', 'shopping', 'health', 'travel'
+        ]
+        
+        text_lower = text.lower()
+        
+        # Check for category in entities first
+        if 'category' in entities:
+            return entities['category']
+        
+        # Look for category keywords in text
+        for category in categories:
+            if category in text_lower:
+                return category
+        
+        return 'other'  # Default category
+
+    def _extract_time_range(self, text: str, entities: Dict) -> Optional[Dict[str, datetime]]:
+        """Extract time range from text and entities."""
+        try:
+            text_lower = text.lower()
+            now = datetime.now()
+            
+            # Check for common time range patterns
+            if 'today' in text_lower:
+                start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start + timedelta(days=1)
+            elif 'this week' in text_lower:
+                start = now - timedelta(days=now.weekday())
+                end = start + timedelta(days=7)
+            elif 'this month' in text_lower:
+                start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end = (start + timedelta(days=32)).replace(day=1)
+            else:
+                # Default to next 24 hours
+                start = now
+                end = now + timedelta(days=1)
+            
+            return {'start': start, 'end': end}
+            
+        except Exception as e:
+            logger.error(f"Error extracting time range: {e}")
+            return None
+
+    def _extract_reminder_identifier(self, text: str, entities: Dict) -> Optional[str]:
+        """Extract reminder identifier from text or entities."""
+        # First check entities
+        if 'reminder_id' in entities:
+            return entities['reminder_id']
+        
+        # Look for UUID pattern
+        uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+        match = re.search(uuid_pattern, text)
+        if match:
+            return match.group(0)
+        
+        return None
+
+    def _generate_event_title(self, text: str) -> str:
+        """Generate a title for an event based on text content."""
+        try:
+            # Clean the text
+            clean_text = text.strip('"').lower()
+            
+            # Look for key phrases that indicate event type
+            event_types = ['meeting', 'appointment', 'call', 'lunch', 'dinner', 'coffee']
+            
+            for event_type in event_types:
+                if event_type in clean_text:
+                    # Extract context around the event type
+                    parts = clean_text.split(event_type)
+                    if len(parts) > 1:
+                        context = parts[1].strip().split()[0] if parts[1].strip() else ''
+                        return f"{event_type.capitalize()} {context}".strip()
+                    return event_type.capitalize()
+            
+            # If no event type found, use first few words
+            words = clean_text.split()[:4]
+            return ' '.join(words).capitalize()
+            
+        except Exception as e:
+            logger.error(f"Error generating event title: {e}")
+            return "Event"
+
+    async def _process_single_intent(self, intent_data: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+        """
+        Process a single intent with error handling and validation.
+        
+        Args:
+            intent_data: Intent classification result
+            user_id: User ID from authentication
+            
+        Returns:
+            Dictionary with operation result
+        """
+        try:
+            intent_type = intent_data.get("type", "unknown")
+            entities = intent_data.get("entities", {})
+            text_segment = intent_data.get("text_segment", "")
+            
+            # Get appropriate handler
+            handler = self.intent_handlers.get(intent_type)
+            if not handler:
+                return {
+                    "success": False,
+                    "error": f"No handler found for intent: {intent_type}",
+                    "intent": intent_type,
+                    "text_segment": text_segment
+                }
+            
+            # Process with handler
+            result = await handler(text_segment, entities, user_id)
+            
+            # Add intent info to result
+            result["intent"] = intent_type
+            result["text_segment"] = text_segment
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in single intent processing: {e}")
+            return {
+                "success": False,
+                "error": f"Failed to process intent: {str(e)}",
+                "intent": intent_data.get("type", "unknown"),
+                "text_segment": intent_data.get("text_segment", "")
+            } 

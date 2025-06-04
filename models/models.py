@@ -135,4 +135,32 @@ class HistoryLog(Base):
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
     # Relationships
-    user = relationship("User", back_populates="history_logs") 
+    user = relationship("User", back_populates="history_logs")
+
+class Expense(Base):
+    __tablename__ = "expenses"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    amount = Column(NUMERIC)
+    description = Column(Text)
+    category = Column(String)
+    created_by = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    creator = relationship("User", foreign_keys=[created_by])
+
+class Contact(Base):
+    __tablename__ = "contacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    created_by = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    creator = relationship("User", foreign_keys=[created_by]) 

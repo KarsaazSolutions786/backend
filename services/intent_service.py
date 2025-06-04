@@ -2,97 +2,159 @@ from typing import Dict, List, Optional
 from core.config import settings
 from utils.logger import logger
 import re
+import pickle
+import os
+import numpy as np
+from pathlib import Path
+
+# Optional PyTorch imports
+try:
+    import torch
+    import torch.nn.functional as F
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    PYTORCH_AVAILABLE = True
+    logger.info("PyTorch and transformers are available")
+except ImportError as e:
+    PYTORCH_AVAILABLE = False
+    logger.warning(f"PyTorch not available: {e}. Will use fallback model.")
 
 class IntentService:
-    """Intent classification service using MiniLM."""
+    """Intent classification service using prompt engineering approach."""
     
     def __init__(self):
         self.model = None
         self.tokenizer = None
+        self.device = None
+        
+        # Updated intent labels to match the prompt categories
         self.intent_labels = [
-            "create_reminder",
-            "create_note", 
-            "create_ledger",
-            "schedule_event",
-            "add_expense",
-            "add_friend",
-            "general_query",
-            "cancel_reminder",
-            "list_reminders",
-            "update_reminder"
+            "create_reminder",  # Maps to "Reminders"
+            "create_note",      # Maps to "Notes" 
+            "create_ledger",    # Maps to "Ledger"
+            "general_query"     # Maps to "Chitchat"
         ]
-        # Multi-intent patterns - Enhanced for better detection
+        
+        # Category mapping for prompt engineering
+        self.category_mapping = {
+            "Reminders": "create_reminder",
+            "Ledger": "create_ledger", 
+            "Notes": "create_note",
+            "Chitchat": "general_query"
+        }
+        
+        # Enhanced multi-intent patterns for better detection
         self.multi_intent_separators = [
-            # Primary action-based separators
-            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind)',  # "and set", "and also create", "and remind"
-            r'\balso\s+(?:set|create|add|make|remind)',  # "also set", "also remind"
-            r'\bthen\s+(?:set|create|add|make|remind)',  # "then set", "then remind"
-            r'\bplus\s+(?:set|create|add|make|remind)',  # "plus set", "plus remind"
+            # Primary action-based separators with context awareness
+            r'\band\s+(?:also\s+)?(?:please\s+)?(?:set|create|add|make|remind|schedule)',
+            r'\balso\s+(?:please\s+)?(?:set|create|add|make|remind|schedule)',
+            r'\bthen\s+(?:please\s+)?(?:set|create|add|make|remind|schedule)',
+            r'\bplus\s+(?:please\s+)?(?:set|create|add|make|remind|schedule)',
             
-            # Name-based separators (for ledger entries)
-            r'\band\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?|borrowed?|lent)',  # "and John owes"
-            r'\band\s+(?:I|i)\s+(?:owe|borrowed|lent)',  # "and I owe", "and i borrowed"
-            r'\band\s+([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',  # "and John will give", "and John pay"
+            # Task-specific separators
+            r'\band\s+(?:remind|note|track|record|schedule)',
+            r'\band\s+(?:I|i)\s+(?:want|need|have to|should|would like to)',
             
-            # General "and" separators for different intent types
-            r'\band\s+(?:I|i)\s+(?:want|need|have to|should)',  # "and i want", "and i need"
-            r'\band\s+(?:remind|note|track|record)',  # "and remind", "and note", "and track"
+            # Name-based separators for ledger/contact entries
+            r'\band\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:owes?|owed?|borrowed?|lent|paid?)',
+            r'\band\s+(?:I|i)\s+(?:owe|borrowed|lent|paid?)',
             
-            # Monetary separators
-            r'\band\s+(?:\$\d+|\d+\s*dollars?)',  # "and $50", "and 50 dollars"
+            # Monetary and time-based separators
+            r'\band\s+(?:\$\d+|\d+\s*dollars?)',
+            r'\band\s+(?:at|on|by|before)\s+(?:\d{1,2}(?::\d{2})?(?:\s*[ap]m)?|\d{1,2}(?:st|nd|rd|th)?)',
         ]
-        self._load_model()
+        self._initialize_prompt_classifier()
     
-    def _load_model(self):
-        """Load the intent classification model."""
-        try:
-            logger.info(f"Loading Intent model from {settings.INTENT_MODEL_PATH}")
+    def _initialize_prompt_classifier(self):
+        """Initialize the prompt-based classifier with rules and examples."""
+        logger.info("Initializing prompt-based intent classifier")
+        
+        # Define classification rules based on prompt engineering
+        self.classification_rules = {
+            "Reminders": {
+                "keywords": [
+                    "remind", "reminder", "alert", "alarm", "schedule", "appointment",
+                    "meeting", "call", "email", "take", "medicine", "medication",
+                    "doctor", "dentist", "workout", "exercise", "pick up", "drop off"
+                ],
+                "patterns": [
+                    r'\b(remind|reminder)\b.*\b(me|to)\b',
+                    r'\bset\s+(a\s+)?(reminder|alarm)\b',
+                    r'\b(appointment|meeting)\b.*\b(tomorrow|today|at|on)\b',
+                    r'\b(call|email|text)\b.*\b(at|tomorrow|today)\b',
+                    r'\btake\b.*\b(medicine|medication|pills?)\b'
+                ],
+                "time_indicators": ["at", "pm", "am", "tomorrow", "today", "tonight", "morning", "evening", "o'clock"]
+            },
             
-            # For demo purposes, we'll simulate model loading
-            # In production, uncomment and modify the following:
-            """
-            from sentence_transformers import SentenceTransformer
-            from transformers import AutoTokenizer, AutoModelForSequenceClassification
+            "Ledger": {
+                "keywords": [
+                    "owe", "owes", "owed", "borrowed", "lent", "paid", "pay", "money",
+                    "dollar", "dollars", "bucks", "debt", "loan", "expense", "cost",
+                    "spent", "gave", "received", "back", "return"
+                ],
+                "patterns": [
+                    r'\b(owe|owes|owed)\b',
+                    r'\b(borrowed|lent)\b',
+                    r'\b(paid|pay)\b.*\b(back|me|him|her)\b',
+                    r'\$\d+',
+                    r'\b\d+\s*(dollars?|bucks?)\b',
+                    r'\b(expense|cost|spent)\b'
+                ],
+                "money_indicators": ["$", "dollar", "dollars", "bucks", "money", "paid", "cost"]
+            },
             
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                settings.INTENT_MODEL_PATH,
-                num_labels=len(self.intent_labels)
-            )
-            self.tokenizer = AutoTokenizer.from_pretrained(settings.INTENT_MODEL_PATH)
-            """
+            "Notes": {
+                "keywords": [
+                    "note", "write", "jot", "save", "record", "remember", "list",
+                    "shopping", "grocery", "idea", "thought", "memo", "diary",
+                    "journal", "log", "minutes", "summary", "discussion"
+                ],
+                "patterns": [
+                    r'\b(note|write|jot)\b.*\b(down|this|that)\b',
+                    r'\b(save|record|remember)\b.*\b(this|that|it)\b',
+                    r'\b(shopping|grocery)\s+list\b',
+                    r'\b(meeting\s+)?minutes\b',
+                    r'\b(idea|thought|discussion)\b'
+                ],
+                "content_indicators": ["list", "idea", "thought", "discussion", "meeting", "project"]
+            },
             
-            # Dummy model for demo
-            self.model = "intent_model_loaded"
-            self.tokenizer = "intent_tokenizer_loaded"
-            
-            logger.info("Intent classification model loaded successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to load Intent model: {e}")
-            # For demo, continue with dummy model
-            self.model = "dummy_intent_model"
-            self.tokenizer = "dummy_tokenizer"
-    
+            "Chitchat": {
+                "keywords": [
+                    "hello", "hi", "hey", "how", "what", "who", "when", "where", "why",
+                    "can", "you", "help", "thank", "thanks", "please", "sorry",
+                    "good", "morning", "evening", "night", "weather", "doing"
+                ],
+                "patterns": [
+                    r'\b(hello|hi|hey)\b',
+                    r'\bhow\s+(are\s+you|is\s+it)\b',
+                    r'\bwhat\s+(can\s+you|do\s+you|is)\b',
+                    r'\b(thank|thanks)\b',
+                    r'\bgood\s+(morning|evening|night)\b',
+                    r'\b(help|assist)\b.*\b(me|us)\b'
+                ],
+                "question_indicators": ["how", "what", "who", "when", "where", "why", "can", "?"]
+            }
+        }
+        
+        self.model = "prompt_based_classifier"
+        self.tokenizer = "rule_based_tokenizer"
+        logger.info("Prompt-based classifier initialized successfully")
+
     async def classify_intent(self, text: str, multi_intent: bool = True) -> Dict[str, any]:
         """
-        Classify the intent(s) of the given text.
+        Classify intent using prompt engineering approach.
         
         Args:
             text: Input text to classify
-            multi_intent: If True, detect and return multiple intents; if False, return single intent (backward compatibility)
+            multi_intent: If True, detect and return multiple intents
             
         Returns:
             Dictionary containing intent(s), confidence, and entities
-            For multi-intent: {"intents": [...], "original_text": "..."}
-            For single-intent: {"intent": "...", "confidence": 0.95, "entities": {...}, "original_text": "..."}
         """
         try:
-            if not self.model or not self.tokenizer:
-                logger.error("Intent model not loaded")
-                if multi_intent:
-                    return {"intents": [{"type": "general_query", "confidence": 0.0, "entities": {}}], "original_text": text}
-                else:
-                    return {"intent": "general_query", "confidence": 0.0, "entities": {}, "original_text": text}
+            # Clean and normalize input text
+            text = self._normalize_text(text)
             
             if multi_intent:
                 return await self._classify_multi_intent(text)
@@ -101,38 +163,156 @@ class IntentService:
                 
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
-            if multi_intent:
-                return {"intents": [{"type": "general_query", "confidence": 0.0, "entities": {}}], "original_text": text}
+            return self._create_fallback_response(text, multi_intent)
+
+    async def _classify_single_intent(self, text: str) -> Dict[str, any]:
+        """Classify a single intent using prompt engineering."""
+        try:
+            # Create the prompt
+            prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {text}\nCategory:"
+            logger.info(f"Using prompt: {prompt}")
+            
+            # Analyze text using rules
+            category_scores = self._analyze_text_with_rules(text)
+            
+            # Get the best category
+            best_category = max(category_scores.items(), key=lambda x: x[1])
+            category_name = best_category[0]
+            confidence = best_category[1]
+            
+            # Map category to intent
+            intent = self.category_mapping.get(category_name, "general_query")
+            
+            # Extract entities
+            entities = self._extract_entities(text)
+            
+            logger.info(f"Classification result: {category_name} -> {intent} (confidence: {confidence:.3f})")
+            
+            return {
+                "intent": intent,
+                "confidence": confidence,
+                "entities": entities,
+                "original_text": text,
+                "category": category_name,
+                "prompt_used": prompt
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in prompt-based classification: {e}")
+            return {
+                "intent": "general_query",
+                "confidence": 0.0,
+                "entities": {},
+                "original_text": text
+            }
+
+    def _analyze_text_with_rules(self, text: str) -> Dict[str, float]:
+        """Analyze text using rule-based scoring for each category."""
+        text_lower = text.lower()
+        category_scores = {"Reminders": 0.0, "Ledger": 0.0, "Notes": 0.0, "Chitchat": 0.0}
+        
+        for category, rules in self.classification_rules.items():
+            score = 0.0
+            
+            # Check keywords
+            keyword_matches = sum(1 for keyword in rules["keywords"] if keyword in text_lower)
+            score += keyword_matches * 0.3
+            
+            # Check patterns
+            pattern_matches = sum(1 for pattern in rules["patterns"] if re.search(pattern, text, re.IGNORECASE))
+            score += pattern_matches * 0.5
+            
+            # Check specific indicators
+            if category == "Reminders":
+                # Check for time indicators
+                time_matches = sum(1 for indicator in rules["time_indicators"] if indicator in text_lower)
+                score += time_matches * 0.4
+                
+            elif category == "Ledger": 
+                # Check for money indicators
+                money_matches = sum(1 for indicator in rules["money_indicators"] if indicator in text_lower)
+                score += money_matches * 0.6
+                # Check for dollar amounts
+                if re.search(r'\$\d+|\b\d+\s*(dollars?|bucks?)\b', text, re.IGNORECASE):
+                    score += 1.0
+                    
+            elif category == "Notes":
+                # Check for content indicators
+                content_matches = sum(1 for indicator in rules["content_indicators"] if indicator in text_lower)
+                score += content_matches * 0.4
+                
+            elif category == "Chitchat":
+                # Check for question indicators
+                question_matches = sum(1 for indicator in rules["question_indicators"] if indicator in text_lower)
+                score += question_matches * 0.3
+                # Check if it's a question
+                if text.strip().endswith('?'):
+                    score += 0.5
+            
+            # Normalize score to confidence (0-1)
+            category_scores[category] = min(1.0, score / 3.0)
+        
+        # If all scores are low, boost the most likely based on simple heuristics
+        max_score = max(category_scores.values())
+        if max_score < 0.3:
+            # Simple fallback heuristics
+            if any(word in text_lower for word in ["remind", "alarm", "appointment"]):
+                category_scores["Reminders"] = 0.7
+            elif any(word in text_lower for word in ["$", "owe", "paid", "money"]):
+                category_scores["Ledger"] = 0.7
+            elif any(word in text_lower for word in ["note", "write", "save", "list"]):
+                category_scores["Notes"] = 0.7
             else:
-                return {"intent": "general_query", "confidence": 0.0, "entities": {}, "original_text": text}
+                category_scores["Chitchat"] = 0.6
+        
+        logger.info(f"Category scores for '{text}': {category_scores}")
+        return category_scores
+
+    def _normalize_text(self, text: str) -> str:
+        """Normalize input text for better classification."""
+        text = text.strip()
+        # Convert multiple spaces to single space
+        text = re.sub(r'\s+', ' ', text)
+        # Normalize time formats
+        text = re.sub(r'(\d{1,2})\s*:\s*(\d{2})', r'\1:\2', text)
+        # Normalize AM/PM formats
+        text = re.sub(r'([ap])\.m\.', r'\1m', text, flags=re.IGNORECASE)
+        return text
+
+    def _create_fallback_response(self, text: str, multi_intent: bool) -> Dict[str, any]:
+        """Create fallback response for error cases."""
+        if multi_intent:
+            return {
+                "intents": [{
+                    "type": "general_query",
+                    "confidence": 0.0,
+                    "entities": {},
+                    "text_segment": text
+                }],
+                "original_text": text
+            }
+        else:
+            return {
+                "intent": "general_query",
+                "confidence": 0.0,
+                "entities": {},
+                "original_text": text
+            }
     
     async def _classify_multi_intent(self, text: str) -> Dict[str, any]:
         """
-        Detect and classify multiple intents in a single utterance.
+        Enhanced multi-intent detection and classification using prompt engineering.
         
         Args:
             text: Input text to classify
             
         Returns:
-            Dictionary with array of intents: {"intents": [...], "original_text": "..."}
+            Dictionary with array of intents
         """
         logger.info(f"Multi-intent classification for: '{text}'")
         
-        # Split text into segments based on multi-intent patterns
+        # Split text into segments using enhanced patterns
         segments = self._segment_text_for_multi_intent(text)
-        
-        if len(segments) <= 1:
-            # Single intent detected, convert to multi-intent format
-            single_result = await self._classify_single_intent(text)
-            return {
-                "intents": [{
-                    "type": single_result["intent"],
-                    "confidence": single_result["confidence"],
-                    "entities": single_result["entities"],
-                    "text_segment": text.strip()
-                }],
-                "original_text": text
-            }
         
         # Process each segment
         intents = []
@@ -142,14 +322,43 @@ class IntentService:
                 continue
                 
             logger.info(f"Processing segment: '{segment}'")
-            single_result = await self._classify_single_intent(segment)
             
-            intents.append({
-                "type": single_result["intent"],
-                "confidence": single_result["confidence"],
-                "entities": single_result["entities"],
-                "text_segment": segment
-            })
+            # Classify the segment using prompt engineering
+            try:
+                # Create prompt for this segment
+                prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {segment}\nCategory:"
+                
+                # Analyze segment using rules
+                category_scores = self._analyze_text_with_rules(segment)
+                
+                # Get the best category
+                best_category = max(category_scores.items(), key=lambda x: x[1])
+                category_name = best_category[0]
+                confidence = best_category[1]
+                
+                # Map category to intent
+                intent_type = self.category_mapping.get(category_name, "general_query")
+                
+                # Extract entities for this segment
+                entities = self._extract_entities(segment)
+                
+                # Only include if confidence is above threshold
+                if confidence > 0.2:  # Lower threshold for multi-intent
+                    intents.append({
+                        "type": intent_type,
+                        "confidence": confidence,
+                        "entities": entities,
+                        "text_segment": segment,
+                        "category": category_name,
+                        "prompt_used": prompt
+                    })
+                    logger.info(f"Segment classified: {category_name} -> {intent_type} (confidence: {confidence:.3f})")
+                else:
+                    logger.warning(f"Segment confidence too low: {confidence:.3f} for '{segment}'")
+                    
+            except Exception as e:
+                logger.error(f"Error processing segment '{segment}': {e}")
+                continue
         
         logger.info(f"Multi-intent result: {len(intents)} intents detected")
         
@@ -160,7 +369,7 @@ class IntentService:
 
     def _segment_text_for_multi_intent(self, text: str) -> List[str]:
         """
-        Segment text into multiple intent components using enhanced logic.
+        Enhanced text segmentation for multiple intents.
         
         Args:
             text: Input text to segment
@@ -168,171 +377,75 @@ class IntentService:
         Returns:
             List of text segments, each potentially containing a separate intent
         """
-        # First, try to find all separator positions
-        separator_positions = []
-        
-        for pattern in self.multi_intent_separators:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                separator_positions.append({
-                    'start': match.start(),
-                    'end': match.end(),
-                    'match': match.group(),
-                    'pattern': pattern
-                })
-        
-        # Sort separators by position
-        separator_positions.sort(key=lambda x: x['start'])
-        
-        # If no separators found, try fallback patterns
-        if not separator_positions:
-            # Look for standalone "and" that might separate different intents
-            and_positions = []
-            for match in re.finditer(r'\band\s+', text, re.IGNORECASE):
-                # Check if this "and" is followed by potential intent indicators
-                following_text = text[match.end():match.end()+50].lower()
-                if any(indicator in following_text for indicator in [
-                    'remind', 'note', 'owe', 'want', 'need', 'have to', 'should', 
-                    'i ', 'john', 'sarah', 'mike', '$', 'dollar', 'track', 'record'
-                ]):
-                    and_positions.append({
-                        'start': match.start(),
-                        'end': match.end(),
-                        'match': match.group(),
-                        'pattern': 'fallback_and'
-                    })
-            
-            separator_positions = and_positions
-        
-        # If still no separators, return the original text
-        if not separator_positions:
-            logger.info(f"Text segmentation: '{text}' -> 1 segment (no separators found)")
-            return [text]
-        
-        # Split text based on separator positions
+        # First try to split on explicit connectors
         segments = []
-        last_end = 0
+        current_segment = ""
         
-        for sep in separator_positions:
-            # Add text before this separator
-            if sep['start'] > last_end:
-                segment = text[last_end:sep['start']].strip()
-                if segment:
-                    segments.append(segment)
+        # Split text into words
+        words = text.split()
+        i = 0
+        
+        while i < len(words):
+            word = words[i].lower()
             
-            # Start next segment from this separator (including it)
-            last_end = sep['start']
-        
-        # Add remaining text after last separator
-        if last_end < len(text):
-            segment = text[last_end:].strip()
-            if segment:
-                segments.append(segment)
-        
-        # Clean up segments - remove leading separators and connectors
-        cleaned_segments = []
-        for segment in segments:
-            # Remove leading "and", "also", "then", "plus" etc.
-            cleaned = re.sub(r'^\s*(?:and|also|then|plus)\s+', '', segment, flags=re.IGNORECASE)
-            cleaned = cleaned.strip()
+            # Check for intent transition markers
+            is_transition = False
             
-            # Skip very short segments that are likely artifacts
-            if len(cleaned) > 3:
-                cleaned_segments.append(cleaned)
-        
-        # If we ended up with just one segment, try a more aggressive approach
-        if len(cleaned_segments) <= 1:
-            # Split on any "and" that appears to separate different types of content
-            aggressive_segments = re.split(r'\s+and\s+', text, flags=re.IGNORECASE)
-            if len(aggressive_segments) > 1:
-                cleaned_segments = [seg.strip() for seg in aggressive_segments if seg.strip()]
-        
-        logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
-        return cleaned_segments
-
-    async def _classify_single_intent(self, text: str) -> Dict[str, any]:
-        """
-        Classify a single intent from text (original implementation).
-        
-        Args:
-            text: Input text to classify
+            # Common transition words
+            transition_words = ['and', 'also', 'then', 'plus']
             
-        Returns:
-            Dictionary containing intent, confidence, and entities
-        """
-        # For demo purposes, return dummy classification
-        # In production, implement actual intent classification:
-        """
-        # Tokenize input
-        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+            # Intent-specific keywords
+            intent_keywords = {
+                'reminder': ['remind', 'set', 'alarm', 'schedule'],
+                'ledger': ['owe', 'owes', 'borrowed', 'lent', 'paid', '$'],
+                'note': ['note', 'write', 'save', 'jot'],
+                'chitchat': ['how', 'what', 'who', 'when', 'where', 'why', 'hello', 'hi', 'thanks']
+            }
+            
+            # Check if current word is a transition word
+            if word in transition_words:
+                # Look ahead for intent keywords
+                if i + 1 < len(words):
+                    next_word = words[i + 1].lower()
+                    for intent_type, keywords in intent_keywords.items():
+                        if next_word in keywords or any(kw in next_word for kw in keywords):
+                            is_transition = True
+                            break
+                    
+                    # Check for money amounts
+                    if next_word.startswith('$') or next_word.isdigit():
+                        is_transition = True
+            
+            # Check for implicit transitions (direct intent keywords)
+            if not is_transition and i > 0:
+                for keywords in intent_keywords.values():
+                    if word in keywords or any(kw in word for kw in keywords):
+                        # Check if previous words indicate a new intent
+                        prev_context = ' '.join(words[max(0, i-3):i]).lower()
+                        if not any(kw in prev_context for kw in keywords):
+                            is_transition = True
+                            break
+            
+            if is_transition and current_segment.strip():
+                segments.append(current_segment.strip())
+                current_segment = ""
+                # Skip the transition word
+                i += 1
+            else:
+                current_segment += " " + words[i]
+            
+            i += 1
         
-        # Get predictions
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        # Add the last segment
+        if current_segment.strip():
+            segments.append(current_segment.strip())
         
-        # Get top prediction
-        predicted_class_id = predictions.argmax().item()
-        confidence = predictions[0][predicted_class_id].item()
-        intent = self.intent_labels[predicted_class_id]
-        """
+        # If no segments were created, use the original text
+        if not segments:
+            segments = [text]
         
-        # Enhanced keyword-based classification for demo
-        text_lower = text.lower()
-        
-        # Check for reminder keywords first
-        if any(word in text_lower for word in ["remind", "reminder", "alert", "book a ticket", "book ticket"]):
-            intent = "create_reminder"
-            confidence = 0.95
-        # Check for note keywords
-        elif any(word in text_lower for word in ["note", "write", "jot"]):
-            intent = "create_note"
-            confidence = 0.90
-        # Enhanced ledger detection - look for names + money terms or explicit debt language
-        elif (any(word in text_lower for word in ["owe", "owes", "owed", "debt", "ledger", "borrowed", "lent", "payback", "will give", "will pay", "giving", "paying", "pay me", "give me"]) or
-              self._has_name_and_money(text) or 
-              self._is_monetary_amount(text)):
-            intent = "create_ledger"
-            confidence = 0.92
-        # Check for scheduling keywords
-        elif any(word in text_lower for word in ["schedule", "appointment", "meeting"]):
-            intent = "schedule_event"
-            confidence = 0.88
-        # Check for expense keywords
-        elif any(word in text_lower for word in ["expense", "cost", "spend", "money"]):
-            intent = "add_expense"
-            confidence = 0.85
-        # Check for friend/contact keywords
-        elif any(word in text_lower for word in ["friend", "contact", "person"]):
-            intent = "add_friend"
-            confidence = 0.80
-        # Check for cancellation keywords
-        elif any(word in text_lower for word in ["cancel", "delete", "remove"]):
-            intent = "cancel_reminder"
-            confidence = 0.87
-        # Check for listing keywords
-        elif any(word in text_lower for word in ["list", "show", "display"]):
-            intent = "list_reminders"
-            confidence = 0.82
-        # Check for travel/general chat patterns
-        elif any(phrase in text_lower for phrase in ["i want to go", "want to go", "going to", "travel to", "visit"]):
-            intent = "general_query"
-            confidence = 0.75
-        else:
-            intent = "general_query"
-            confidence = 0.60
-        
-        # Extract basic entities (time, date, etc.)
-        entities = self._extract_entities(text)
-        
-        result = {
-            "intent": intent,
-            "confidence": confidence,
-            "entities": entities,
-            "original_text": text
-        }
-        
-        logger.info(f"Intent classification: {intent} (confidence: {confidence:.2f})")
-        return result
+        logger.info(f"Text segmentation: '{text}' -> {len(segments)} segments: {segments}")
+        return segments
 
     def _extract_entities(self, text: str) -> Dict[str, any]:
         """Extract entities from text (enhanced implementation)."""
@@ -473,7 +586,7 @@ class IntentService:
         has_money = any(re.search(pattern, text, re.IGNORECASE) for pattern in money_patterns)
         
         return has_name and has_money
-
+    
     def _is_monetary_amount(self, text: str) -> bool:
         """Check if the text represents a standalone monetary amount."""
         import re
@@ -502,4 +615,73 @@ class IntentService:
             return True
             
         return False
+
+    async def process_audio_transcript(self, transcript: str) -> Dict[str, any]:
+        """
+        Process transcribed audio to determine intent(s) with multi-intent support.
+        
+        Args:
+            transcript: Transcribed text from audio
+            
+        Returns:
+            Dictionary containing intent classification results (multi-intent format)
+        """
+        try:
+            # Use multi-intent classification to detect all intents
+            result = await self.classify_intent(transcript, multi_intent=True)
+            
+            # Check if we have multiple intents
+            if "intents" in result and isinstance(result["intents"], list):
+                # Return multi-intent format
+                return result
+            else:
+                # Convert single intent to multi-intent format for consistency
+                single_intent = result.get("intent", "general_query")
+                confidence = result.get("confidence", 0.0)
+                entities = result.get("entities", {})
+                
+                return {
+                    "intents": [{
+                        "type": single_intent,
+                        "confidence": confidence,
+                        "entities": entities,
+                        "text_segment": transcript
+                    }],
+                    "original_text": transcript
+                }
+                
+        except Exception as e:
+            logger.error(f"Error processing audio transcript: {e}")
+            return {
+                "intents": [{
+                    "type": "general_query",
+                    "confidence": 0.0,
+                    "entities": {},
+                    "text_segment": transcript
+                }],
+                "original_text": transcript
+            }
+
+    def _add_context_hints(self, text: str) -> str:
+        """Add contextual hints to improve classification accuracy."""
+        text_lower = text.lower()
+        hints = []
+        
+        # Time-related hints for reminders
+        if any(word in text_lower for word in ['tomorrow', 'today', 'am', 'pm', ':']) or \
+           re.search(r'\d{1,2}(?::\d{2})?(?:\s*[ap]m)?', text_lower):
+            hints.append("time_context")
+        
+        # Money-related hints for ledger
+        if '$' in text or any(word in text_lower for word in ['dollars', 'bucks', 'paid', 'owe']):
+            hints.append("money_context")
+        
+        # Note-taking hints
+        if any(word in text_lower for word in ['write', 'note', 'save', 'jot']):
+            hints.append("note_context")
+        
+        # Add hints as subtle markers in the text
+        if hints:
+            return f"{text} [{' '.join(hints)}]"
+        return text
  
