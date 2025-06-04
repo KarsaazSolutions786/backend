@@ -226,7 +226,7 @@ async def transcribe_audio(
                 detail=f"Failed to save uploaded file: {str(e)}"
             )
         
-        # Get STT service and check if it's ready
+        # Get STT service
         stt_service = get_stt_service()
         if not stt_service:
             # Clean up file
@@ -416,13 +416,10 @@ async def transcribe_and_respond(
         # === STEP 2: SPEECH-TO-TEXT TRANSCRIPTION ===
         logger.info("Step 2: Starting STT transcription")
         
-        # Get STT service and check if it's ready
+        # Get STT service
         stt_service = get_stt_service()
         if not stt_service:
-            raise HTTPException(
-                status_code=503, 
-                detail="Speech-to-text service not available"
-            )
+            raise HTTPException(status_code=503, detail="STT service not available")
         
         # Perform transcription
         try:
@@ -729,3 +726,68 @@ async def stream_conversation(
                 os.remove(temp_file_path)
             except Exception as e:
                 logger.warning(f"Failed to remove temp file: {e}") 
+
+@router.post("/test-transcribe")
+async def test_transcribe_audio(
+    audio_file: UploadFile = File(...)
+):
+    """
+    Test endpoint for transcribing audio without authentication (for development only).
+    """
+    try:
+        logger.info(f"Test transcription request for file: {audio_file.filename}")
+        
+        # Create uploads directory if it doesn't exist
+        uploads_dir = Path("uploads")
+        uploads_dir.mkdir(exist_ok=True)
+        
+        # Save uploaded file temporarily
+        temp_path = uploads_dir / audio_file.filename
+        
+        async with aiofiles.open(temp_path, "wb") as f:
+            content = await audio_file.read()
+            await f.write(content)
+        
+        logger.info(f"Saved audio file to: {temp_path}")
+        
+        # Get STT service
+        from core.dependencies import get_stt_service
+        stt_service = get_stt_service()
+        
+        if not stt_service:
+            raise HTTPException(status_code=503, detail="STT service not available")
+        
+        # Transcribe the audio
+        logger.info("Starting transcription...")
+        transcript = await stt_service.transcribe_file(str(temp_path))
+        
+        # Clean up temporary file
+        try:
+            os.remove(temp_path)
+            logger.info(f"Cleaned up temp file: {temp_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup temp file: {e}")
+        
+        if not transcript:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to transcribe audio. Please check audio format and quality."
+            )
+        
+        logger.info(f"Transcription successful: '{transcript}'")
+        
+        return {
+            "success": True,
+            "transcript": transcript,
+            "model_info": stt_service.get_model_info(),
+            "message": "Test transcription completed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Test transcription failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Test transcription failed: {str(e)}"
+        ) 
