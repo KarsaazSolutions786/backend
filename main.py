@@ -84,7 +84,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=600,
+    max_age=600,  # Cache preflight requests for 10 minutes
 )
 
 app.add_middleware(

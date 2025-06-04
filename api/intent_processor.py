@@ -179,7 +179,7 @@ async def get_supported_intents(current_user: dict = Depends(verify_firebase_tok
     try:
         intent_processor = IntentProcessorService()
         
-        return {
+    return {
             "supported_intents": list(intent_processor.intent_handlers.keys()),
             "handler_mapping": {
                 intent: handler.__name__ for intent, handler in intent_processor.intent_handlers.items()
