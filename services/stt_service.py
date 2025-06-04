@@ -1,9 +1,10 @@
 import os
 import wave
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from pathlib import Path
 from core.config import settings
 from utils.logger import logger
+from services.intent_service import IntentService
 
 # Try to import audio processing libraries
 NUMPY_AVAILABLE = False
@@ -50,11 +51,13 @@ except ImportError:
     logger.warning("Coqui STT library not available")
 
 class SpeechToTextService:
-    """Speech-to-Text service with multiple backend support."""
+    """Speech-to-Text service with intent classification integration."""
     
     def __init__(self):
         self.model = None
         self.recognition_method = None
+        self.recognizer = sr.Recognizer()
+        self.intent_service = IntentService()
         self._load_model()
     
     def _load_model(self):
@@ -322,11 +325,11 @@ class SpeechToTextService:
                 audio_buffer = io.BytesIO(audio_data)
                 
                 with sr.AudioFile(audio_buffer) as source:
-                    audio = self.model.record(source)
+                    audio = self.recognizer.record(source)
                     
                 try:
                     # Try Google Speech Recognition (free tier)
-                    transcription = self.model.recognize_google(audio)
+                    transcription = self.recognizer.recognize_google(audio)
                     logger.info(f"Google Speech Recognition transcription: {transcription}")
                     return transcription
                 except sr.UnknownValueError:
@@ -400,12 +403,12 @@ class SpeechToTextService:
                 # Use SpeechRecognition library with file
                 with sr.AudioFile(file_path) as source:
                     # Adjust for ambient noise
-                    self.model.adjust_for_ambient_noise(source, duration=0.5)
-                    audio = self.model.record(source)
+                    self.recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    audio = self.recognizer.record(source)
                     
                 try:
                     # Try Google Speech Recognition
-                    transcription = self.model.recognize_google(audio)
+                    transcription = self.recognizer.recognize_google(audio)
                     logger.info(f"Google Speech Recognition transcription: {transcription}")
                     return transcription
                 except sr.UnknownValueError:
@@ -452,4 +455,72 @@ class SpeechToTextService:
                 "online_processing": self.recognition_method == "speech_recognition",
                 "audio_analysis": True
             }
-        } 
+        }
+    
+    async def process_audio(self, audio_file_path: str) -> Dict[str, Any]:
+        """
+        Process audio file to text and classify intent.
+        
+        Args:
+            audio_file_path: Path to the audio file
+            
+        Returns:
+            Dictionary containing transcription and intent classification results
+        """
+        try:
+            # Convert audio to text
+            transcript = await self._transcribe_audio(audio_file_path)
+            if not transcript:
+                return {
+                    "success": False,
+                    "error": "Failed to transcribe audio",
+                    "transcript": None,
+                    "intent": None
+                }
+            
+            # Classify intent
+            intent_result = await self.intent_service.process_audio_transcript(transcript)
+            
+            return {
+                "success": True,
+                "transcript": transcript,
+                "intent": intent_result
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing audio: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "transcript": None,
+                "intent": None
+            }
+    
+    async def _transcribe_audio(self, audio_file_path: str) -> Optional[str]:
+        """
+        Transcribe audio file to text using speech recognition.
+        
+        Args:
+            audio_file_path: Path to the audio file
+            
+        Returns:
+            Transcribed text or None if transcription fails
+        """
+        try:
+            with sr.AudioFile(audio_file_path) as source:
+                audio = self.recognizer.record(source)
+                
+            # Use Google Speech Recognition (you can change this to other providers)
+            text = self.recognizer.recognize_google(audio)
+            logger.info(f"Transcribed text: {text}")
+            return text
+            
+        except sr.UnknownValueError:
+            logger.error("Speech recognition could not understand the audio")
+            return None
+        except sr.RequestError as e:
+            logger.error(f"Could not request results from speech recognition service: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error transcribing audio: {e}")
+            return None 

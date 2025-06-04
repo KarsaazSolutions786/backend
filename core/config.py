@@ -22,7 +22,7 @@ class Settings(BaseModel):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # CORS - More permissive for Railway
-    ALLOWED_HOSTS: List[str] = ["*"] if os.getenv("RAILWAY_ENVIRONMENT") else ["localhost", "127.0.0.1"]
+    ALLOWED_HOSTS: List[str] = ["*"]  # Allow all hosts during development
     
     # Database - Railway provides DATABASE_URL automatically for PostgreSQL
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:admin123@localhost:5432/eindr")
