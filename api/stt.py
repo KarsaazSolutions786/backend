@@ -510,7 +510,7 @@ async def transcribe_and_respond(
             "user_id": current_user_id,
             "model_info": {
                 "stt": stt_service.get_model_info() if stt_service else None,
-                "intent": "model_head.pkl"
+                # "intent": "model_head.pkl"
             }
         }
         
