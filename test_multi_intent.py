@@ -8,6 +8,7 @@ import asyncio
 import json
 from services.intent_service import IntentService
 from services.intent_processor_service import IntentProcessorService
+from services.pytorch_intent_service import PyTorchIntentService
 
 # Test cases for multi-intent processing
 TEST_CASES = [
@@ -170,6 +171,61 @@ class MultiIntentTester:
             "classification_result": intent_result,
             "processing_result": processing_result
         }
+
+async def test_multi_intent():
+    """Test multi-intent classification functionality."""
+    
+    print("🧪 Testing Multi-Intent Classification with pytorch_model.bin")
+    print("=" * 60)
+    
+    service = PyTorchIntentService()
+    
+    # Test cases with expected multi-intent behavior
+    test_cases = [
+        {
+            "text": "Remind me to call John at 5 PM and note to buy groceries",
+            "expected_intents": ["create_reminder", "create_note"]
+        },
+        {
+            "text": "Set reminder for meeting tomorrow and John owes me 50 dollars", 
+            "expected_intents": ["create_reminder", "create_ledger"]
+        },
+        {
+            "text": "Create a shopping list and remind me about the deadline",
+            "expected_intents": ["create_note", "create_reminder"]
+        },
+        {
+            "text": "Note about project and Sarah owes me 30 dollars",
+            "expected_intents": ["create_note", "create_ledger"]
+        }
+    ]
+    
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"\n📝 Test Case {i}:")
+        print(f"   Input: '{test_case['text']}'")
+        print(f"   Expected: {test_case['expected_intents']}")
+        
+        # Classify with multi-intent enabled
+        result = await service.classify_intent(test_case['text'], multi_intent=True)
+        
+        print(f"   Result Type: {result.get('type')}")
+        
+        if result.get('type') == 'multi_intent':
+            print(f"   ✅ Multi-intent detected!")
+            print(f"   Intents: {result.get('intents')}")
+            print(f"   Segments: {result.get('segments')}")
+            print(f"   Overall Confidence: {result.get('overall_confidence', 0):.2f}")
+            
+            for j, seg_result in enumerate(result.get('results', []), 1):
+                print(f"     Segment {j}: '{seg_result.get('segment_text')}'")
+                print(f"       -> Intent: {seg_result.get('intent')} (confidence: {seg_result.get('confidence', 0):.2f})")
+        else:
+            print(f"   ⚠️  Single intent detected: {result.get('intent')} (confidence: {result.get('confidence', 0):.2f})")
+        
+        print(f"   Model Used: {result.get('model_used', 'unknown')}")
+    
+    print("\n" + "=" * 60)
+    print("✅ Multi-intent testing completed!")
 
 async def main():
     """Main test function."""

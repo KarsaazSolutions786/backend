@@ -369,8 +369,8 @@ class SpeechToTextService:
                 ]
             elif file_duration < 2.5:
                 # Short audio - simple commands
-                transcriptions = [
-                    "Set a reminder for tomorrow",
+                    transcriptions = [
+                        "Set a reminder for tomorrow",
                     "Call me at three PM", 
                     "Add fifty dollars to my ledger",
                     "John owes me twenty dollars",
@@ -383,7 +383,7 @@ class SpeechToTextService:
                 ]
             elif file_duration < 5.0:
                 # Medium audio - detailed commands
-                transcriptions = [
+                    transcriptions = [
                     "Set a reminder for my doctor appointment tomorrow at two PM",
                     "John owes me fifty dollars for the dinner we had last night",
                     "Add one hundred dollars to my expense ledger for groceries today",
@@ -397,7 +397,7 @@ class SpeechToTextService:
                 ]
             else:
                 # Long audio - complex or multiple commands
-                transcriptions = [
+                    transcriptions = [
                     "Set a reminder for my doctor appointment tomorrow at two PM and also remind me to call my mom tonight about her birthday party next week",
                     "John owes me fifty dollars for dinner and I need to add one hundred dollars to my expense ledger for the groceries I bought today",
                     "Create a note about today's client meeting where we discussed the new product launch timeline and remind me to follow up with the design team on Friday",
@@ -544,7 +544,7 @@ class SpeechToTextService:
                 transcription = await self._transcribe_with_multiple_providers(actual_file)
             elif self.recognition_method == "coqui_stt":
                 logger.info("Attempting Coqui STT transcription...")
-                transcription = await self._transcribe_with_coqui(actual_file)
+                transcription = await self._transcribe_with_coqui(file_path)
             
             # If transcription succeeded, return it
             if transcription and len(transcription.strip()) > 0:
@@ -797,7 +797,7 @@ class SpeechToTextService:
                 audio_np = np.frombuffer(frames, dtype=np.int16)
                 
                 transcription = self.model.stt(audio_np)
-                logger.info(f"Coqui STT transcription: {transcription}")
+            logger.info(f"Coqui STT transcription: {transcription}")
             return transcription.strip() if transcription else self._analyze_audio_content(file_path)
             
         except Exception as e:
