@@ -118,6 +118,11 @@ async def root():
         "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
     }
 
+@app.get("/health")
+async def health_check_endpoint():
+    """Simple health check endpoint."""
+    return {"status": "healthy"}
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
