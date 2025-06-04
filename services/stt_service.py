@@ -328,9 +328,9 @@ class SpeechToTextService:
         """
         try:
             logger.info(f"Performing enhanced audio analysis on: {file_path}")
-                
-                # Get basic file info
-                file_size = os.path.getsize(file_path)
+            
+            # Get basic file info
+            file_size = os.path.getsize(file_path)
             file_duration = 0
             
             # Try to get actual duration using different methods
@@ -369,8 +369,8 @@ class SpeechToTextService:
                 ]
             elif file_duration < 2.5:
                 # Short audio - simple commands
-                    transcriptions = [
-                        "Set a reminder for tomorrow",
+                transcriptions = [
+                    "Set a reminder for tomorrow",
                     "Call me at three PM", 
                     "Add fifty dollars to my ledger",
                     "John owes me twenty dollars",
@@ -383,7 +383,7 @@ class SpeechToTextService:
                 ]
             elif file_duration < 5.0:
                 # Medium audio - detailed commands
-                    transcriptions = [
+                transcriptions = [
                     "Set a reminder for my doctor appointment tomorrow at two PM",
                     "John owes me fifty dollars for the dinner we had last night",
                     "Add one hundred dollars to my expense ledger for groceries today",
@@ -397,7 +397,7 @@ class SpeechToTextService:
                 ]
             else:
                 # Long audio - complex or multiple commands
-                    transcriptions = [
+                transcriptions = [
                     "Set a reminder for my doctor appointment tomorrow at two PM and also remind me to call my mom tonight about her birthday party next week",
                     "John owes me fifty dollars for dinner and I need to add one hundred dollars to my expense ledger for the groceries I bought today",
                     "Create a note about today's client meeting where we discussed the new product launch timeline and remind me to follow up with the design team on Friday",
@@ -777,32 +777,32 @@ class SpeechToTextService:
         """
         try:
             # Validate and preprocess for Coqui STT
-                is_valid, error_msg = self._validate_wav_format(file_path)
-                if not is_valid:
-                    logger.warning(f"WAV validation failed: {error_msg}. Attempting preprocessing...")
-                    
-                    # Try to preprocess the audio
-                    audio_data = self._preprocess_audio(file_path)
-                    if audio_data is None:
-                        logger.error("Audio preprocessing failed")
-                        return self._analyze_audio_content(file_path)
-                    
-                    # Transcribe preprocessed audio
-                    transcription = self.model.stt(audio_data)
-                    return transcription.strip() if transcription else self._analyze_audio_content(file_path)
+            is_valid, error_msg = self._validate_wav_format(file_path)
+            if not is_valid:
+                logger.warning(f"WAV validation failed: {error_msg}. Attempting preprocessing...")
                 
-                # File is valid, read and transcribe directly
-                with wave.open(file_path, 'rb') as wav_file:
-                    frames = wav_file.readframes(wav_file.getnframes())
-                    audio_np = np.frombuffer(frames, dtype=np.int16)
-                    
-                    transcription = self.model.stt(audio_np)
+                # Try to preprocess the audio
+                audio_data = self._preprocess_audio(file_path)
+                if audio_data is None:
+                    logger.error("Audio preprocessing failed")
+                    return self._analyze_audio_content(file_path)
+                
+                # Transcribe preprocessed audio
+                transcription = self.model.stt(audio_data)
+                return transcription.strip() if transcription else self._analyze_audio_content(file_path)
+            
+            # File is valid, read and transcribe directly
+            with wave.open(file_path, 'rb') as wav_file:
+                frames = wav_file.readframes(wav_file.getnframes())
+                audio_np = np.frombuffer(frames, dtype=np.int16)
+                
+                transcription = self.model.stt(audio_np)
                 logger.info(f"Coqui STT transcription: {transcription}")
-                    return transcription.strip() if transcription else self._analyze_audio_content(file_path)
+            return transcription.strip() if transcription else self._analyze_audio_content(file_path)
             
         except Exception as e:
             logger.error(f"Coqui STT failed: {e}")
-                return self._analyze_audio_content(file_path)
+            return self._analyze_audio_content(file_path)
     
     def is_ready(self) -> bool:
         """Check if the STT service is ready."""

@@ -510,10 +510,10 @@ async def upload_training_data(
             await f.write(content)
         
         logger.info(f"Training data saved to {file_path}")
-            
-            return {
+        
+        return {
             "success": True,
-                "user_id": user_id,
+            "user_id": user_id,
             "filename": file.filename,
             "file_path": str(file_path),
             "file_size": len(content),
