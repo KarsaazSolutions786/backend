@@ -118,7 +118,7 @@ async def root():
         "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
     }
 
-@app.get("/health")
+# @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     try:
