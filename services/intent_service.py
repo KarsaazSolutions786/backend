@@ -172,8 +172,8 @@ class IntentService:
         """Classify a single intent using prompt engineering."""
         try:
             # Create the prompt
-            prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {text}\nCategory:"
-            logger.info(f"Using prompt: {prompt}")
+            # prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {text}\nCategory:"
+            # logger.info(f"Using prompt: {prompt}")
             
             # Analyze text using rules
             category_scores = self._analyze_text_with_rules(text)
@@ -197,7 +197,7 @@ class IntentService:
                 "entities": entities,
                 "original_text": text,
                 "category": category_name,
-                "prompt_used": prompt
+                # "prompt_used": prompt
             }
             
         except Exception as e:
@@ -343,7 +343,7 @@ class IntentService:
             # Classify the segment using prompt engineering
             try:
                 # Create prompt for this segment
-                prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {segment}\nCategory:"
+                # prompt = f"Classify the following text into one of these categories: Reminders, Ledger, Notes, or Chitchat.\n\nText: {segment}\nCategory:"
                 
                 # Analyze segment using rules
                 category_scores = self._analyze_text_with_rules(segment)
@@ -367,7 +367,7 @@ class IntentService:
                         "entities": entities,
                         "text_segment": segment,
                         "category": category_name,
-                        "prompt_used": prompt
+                        # "prompt_used": prompt
                     })
                     logger.info(f"Segment classified: {category_name} -> {intent_type} (confidence: {confidence:.3f})")
                 else:
