@@ -106,17 +106,20 @@ class IntentService:
             "Notes": {
                 "keywords": [
                     "note", "write", "jot", "save", "record", "remember", "list",
-                    "shopping", "grocery", "idea", "thought", "memo", "diary",
-                    "journal", "log", "minutes", "summary", "discussion"
+                    "shopping", "grocery", "groceries", "buy", "purchase", "get", "idea", "thought", "memo", "diary",
+                    "journal", "log", "minutes", "summary", "discussion", "add", "create", "make"
                 ],
                 "patterns": [
+                    r'\b(add|create|make)\s+(a\s+)?(note|list)\b',  # "add a note", "create note", "make list"
+                    r'\bnote\s+(to\s+|about\s+|that\s+)',  # "note to", "note about", "note that"
                     r'\b(note|write|jot)\b.*\b(down|this|that)\b',
                     r'\b(save|record|remember)\b.*\b(this|that|it)\b',
-                    r'\b(shopping|grocery)\s+list\b',
+                    r'\b(shopping|grocery)\s+(list|items?)\b',
                     r'\b(meeting\s+)?minutes\b',
-                    r'\b(idea|thought|discussion)\b'
+                    r'\b(idea|thought|discussion)\b',
+                    r'\b(buy|purchase|get)\s+(groceries|food|items?)\b'  # Shopping related
                 ],
-                "content_indicators": ["list", "idea", "thought", "discussion", "meeting", "project"]
+                "content_indicators": ["list", "idea", "thought", "discussion", "meeting", "project", "groceries", "shopping", "buy", "purchase"]
             },
             
             "Chitchat": {
@@ -216,54 +219,68 @@ class IntentService:
             
             # Check keywords
             keyword_matches = sum(1 for keyword in rules["keywords"] if keyword in text_lower)
-            score += keyword_matches * 0.3
+            score += keyword_matches * 0.4  # Increased weight for keywords
             
             # Check patterns
             pattern_matches = sum(1 for pattern in rules["patterns"] if re.search(pattern, text, re.IGNORECASE))
-            score += pattern_matches * 0.5
+            score += pattern_matches * 0.7  # Increased weight for patterns
             
             # Check specific indicators
             if category == "Reminders":
                 # Check for time indicators
                 time_matches = sum(1 for indicator in rules["time_indicators"] if indicator in text_lower)
-                score += time_matches * 0.4
+                score += time_matches * 0.5
                 
             elif category == "Ledger": 
                 # Check for money indicators
                 money_matches = sum(1 for indicator in rules["money_indicators"] if indicator in text_lower)
-                score += money_matches * 0.6
+                score += money_matches * 0.7
                 # Check for dollar amounts
                 if re.search(r'\$\d+|\b\d+\s*(dollars?|bucks?)\b', text, re.IGNORECASE):
-                    score += 1.0
+                    score += 1.2
                     
             elif category == "Notes":
+                # Enhanced note detection
+                # Check for "add/create + note" patterns
+                if re.search(r'\b(add|create|make)\s+(a\s+)?(note|list)\b', text, re.IGNORECASE):
+                    score += 1.5
+                # Check for "note + content" patterns  
+                if re.search(r'\bnote\s+(to\s+|about\s+|that\s+)', text, re.IGNORECASE):
+                    score += 1.2
                 # Check for content indicators
                 content_matches = sum(1 for indicator in rules["content_indicators"] if indicator in text_lower)
-                score += content_matches * 0.4
+                score += content_matches * 0.5
                 
             elif category == "Chitchat":
                 # Check for question indicators
                 question_matches = sum(1 for indicator in rules["question_indicators"] if indicator in text_lower)
-                score += question_matches * 0.3
+                score += question_matches * 0.4
                 # Check if it's a question
                 if text.strip().endswith('?'):
-                    score += 0.5
-            
-            # Normalize score to confidence (0-1)
-            category_scores[category] = min(1.0, score / 3.0)
+                    score += 0.6
         
-        # If all scores are low, boost the most likely based on simple heuristics
+        # Normalize score to confidence (0-1)
+        for category in category_scores:
+            category_scores[category] = min(1.0, category_scores[category] / 2.5)  # Adjusted normalization
+        
+        # Enhanced fallback heuristics
         max_score = max(category_scores.values())
-        if max_score < 0.3:
-            # Simple fallback heuristics
-            if any(word in text_lower for word in ["remind", "alarm", "appointment"]):
-                category_scores["Reminders"] = 0.7
-            elif any(word in text_lower for word in ["$", "owe", "paid", "money"]):
-                category_scores["Ledger"] = 0.7
-            elif any(word in text_lower for word in ["note", "write", "save", "list"]):
-                category_scores["Notes"] = 0.7
+        if max_score < 0.4:
+            # Specific patterns for common cases
+            if re.search(r'\b(add|create|make)\s+(a\s+)?(note|list)\b', text_lower):
+                category_scores["Notes"] = 0.8
+            elif re.search(r'\b(remind|reminder|alarm)\b', text_lower):
+                category_scores["Reminders"] = 0.8
+            elif re.search(r'\b(\$|dollar|owe|paid|money)\b', text_lower):
+                category_scores["Ledger"] = 0.8
+            elif re.search(r'\b(how|what|hello|hi|thank)\b', text_lower):
+                category_scores["Chitchat"] = 0.7
             else:
-                category_scores["Chitchat"] = 0.6
+                # Default to Notes if it contains actionable content
+                if len(text.split()) > 2 and not any(word in text_lower for word in ['?', 'how', 'what', 'hello']):
+                    category_scores["Notes"] = 0.6
+                else:
+                    category_scores["Chitchat"] = 0.6
         
         logger.info(f"Category scores for '{text}': {category_scores}")
         return category_scores
@@ -377,7 +394,29 @@ class IntentService:
         Returns:
             List of text segments, each potentially containing a separate intent
         """
-        # First try to split on explicit connectors
+        # First check if this looks like a single intent that shouldn't be split
+        text_lower = text.lower()
+        
+        # Don't split if it's clearly a single coherent intent
+        single_intent_patterns = [
+            r'\b(add|create|make)\s+(a\s+)?(note|reminder)\s+to\b',  # "add a note to", "create reminder to"
+            r'\b(note|write|jot)\s+(down\s+)?(that\s+)?',  # "note that", "write down"
+            r'\b(remind\s+me\s+to|set\s+(a\s+)?reminder)\b',  # "remind me to", "set reminder"
+            r'\b(john|sarah|mike|alex|david|mary)\s+(owes?|owed?|borrowed?|lent|paid?)\b',  # "John owes"
+            r'\b(track|record|log)\s+(expense|payment|cost)\b',  # "track expense"
+        ]
+        
+        for pattern in single_intent_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                logger.info(f"Text '{text}' matches single intent pattern: {pattern}")
+                return [text]  # Don't split
+        
+        # If text is short (< 50 chars) and doesn't have clear separators, don't split
+        if len(text) < 50 and not re.search(r'\s+and\s+(?:also\s+)?(?:remind|note|owe|john|sarah|mike)', text, re.IGNORECASE):
+            logger.info(f"Short text '{text}' - treating as single intent")
+            return [text]
+        
+        # Enhanced segmentation for longer texts with multiple clear intents
         segments = []
         current_segment = ""
         
@@ -391,62 +430,55 @@ class IntentService:
             # Check for intent transition markers
             is_transition = False
             
-            # Common transition words
+            # Common transition words that indicate new intents
             transition_words = ['and', 'also', 'then', 'plus']
             
-            # Intent-specific keywords
-            intent_keywords = {
-                'reminder': ['remind', 'set', 'alarm', 'schedule'],
-                'ledger': ['owe', 'owes', 'borrowed', 'lent', 'paid', '$'],
-                'note': ['note', 'write', 'save', 'jot'],
+            # Intent-specific keywords that start new intents
+            intent_starters = {
+                'reminder': ['remind', 'set', 'alarm', 'schedule', 'appointment'],
+                'ledger': ['john', 'sarah', 'mike', 'alex', 'david', 'mary', 'owe', 'owes', 'borrowed', 'lent', 'paid'],
+                'note': ['note', 'write', 'save', 'jot', 'record'],
                 'chitchat': ['how', 'what', 'who', 'when', 'where', 'why', 'hello', 'hi', 'thanks']
             }
             
-            # Check if current word is a transition word
-            if word in transition_words:
-                # Look ahead for intent keywords
-                if i + 1 < len(words):
-                    next_word = words[i + 1].lower()
-                    for intent_type, keywords in intent_keywords.items():
-                        if next_word in keywords or any(kw in next_word for kw in keywords):
+            # Check if current word is a transition word followed by intent starter
+            if word in transition_words and i + 1 < len(words):
+                next_word = words[i + 1].lower()
+                
+                # Look for strong intent starters after transition words
+                for intent_type, starters in intent_starters.items():
+                    if next_word in starters:
+                        # Check if this would create a meaningful segment
+                        if len(current_segment.split()) >= 3:  # Minimum 3 words for a segment
                             is_transition = True
                             break
-                    
-                    # Check for money amounts
-                    if next_word.startswith('$') or next_word.isdigit():
+                
+                # Check for money amounts or names after "and"
+                if next_word.startswith('$') or next_word[0].isupper():
+                    if len(current_segment.split()) >= 3:
                         is_transition = True
-            
-            # Check for implicit transitions (direct intent keywords)
-            if not is_transition and i > 0:
-                for keywords in intent_keywords.values():
-                    if word in keywords or any(kw in word for kw in keywords):
-                        # Check if previous words indicate a new intent
-                        prev_context = ' '.join(words[max(0, i-3):i]).lower()
-                        if not any(kw in prev_context for kw in keywords):
-                            is_transition = True
-                            break
             
             if is_transition and current_segment.strip():
                 segments.append(current_segment.strip())
                 current_segment = ""
                 # Skip the transition word
                 i += 1
-            else:
-                current_segment += " " + words[i]
+                continue
             
+            current_segment += " " + words[i]
             i += 1
         
         # Add the last segment
         if current_segment.strip():
             segments.append(current_segment.strip())
         
-        # If no segments were created, use the original text
-        if not segments:
+        # If we only got one segment, return the original text
+        if len(segments) <= 1:
             segments = [text]
         
         logger.info(f"Text segmentation: '{text}' -> {len(segments)} segments: {segments}")
         return segments
-
+    
     def _extract_entities(self, text: str) -> Dict[str, any]:
         """Extract entities from text (enhanced implementation)."""
         entities = {}
