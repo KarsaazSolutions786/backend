@@ -16,8 +16,16 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Eindr Backend...")
     
-    # Check if we're in minimal mode
+    # Check if we're in minimal mode or Railway environment
     is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    
+    # Force minimal mode in Railway
+    if is_railway_env:
+        is_minimal_mode = True
+        logger.info("Railway environment detected - forcing minimal mode")
+    
+    logger.info(f"Running in {'minimal' if is_minimal_mode else 'full'} mode")
     
     # Configure PyTorch memory settings only if needed
     if not is_minimal_mode:
@@ -37,9 +45,9 @@ async def lifespan(app: FastAPI):
         from services.chat_service import ChatService
         from core.dependencies import set_services
         
-        # Use lightweight intent service instead of PyTorch version in minimal mode
-        if is_minimal_mode:
-            logger.info("Running in minimal mode - using lightweight intent service")
+        # Always use lightweight intent service in Railway or minimal mode
+        if is_minimal_mode or is_railway_env:
+            logger.info("Using lightweight intent service (minimal/Railway mode)")
             from services.intent_service import IntentService
             intent_service = IntentService()
         else:
@@ -67,7 +75,7 @@ async def lifespan(app: FastAPI):
         set_services(stt_service, tts_service, intent_service, chat_service)
         
         # Only start scheduler if not in minimal mode (to avoid heavy background tasks)
-        if not is_minimal_mode:
+        if not is_minimal_mode and not is_railway_env:
             try:
                 from core.scheduler import scheduler
                 scheduler.start()
@@ -75,7 +83,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning(f"Failed to start scheduler: {e}")
         else:
-            logger.info("Scheduler skipped in minimal mode")
+            logger.info("Scheduler skipped in minimal/Railway mode")
             
         logger.info("All services initialized successfully!")
         
@@ -89,7 +97,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     logger.info("Shutting down Eindr Backend...")
     try:
-        if not is_minimal_mode:
+        if not is_minimal_mode and not is_railway_env:
             from core.scheduler import scheduler
             scheduler.shutdown()
     except Exception as e:
@@ -143,7 +151,7 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "environment": "railway" if os.getenv("RAILWAY_ENVIRONMENT") else "local",
-        "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
+        "mode": "minimal" if (os.getenv("MINIMAL_MODE", "false").lower() == "true" or os.getenv("RAILWAY_ENVIRONMENT")) else "full"
     }
 
 @app.get("/health")
@@ -154,7 +162,7 @@ async def health_check_endpoint():
             "status": "healthy",
             "timestamp": datetime.datetime.utcnow().isoformat(),
             "environment": os.getenv("RAILWAY_ENVIRONMENT", "local"),
-            "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
+            "mode": "minimal" if (os.getenv("MINIMAL_MODE", "false").lower() == "true" or os.getenv("RAILWAY_ENVIRONMENT")) else "full"
         }
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")

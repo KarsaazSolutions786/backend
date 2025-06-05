@@ -10,19 +10,55 @@ from pydantic import BaseModel
 import aiofiles
 import asyncio
 from pathlib import Path
+import os
 
 # Import dependencies
 from firebase_auth import verify_firebase_token
-from services.pytorch_intent_service import PyTorchIntentService
 from services.database_integration_service import DatabaseIntegrationService
 from utils.logger import logger
 
 # Initialize router
 router = APIRouter()
 
-# Initialize services
-pytorch_intent_service = PyTorchIntentService()
+# Initialize services conditionally
 db_integration_service = DatabaseIntegrationService()
+
+# Global service variables - will be initialized on first use
+pytorch_intent_service = None
+intent_service = None
+
+def get_intent_service():
+    """Get the appropriate intent service based on mode and availability."""
+    global pytorch_intent_service, intent_service
+    
+    # Check if we're in minimal mode or Railway environment
+    is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    
+    # Force minimal mode in Railway
+    if is_railway_env:
+        is_minimal_mode = True
+    
+    if is_minimal_mode:
+        # Use lightweight intent service in minimal mode or Railway
+        if intent_service is None:
+            logger.info("Initializing lightweight intent service for API (minimal/Railway mode)")
+            from services.intent_service import IntentService
+            intent_service = IntentService()
+        return intent_service
+    else:
+        # Try to use PyTorch service in full mode (local only)
+        if pytorch_intent_service is None:
+            try:
+                logger.info("Initializing PyTorch intent service for API")
+                from services.pytorch_intent_service import PyTorchIntentService
+                pytorch_intent_service = PyTorchIntentService()
+            except Exception as e:
+                logger.warning(f"Failed to initialize PyTorch intent service: {e}")
+                logger.info("Falling back to lightweight intent service for API")
+                from services.intent_service import IntentService
+                pytorch_intent_service = IntentService()  # Store in pytorch_intent_service var to avoid re-initialization
+        return pytorch_intent_service
 
 # Pydantic models for request/response
 class IntentClassificationRequest(BaseModel):
@@ -62,7 +98,7 @@ async def classify_intent(
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Classify intent(s) in the provided text using PyTorch model.
+    Classify intent(s) in the provided text using available model.
     
     Features:
     - Single and multi-intent detection
@@ -74,8 +110,11 @@ async def classify_intent(
         user_id = current_user["uid"]
         logger.info(f"Intent classification request from user {user_id}: '{request.text}'")
         
+        # Get the appropriate intent service
+        service = get_intent_service()
+        
         # Perform classification
-        result = await pytorch_intent_service.classify_intent(
+        result = await service.classify_intent(
             text=request.text,
             multi_intent=request.multi_intent
         )
@@ -106,7 +145,7 @@ async def classify_intent(
         response_data = {
             "success": True,
             "original_text": request.text,
-            "model_used": result.get("model_used", "pytorch"),
+            "model_used": result.get("model_used", "lightweight"),
             "type": result.get("type", "single_intent")
         }
         
@@ -209,7 +248,7 @@ async def classify_and_store(
         logger.info(f"Full pipeline request from user {user_id}: '{request.text}'")
         
         # Step 1: Classify intent
-        classification_result = await pytorch_intent_service.classify_intent(
+        classification_result = await get_intent_service().classify_intent(
             text=request.text,
             multi_intent=request.multi_intent
         )
@@ -276,7 +315,7 @@ async def train_model(
         logger.info("Starting model training...")
         
         # Start training
-        success = await pytorch_intent_service.train_model(
+        success = await get_intent_service().train_model(
             epochs=request.epochs,
             learning_rate=request.learning_rate,
             batch_size=request.batch_size
@@ -292,7 +331,7 @@ async def train_model(
                     "learning_rate": request.learning_rate,
                     "batch_size": request.batch_size
                 },
-                "model_info": pytorch_intent_service.get_model_info()
+                "model_info": get_intent_service().get_model_info()
             }
         else:
             raise HTTPException(
@@ -315,11 +354,11 @@ async def get_model_info(
 ):
     """Get information about the current model and capabilities."""
     try:
-        model_info = pytorch_intent_service.get_model_info()
+        model_info = get_intent_service().get_model_info()
         return {
             "success": True,
             "model_info": model_info,
-            "supported_intents": pytorch_intent_service.intent_labels,
+            "supported_intents": get_intent_service().intent_labels,
             "capabilities": {
                 "single_intent_classification": True,
                 "multi_intent_classification": True,
@@ -429,7 +468,7 @@ async def batch_classify(
         # Process each text
         for i, text in enumerate(texts):
             try:
-                result = await pytorch_intent_service.classify_intent(
+                result = await get_intent_service().classify_intent(
                     text=text,
                     multi_intent=multi_intent
                 )
@@ -534,8 +573,8 @@ async def upload_training_data(
 async def health_check():
     """Health check for the intent processing service."""
     try:
-        model_ready = pytorch_intent_service.is_ready()
-        model_info = pytorch_intent_service.get_model_info()
+        model_ready = get_intent_service().is_ready()
+        model_info = get_intent_service().get_model_info()
         
         return {
             "status": "healthy" if model_ready else "degraded",
@@ -543,7 +582,7 @@ async def health_check():
             "pytorch_available": model_info.get("pytorch_available", False),
             "transformers_available": model_info.get("transformers_available", False),
             "device": model_info.get("device", "unknown"),
-            "supported_intents": pytorch_intent_service.intent_labels
+            "supported_intents": get_intent_service().intent_labels
         }
         
     except Exception as e:
