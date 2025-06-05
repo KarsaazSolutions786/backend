@@ -11,7 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MINIMAL_MODE=true \
     PORT=8000 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    # PyTorch memory optimization
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128 \
+    OMP_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    VECLIB_MAXIMUM_THREADS=1
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -48,5 +55,5 @@ EXPOSE ${PORT}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Run the application with proper signal handling
-CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 30 --workers 1"] 
+# Run the application with proper signal handling and memory limits
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 30 --workers 1 --limit-concurrency 100 --limit-max-requests 1000"] 
