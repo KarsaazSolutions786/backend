@@ -256,10 +256,13 @@ models/*.tflite
 models/*.onnx
 models/*.h5
 models/*.joblib
+models/*.bin
+
 # Allow our specific model files
 !models/pytorch_model.bin
 !models/model_head.pkl
 !models/model.tflite
+!models/coqui.tflite
 # Large model files
 !models/whisper-tiny.bin
 # But allow Python files in models directory
