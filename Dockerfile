@@ -11,12 +11,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MINIMAL_MODE=true \
     PORT=8000
 
-# Install system dependencies (minimal for Railway)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     postgresql-client \
     libsndfile1 \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
