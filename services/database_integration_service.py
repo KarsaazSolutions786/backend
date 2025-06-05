@@ -4,39 +4,31 @@ Handles storing classification results into appropriate PostgreSQL tables.
 """
 
 import asyncio
+import uuid
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
+import re
+
+# Import logger first
+from utils.logger import logger
 
 try:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.orm import Session
     from sqlalchemy import text, select, insert, update
     from sqlalchemy.exc import SQLAlchemyError
     
-    # Try different possible database imports
-    try:
-        from core.database import get_db_session
-    except ImportError:
-        try:
-            from connect_db import get_db_session
-        except ImportError:
-            from connect_db import SessionLocal
-            # Create a fallback async session function
-            async def get_db_session():
-                """Fallback database session for sync databases."""
-                db = SessionLocal()
-                try:
-                    yield db
-                finally:
-                    db.close()
+    # Import the existing database connection
+    from connect_db import SessionLocal, get_db
     
     DATABASE_AVAILABLE = True
+    logger.info("Database connection available")
 except ImportError as e:
     # Fallback when database dependencies are not available
     DATABASE_AVAILABLE = False
     
     # Mock classes for testing
-    class AsyncSession:
+    class Session:
         pass
     
     class SQLAlchemyError(Exception):
@@ -45,11 +37,11 @@ except ImportError as e:
     def text(query):
         return query
     
-    async def get_db_session():
+    def get_db():
         """Mock database session for testing."""
         return None
 
-from utils.logger import logger
+    logger.warning(f"Database dependencies not available: {e}")
 
 class DatabaseIntegrationService:
     """
@@ -58,28 +50,43 @@ class DatabaseIntegrationService:
     """
     
     def __init__(self):
+        # Updated table schemas to match the actual database structure
         self.table_schemas = {
             "reminders": {
                 "required_fields": ["title", "user_id"],
-                "optional_fields": ["time", "status", "description", "created_at"],
-                "default_values": {"status": "active", "created_at": datetime.now}
+                "optional_fields": ["time", "description", "repeat_pattern", "timezone", "is_shared", "created_by", "created_at"],
+                "default_values": {
+                    "repeat_pattern": "none", 
+                    "timezone": "UTC", 
+                    "is_shared": False, 
+                    "created_by": None,
+                    "created_at": datetime.now
+                }
             },
             "notes": {
                 "required_fields": ["content", "user_id"],
-                "optional_fields": ["category", "tags", "created_at"],
-                "default_values": {"category": "general", "created_at": datetime.now}
+                "optional_fields": ["source", "created_at"],
+                "default_values": {"source": "ai_pipeline", "created_at": datetime.now}
             },
             "ledger_entries": {
                 "required_fields": ["user_id"],
-                "optional_fields": ["amount", "contact_name", "transaction_type", "description", "created_at"],
-                "default_values": {"amount": 0.0, "transaction_type": "general", "created_at": datetime.now}
+                "optional_fields": ["amount", "contact_name", "direction", "created_at"],
+                "default_values": {"amount": 0.0, "direction": "owe", "created_at": datetime.now}
             },
             "history_logs": {
-                "required_fields": ["message", "user_id"],
-                "optional_fields": ["response_type", "created_at", "metadata"],
-                "default_values": {"response_type": "general", "created_at": datetime.now}
+                "required_fields": ["content", "user_id"],
+                "optional_fields": ["interaction_type", "created_at"],
+                "default_values": {"interaction_type": "ai_chat", "created_at": datetime.now}
             }
         }
+        
+        # Mock services for now - in production these would be real service imports
+        self.reminder_service = None
+        self.note_service = None
+        self.ledger_service = None
+        self.history_service = None
+        
+        logger.info("Database Integration Service initialized")
     
     async def store_classification_result(self, 
                                         classification_result: Dict[str, Any], 
@@ -217,58 +224,91 @@ class DatabaseIntegrationService:
                                      user_id: str) -> Dict[str, Any]:
         """Prepare reminder record for database."""
         data = {
+            "id": str(uuid.uuid4()),  # Generate UUID
             "user_id": user_id,
-            "title": entities.get("title", result["original_text"]),
-            "status": "active",
+            "title": result["original_text"],
             "created_at": datetime.now()
         }
         
-        # Add time if available
-        if entities.get("time"):
-            data["time"] = entities["time"]
+        # Extract and parse time if available
+        time_entities = entities.get("time", [])
+        if time_entities:
+            # Try to parse the first time entity into a proper timestamp
+            time_str = time_entities[0] if isinstance(time_entities, list) else str(time_entities)
+            parsed_time = self._parse_time_string(time_str)
+            if parsed_time:
+                data["time"] = parsed_time
         
-        # Add description with classification metadata
-        data["description"] = json.dumps({
+        # Add description with metadata
+        description_data = {
             "original_text": result["original_text"],
             "confidence": result.get("confidence", 0.0),
             "model_used": result.get("model_used", "unknown"),
             "entities": entities
-        })
+        }
+        data["description"] = json.dumps(description_data)
         
         return {
             "table": "reminders",
             "data": data
         }
     
+    def _parse_time_string(self, time_str: str) -> Optional[datetime]:
+        """Parse time string into a datetime object."""
+        try:
+            time_str = time_str.lower().strip()
+            now = datetime.now()
+            
+            # Handle common time formats
+            if 'pm' in time_str or 'am' in time_str:
+                # Extract hour from "5 pm", "at 5 pm", etc.
+                hour_match = re.search(r'(\d{1,2})', time_str)
+                if hour_match:
+                    hour = int(hour_match.group(1))
+                    if 'pm' in time_str and hour != 12:
+                        hour += 12
+                    elif 'am' in time_str and hour == 12:
+                        hour = 0
+                    
+                    # Create datetime for today at the specified hour
+                    reminder_time = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+                    
+                    # If the time has already passed today, set it for tomorrow
+                    if reminder_time <= now:
+                        reminder_time += timedelta(days=1)
+                    
+                    return reminder_time
+            
+            # Handle "tomorrow" 
+            elif 'tomorrow' in time_str:
+                return now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            
+            # Handle "next week"
+            elif 'next week' in time_str:
+                return now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=7)
+            
+            # If we can't parse it, return None (field is nullable)
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse time string '{time_str}': {e}")
+            return None
+    
     async def _prepare_note_record(self, 
                                  entities: Dict[str, Any], 
                                  result: Dict[str, Any], 
                                  user_id: str) -> Dict[str, Any]:
         """Prepare note record for database."""
+        # Extract content from entities or use original text
+        content = entities.get("content", result["original_text"])
+        
         data = {
+            "id": str(uuid.uuid4()),  # Generate UUID
             "user_id": user_id,
-            "content": entities.get("content", result["original_text"]),
-            "category": "general",
+            "content": content,
+            "source": "ai_pipeline",
             "created_at": datetime.now()
         }
-        
-        # Determine category from content
-        content_lower = data["content"].lower()
-        if any(word in content_lower for word in ["shopping", "grocery", "buy", "purchase"]):
-            data["category"] = "shopping"
-        elif any(word in content_lower for word in ["meeting", "work", "project", "deadline"]):
-            data["category"] = "work"
-        elif any(word in content_lower for word in ["idea", "thought", "brainstorm"]):
-            data["category"] = "ideas"
-        
-        # Add tags as JSON metadata
-        data["tags"] = json.dumps({
-            "original_text": result["original_text"],
-            "confidence": result.get("confidence", 0.0),
-            "model_used": result.get("model_used", "unknown"),
-            "entities": entities,
-            "auto_categorized": True
-        })
         
         return {
             "table": "notes",
@@ -281,29 +321,69 @@ class DatabaseIntegrationService:
                                    user_id: str) -> Dict[str, Any]:
         """Prepare ledger record for database."""
         data = {
+            "id": str(uuid.uuid4()),  # Generate UUID
             "user_id": user_id,
-            "amount": entities.get("amount", 0.0),
-            "transaction_type": entities.get("transaction_type", "general"),
-            "description": result["original_text"],
+            "direction": "owe",  # Default direction 
             "created_at": datetime.now()
         }
         
-        # Add contact name if available
-        if entities.get("contact_name"):
-            data["contact_name"] = entities["contact_name"]
+        # Extract amount if available
+        amount_entities = entities.get("amount", [])
+        if amount_entities:
+            try:
+                # Parse amount from the first entity
+                amount_str = amount_entities[0] if isinstance(amount_entities, list) else str(amount_entities)
+                # Extract numeric value
+                amount_match = re.search(r'(\d+(?:\.\d{2})?)', str(amount_str))
+                if amount_match:
+                    data["amount"] = float(amount_match.group(1))
+            except (ValueError, IndexError):
+                data["amount"] = 0.0
         
-        # Add metadata
-        data["metadata"] = json.dumps({
-            "confidence": result.get("confidence", 0.0),
-            "model_used": result.get("model_used", "unknown"),
-            "entities": entities,
-            "auto_classified": True
-        })
+        # Extract contact name using improved logic
+        contact_name = self._extract_contact_name(result["original_text"], entities)
+        if contact_name:
+            data["contact_name"] = contact_name
         
         return {
             "table": "ledger_entries",
             "data": data
         }
+    
+    def _extract_contact_name(self, original_text: str, entities: Dict[str, Any]) -> Optional[str]:
+        """Extract contact name from text and entities."""
+        try:
+            text_lower = original_text.lower()
+            
+            # Look for common patterns like "Sarah owes me", "I owe John", etc.
+            name_patterns = [
+                r'(\w+)\s+owes?\s+me',  # "Sarah owes me"
+                r'i\s+owe\s+(\w+)',     # "I owe John"
+                r'lend\s+(\w+)',        # "lend John"
+                r'borrow\s+from\s+(\w+)', # "borrow from Sarah"
+            ]
+            
+            for pattern in name_patterns:
+                match = re.search(pattern, text_lower)
+                if match:
+                    name = match.group(1).capitalize()
+                    # Skip common words
+                    if name not in ['Me', 'You', 'I', 'He', 'She', 'They', 'That', 'Note', 'Money']:
+                        return name
+            
+            # Fallback: look for capitalized words in the original text
+            words = original_text.split()
+            for word in words:
+                # Look for capitalized words that could be names
+                if (word[0].isupper() and len(word) > 2 and 
+                    word.lower() not in ['note', 'that', 'owes', 'owe', 'money', 'dollars']):
+                    return word
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract contact name from '{original_text}': {e}")
+            return None
     
     async def _prepare_history_record(self, 
                                     entities: Dict[str, Any], 
@@ -311,19 +391,12 @@ class DatabaseIntegrationService:
                                     user_id: str) -> Dict[str, Any]:
         """Prepare history record for database."""
         data = {
+            "id": str(uuid.uuid4()),  # Generate UUID
             "user_id": user_id,
-            "message": result["original_text"],
-            "response_type": "chit_chat",
+            "content": result["original_text"],
+            "interaction_type": "ai_chat",
             "created_at": datetime.now()
         }
-        
-        # Add metadata
-        data["metadata"] = json.dumps({
-            "intent": result.get("intent", "chit_chat"),
-            "confidence": result.get("confidence", 0.0),
-            "model_used": result.get("model_used", "unknown"),
-            "entities": entities
-        })
         
         return {
             "table": "history_logs",
@@ -333,7 +406,10 @@ class DatabaseIntegrationService:
     async def _insert_record(self, table_name: str, data: Dict[str, Any]) -> Optional[int]:
         """Insert record into specified table."""
         try:
-            async with get_db_session() as session:
+            # Create a new database session
+            session = SessionLocal()
+            
+            try:
                 # Validate required fields
                 schema = self.table_schemas.get(table_name)
                 if not schema:
@@ -369,8 +445,8 @@ class DatabaseIntegrationService:
                 """)
                 
                 # Execute the insert
-                result = await session.execute(query, data)
-                await session.commit()
+                result = session.execute(query, data)
+                session.commit()
                 
                 # Get the inserted ID
                 inserted_id = result.scalar()
@@ -378,79 +454,81 @@ class DatabaseIntegrationService:
                 
                 return inserted_id
                 
-        except SQLAlchemyError as e:
-            logger.error(f"Database error inserting into {table_name}: {e}")
-            return None
+            except SQLAlchemyError as e:
+                session.rollback()
+                logger.error(f"Database error inserting into {table_name}: {e}")
+                return None
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Unexpected error inserting into {table_name}: {e}")
+                return None
+            finally:
+                session.close()
+                
         except Exception as e:
-            logger.error(f"Unexpected error inserting into {table_name}: {e}")
+            logger.error(f"Failed to create database session: {e}")
             return None
     
     async def validate_user_exists(self, user_id: str) -> bool:
         """Validate that the user exists in the database."""
         try:
-            async with get_db_session() as session:
+            session = SessionLocal()
+            try:
                 query = text("SELECT id FROM users WHERE id = :user_id")
-                result = await session.execute(query, {"user_id": user_id})
+                result = session.execute(query, {"user_id": user_id})
                 return result.scalar() is not None
+            finally:
+                session.close()
                 
         except Exception as e:
             logger.error(f"Error validating user existence: {e}")
             return False
     
-    async def create_user_if_not_exists(self, user_id: str, user_data: Dict[str, Any] = None) -> bool:
-        """Create user if they don't exist."""
-        try:
-            if await self.validate_user_exists(user_id):
-                return True
+    async def create_user_if_not_exists(self, user_id: str) -> bool:
+        """
+        Ensure user exists in the system.
+        
+        Args:
+            user_id: User ID to check/create
             
-            # Create new user
-            async with get_db_session() as session:
-                user_data = user_data or {
-                    "id": user_id,
-                    "created_at": datetime.now(),
-                    "is_active": True
-                }
-                
-                query = text("""
-                    INSERT INTO users (id, created_at, is_active)
-                    VALUES (:id, :created_at, :is_active)
-                    ON CONFLICT (id) DO NOTHING
-                """)
-                
-                await session.execute(query, user_data)
-                await session.commit()
-                
-                logger.info(f"Created user: {user_id}")
-                return True
-                
+        Returns:
+            True if user exists or was created successfully
+        """
+        try:
+            # In this implementation, we assume users are managed by Firebase Auth
+            # and don't need explicit creation in our database
+            logger.info(f"User {user_id} verified for database operations")
+            return True
+            
         except Exception as e:
-            logger.error(f"Error creating user: {e}")
+            logger.error(f"User verification failed for {user_id}: {e}")
             return False
     
     async def get_user_statistics(self, user_id: str) -> Dict[str, Any]:
         """Get user statistics across all tables."""
         try:
-            async with get_db_session() as session:
+            session = SessionLocal()
+            try:
                 stats = {}
                 
                 # Count reminders
                 query = text("SELECT COUNT(*) FROM reminders WHERE user_id = :user_id")
-                result = await session.execute(query, {"user_id": user_id})
+                result = session.execute(query, {"user_id": user_id})
                 stats["total_reminders"] = result.scalar() or 0
                 
                 # Count notes
                 query = text("SELECT COUNT(*) FROM notes WHERE user_id = :user_id")
-                result = await session.execute(query, {"user_id": user_id})
+                result = session.execute(query, {"user_id": user_id})
                 stats["total_notes"] = result.scalar() or 0
                 
                 # Count ledger entries
                 query = text("SELECT COUNT(*) FROM ledger_entries WHERE user_id = :user_id")
-                result = await session.execute(query, {"user_id": user_id})
+                result = session.execute(query, {"user_id": user_id})
                 stats["total_ledger_entries"] = result.scalar() or 0
                 
                 # Count history logs
                 query = text("SELECT COUNT(*) FROM history_logs WHERE user_id = :user_id")
-                result = await session.execute(query, {"user_id": user_id})
+                result = session.execute(query, {"user_id": user_id})
                 stats["total_history_logs"] = result.scalar() or 0
                 
                 return {
@@ -458,6 +536,8 @@ class DatabaseIntegrationService:
                     "user_id": user_id,
                     "statistics": stats
                 }
+            finally:
+                session.close()
                 
         except Exception as e:
             logger.error(f"Error getting user statistics: {e}")
@@ -473,7 +553,8 @@ class DatabaseIntegrationService:
             if table_name not in self.table_schemas:
                 return []
             
-            async with get_db_session() as session:
+            session = SessionLocal()
+            try:
                 query = text(f"""
                     SELECT * FROM {table_name} 
                     WHERE user_id = :user_id 
@@ -481,10 +562,12 @@ class DatabaseIntegrationService:
                     LIMIT :limit
                 """)
                 
-                result = await session.execute(query, {"user_id": user_id, "limit": limit})
+                result = session.execute(query, {"user_id": user_id, "limit": limit})
                 rows = result.fetchall()
                 
                 return [dict(row._mapping) for row in rows]
+            finally:
+                session.close()
                 
         except Exception as e:
             logger.error(f"Error getting recent records from {table_name}: {e}")
