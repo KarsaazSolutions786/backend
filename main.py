@@ -9,7 +9,6 @@ import datetime
 # Import core modules
 from core.config import settings
 from utils.logger import logger
-from core.torch_config import configure_torch_memory
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -17,30 +16,49 @@ async def lifespan(app: FastAPI):
     
     logger.info("Starting Eindr Backend...")
     
-    # Configure PyTorch memory settings
-    configure_torch_memory()
+    # Check if we're in minimal mode
+    is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    
+    # Configure PyTorch memory settings only if needed
+    if not is_minimal_mode:
+        try:
+            from core.torch_config import configure_torch_memory
+            configure_torch_memory()
+        except ImportError:
+            logger.warning("PyTorch configuration not available, skipping memory optimization")
     
     # Always try to initialize basic services for API functionality
     try:
         logger.info("Initializing services...")
         
-        # Import services for initialization
+        # Import services for initialization - use lighter services in minimal mode
         from services.stt_service import SpeechToTextService
         from services.tts_service import TextToSpeechService
-        from services.intent_service import IntentService
         from services.chat_service import ChatService
         from core.dependencies import set_services
-        from core.scheduler import scheduler
         
-        # Initialize services (they have their own fallback mechanisms)
+        # Use lightweight intent service instead of PyTorch version in minimal mode
+        if is_minimal_mode:
+            logger.info("Running in minimal mode - using lightweight intent service")
+            from services.intent_service import IntentService
+            intent_service = IntentService()
+        else:
+            logger.info("Running in full mode - attempting to use PyTorch intent service")
+            try:
+                from services.pytorch_intent_service import PyTorchIntentService
+                intent_service = PyTorchIntentService()
+            except Exception as e:
+                logger.warning(f"Failed to initialize PyTorch intent service: {e}")
+                logger.info("Falling back to lightweight intent service")
+                from services.intent_service import IntentService
+                intent_service = IntentService()
+        
+        # Initialize other services (they have their own fallback mechanisms)
         logger.info("Initializing Speech-to-Text service...")
         stt_service = SpeechToTextService()
         
         logger.info("Initializing Text-to-Speech service...")
         tts_service = TextToSpeechService()
-        
-        logger.info("Initializing Intent classification service...")
-        intent_service = IntentService()
         
         logger.info("Initializing Chat service...")
         chat_service = ChatService()
@@ -49,9 +67,13 @@ async def lifespan(app: FastAPI):
         set_services(stt_service, tts_service, intent_service, chat_service)
         
         # Only start scheduler if not in minimal mode (to avoid heavy background tasks)
-        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
-            scheduler.start()
-            logger.info("Scheduler started")
+        if not is_minimal_mode:
+            try:
+                from core.scheduler import scheduler
+                scheduler.start()
+                logger.info("Scheduler started")
+            except Exception as e:
+                logger.warning(f"Failed to start scheduler: {e}")
         else:
             logger.info("Scheduler skipped in minimal mode")
             
@@ -67,7 +89,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     logger.info("Shutting down Eindr Backend...")
     try:
-        if not os.getenv("MINIMAL_MODE", "false").lower() == "true":
+        if not is_minimal_mode:
             from core.scheduler import scheduler
             scheduler.shutdown()
     except Exception as e:
