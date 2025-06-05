@@ -260,9 +260,13 @@ models/*.joblib
 !models/pytorch_model.bin
 !models/model_head.pkl
 !models/model.tflite
+# Large model files
+!models/whisper-tiny.bin
 # But allow Python files in models directory
 !models/*.py
 !models/__init__.py
+
+
 
 # Media files
 media/
