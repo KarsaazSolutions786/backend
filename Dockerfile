@@ -20,17 +20,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=1 \
     VECLIB_MAXIMUM_THREADS=1
 
-# Install system dependencies
+# Install system dependencies (minimal for Railway)
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     postgresql-client \
     libsndfile1 \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
-    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
