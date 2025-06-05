@@ -8,7 +8,8 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    MINIMAL_MODE=true
+    MINIMAL_MODE=true \
+    PORT=8000
 
 # Install system dependencies (minimal for Railway)
 RUN apt-get update && apt-get install -y \
@@ -29,14 +30,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 # Create necessary directories
-RUN mkdir -p logs uploads
+RUN mkdir -p logs uploads && \
+    chmod -R 777 logs uploads
 
 # Expose port (Railway will set PORT environment variable)
-EXPOSE 8000
+EXPOSE ${PORT}
 
 # Health check that works with minimal mode
-HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Run the application
-CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --timeout-keep-alive 30"] 
+# Run the application with proper signal handling
+CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port ${PORT} --timeout-keep-alive 30 --workers 1"] 
