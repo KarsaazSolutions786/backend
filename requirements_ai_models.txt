@@ -1,0 +1,46 @@
+# AI Models Requirements
+# Dependencies for Whisper STT, MiniLM Intent Classification, and Coqui TTS integration
+
+# Whisper Speech-to-Text
+openai-whisper>=20231117
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+scipy>=1.10.0
+numpy>=1.24.0
+
+# Transformers for MiniLM Intent Classification
+transformers>=4.35.0
+tokenizers>=0.14.0
+torch>=2.0.0
+
+# Coqui TTS
+TTS>=0.20.0
+coqui-ai-tts>=0.20.0
+
+# Alternative/Fallback TTS engines
+pyttsx3>=2.90
+gTTS>=2.4.0
+
+# Audio utilities
+pydub>=0.25.0
+ffmpeg-python>=0.2.0
+
+# Additional ML utilities
+scikit-learn>=1.3.0
+matplotlib>=3.7.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# File handling
+aiofiles>=23.2.0
+
+# GPU support (optional)
+# Uncomment if using CUDA
+# torch[cuda]>=2.0.0
+# torchaudio[cuda]>=2.0.0 
