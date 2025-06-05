@@ -9,12 +9,16 @@ import datetime
 # Import core modules
 from core.config import settings
 from utils.logger import logger
+from core.torch_config import configure_torch_memory
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager for startup and shutdown events."""
     
     logger.info("Starting Eindr Backend...")
+    
+    # Configure PyTorch memory settings
+    configure_torch_memory()
     
     # Always try to initialize basic services for API functionality
     try:
