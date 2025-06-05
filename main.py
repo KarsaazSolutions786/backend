@@ -4,6 +4,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 import os
+import datetime
 
 # Import core modules
 from core.config import settings
@@ -121,14 +122,24 @@ async def root():
 
 @app.get("/health")
 async def health_check_endpoint():
-    """Simple health check endpoint."""
-    return {"status": "healthy"}
+    """Enhanced health check endpoint."""
+    try:
+        return {
+            "status": "healthy",
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "environment": os.getenv("RAILWAY_ENVIRONMENT", "local"),
+            "mode": "minimal" if os.getenv("MINIMAL_MODE", "false").lower() == "true" else "full"
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
 
 if __name__ == "__main__":
+    port = int(os.getenv("PORT", "8000"))
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8003,
+        port=port,
         reload=True,
         server_header=False,
         proxy_headers=True
