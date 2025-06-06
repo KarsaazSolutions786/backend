@@ -348,12 +348,12 @@ async def transcribe_and_respond(
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Complete voice-to-database pipeline: transcribe audio, classify intent using model_head.pkl, and save to database.
+    Complete voice-to-database pipeline: transcribe audio, classify intent, and save to database.
     
     Pipeline steps:
     1. Audio validation and preprocessing
-    2. Speech-to-text transcription
-    3. Intent classification using model_head.pkl
+    2. Speech-to-text transcription using whisper-tiny.bin
+    3. Intent classification using MiniLM or rule-based fallback
     4. Database processing based on intent
     5. Generate response
     """
@@ -413,8 +413,8 @@ async def transcribe_and_respond(
         processing_steps["audio_validation"] = True
         logger.info("Step 1: Audio validation completed successfully")
         
-        # === STEP 2: SPEECH-TO-TEXT TRANSCRIPTION ===
-        logger.info("Step 2: Starting STT transcription")
+        # === STEP 2: SPEECH-TO-TEXT TRANSCRIPTION USING WHISPER-TINY.BIN ===
+        logger.info("Step 2: Starting STT transcription with whisper-tiny.bin")
         
         # Get STT service
         stt_service = get_stt_service()
@@ -437,8 +437,8 @@ async def transcribe_and_respond(
         processing_steps["transcription"] = True
         logger.info(f"Step 2: Transcription completed successfully: '{transcription}'")
         
-        # === STEP 3: INTENT CLASSIFICATION WITH MODEL_HEAD.PKL ===
-        logger.info("Step 3: Starting intent classification with model_head.pkl")
+        # === STEP 3: INTENT CLASSIFICATION USING MINILM OR RULE-BASED FALLBACK ===
+        logger.info("Step 3: Starting intent classification")
         
         intent_service = get_intent_service()
         if not intent_service:
@@ -448,7 +448,7 @@ async def transcribe_and_respond(
             )
         
         try:
-            # Process the transcribed text with model_head.pkl
+            # Process the transcribed text for intent classification
             intent_result = await intent_service.process_audio_transcript(transcription)
             
             if not intent_result:
@@ -510,7 +510,8 @@ async def transcribe_and_respond(
             "user_id": current_user_id,
             "model_info": {
                 "stt": stt_service.get_model_info() if stt_service else None,
-                # "intent": "model_head.pkl"
+                "stt_model": "whisper-tiny.bin",
+                "intent_service": intent_service.__class__.__name__ if intent_service else None
             }
         }
         
