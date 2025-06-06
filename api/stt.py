@@ -541,7 +541,7 @@ async def get_response_audio(
     voice: Optional[str] = "default",
     current_user: dict = Depends(verify_firebase_token)
 ):
-    """Generate TTS audio for given text response."""
+    """Generate high-quality TTS audio for given text response using Coqui TTS."""
     try:
         tts_service = get_tts_service()
         if not tts_service:
@@ -569,14 +569,20 @@ async def get_response_audio(
 
 @router.get("/voices")
 async def get_available_voices(current_user: dict = Depends(verify_firebase_token)):
-    """Get list of available TTS voices."""
+    """Get list of available Coqui TTS voices and fallback engines."""
     try:
         tts_service = get_tts_service()
         if not tts_service:
             raise HTTPException(status_code=503, detail="TTS service not available")
         
         voices = await tts_service.get_available_voices()
-        return {"voices": voices}
+        engine_info = tts_service.get_engine_info()
+        
+        return {
+            "voices": voices,
+            "engine_info": engine_info,
+            "primary_engine": engine_info.get("primary_engine", "unknown")
+        }
         
     except Exception as e:
         logger.error(f"Get voices error: {e}")
@@ -626,12 +632,12 @@ async def stream_conversation(
     current_user: dict = Depends(verify_firebase_token)
 ):
     """
-    Enhanced conversational endpoint: Audio in → Bloom 560M response → TTS Audio out
+    Enhanced conversational endpoint: Audio in → Bloom 560M response → Coqui TTS Audio out
     
     This endpoint provides a complete voice-to-voice conversation experience:
-    1. STT: Convert uploaded audio to text
+    1. STT: Convert uploaded audio to text using whisper-tiny.bin
     2. Bloom 560M: Generate conversational AI response
-    3. TTS: Convert AI response to audio
+    3. Coqui TTS: Convert AI response to high-quality audio
     4. Return both text and audio responses
     """
     temp_file_path = None
