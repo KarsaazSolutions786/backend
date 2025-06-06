@@ -146,6 +146,15 @@ class PyTorchIntentService:
     """
     
     def __init__(self):
+        # Early check for Railway/minimal mode to prevent model downloads
+        is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+        is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+        
+        if is_railway_env or is_minimal_mode:
+            logger.info("Railway/minimal mode detected - PyTorch service will use fallback mode only")
+            self._initialize_railway_fallback()
+            return
+        
         self.device = self._get_device()
         self.model = None
         self.tokenizer = None
@@ -178,6 +187,27 @@ class PyTorchIntentService:
         
         # Initialize the service
         self._initialize()
+    
+    def _initialize_railway_fallback(self):
+        """Initialize minimal fallback mode for Railway deployment."""
+        self.device = "cpu"
+        self.model = "railway_fallback"
+        self.tokenizer = "rule_based"
+        
+        # Intent labels
+        self.intent_labels = [
+            "create_reminder",
+            "create_note", 
+            "create_ledger",
+            "chit_chat"
+        ]
+        
+        self.label_to_id = {label: idx for idx, label in enumerate(self.intent_labels)}
+        self.id_to_label = {idx: label for idx, label in enumerate(self.intent_labels)}
+        
+        # Initialize fallback classification rules
+        self._initialize_fallback_classifier()
+        logger.info("PyTorch service initialized in Railway fallback mode (no model downloads)")
     
     def _get_device(self) -> str:
         """Get the best available device for PyTorch."""
@@ -223,6 +253,11 @@ class PyTorchIntentService:
     
     def _load_model_from_file(self):
         """Load the trained model from Mini_LM.bin."""
+        # Skip model loading in Railway/minimal mode
+        if self.model == "railway_fallback":
+            logger.info("Skipping model file loading in Railway mode")
+            return
+            
         try:
             logger.info(f"Loading PyTorch model from {self.model_directory}")
             
@@ -292,6 +327,11 @@ class PyTorchIntentService:
     
     def _initialize_new_model(self):
         """Initialize a new model for training."""
+        # Skip new model initialization in Railway/minimal mode
+        if self.model == "railway_fallback":
+            logger.info("Skipping new model initialization in Railway mode")
+            return
+            
         try:
             model_name = "distilbert-base-uncased"  # Lightweight and effective
             
@@ -553,10 +593,11 @@ class PyTorchIntentService:
     async def _classify_single_intent(self, text: str) -> Dict[str, Any]:
         """Classify a single intent."""
         try:
-            if PYTORCH_AVAILABLE and self.model and self.model != "fallback_classifier":
-                return await self._pytorch_classify(text)
-            else:
+            # Always use fallback for Railway mode
+            if self.model == "railway_fallback" or not PYTORCH_AVAILABLE or self.model == "fallback_classifier":
                 return await self._fallback_classify(text)
+            else:
+                return await self._pytorch_classify(text)
         except Exception as e:
             logger.error(f"Single intent classification failed: {e}")
             return self._create_error_response(text, str(e))
