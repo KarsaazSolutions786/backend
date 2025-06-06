@@ -240,14 +240,18 @@ class MiniLMIntentService:
             confidence = probabilities[0][predicted_idx].item()
             intent = self.intent_labels[predicted_idx]
             
+            # Post-process intent (map add_expense -> create_ledger)
+            processed_intents = self._post_process_intents([intent])
+            final_intent = processed_intents[0] if processed_intents else intent
+            
             # Extract entities
             entities = self._extract_entities(text)
             
-            logger.info(f"MiniLM classification: {intent} (confidence: {confidence:.3f})")
+            logger.info(f"MiniLM classification: {final_intent} (confidence: {confidence:.3f})")
             
             return {
                 "success": True,
-                "intent": intent,
+                "intent": final_intent,
                 "confidence": confidence,
                 "entities": entities,
                 "original_text": text,
@@ -293,18 +297,21 @@ class MiniLMIntentService:
             overall_confidence /= len(results)
             intents = [r["intent"] for r in results]
             
-            logger.info(f"Multi-intent classification: {intents} (overall confidence: {overall_confidence:.3f})")
+            # Post-process intents (map add_expense -> create_ledger, remove duplicates)
+            processed_intents = self._post_process_intents(intents)
+            
+            logger.info(f"Multi-intent classification: {processed_intents} (overall confidence: {overall_confidence:.3f})")
             
             return {
                 "success": True,
                 "type": "multi_intent",
-                "intents": intents,
+                "intents": processed_intents,
                 "overall_confidence": overall_confidence,
                 "segments": segments,
                 "results": results,
                 "original_text": text,
                 "model_used": "minilm",
-                "total_intents": len(results)
+                "total_intents": len(processed_intents)
             }
             
         except Exception as e:
@@ -514,6 +521,10 @@ class MiniLMIntentService:
                 # Convert score to confidence (0-1 range)
                 confidence = min(max_score / 3.0, 0.95)  # Cap at 95% confidence
             
+            # Post-process the best intent
+            processed_intents = self._post_process_intents([best_intent])
+            final_intent = processed_intents[0] if processed_intents else best_intent
+            
             # Extract entities
             entities = self._extract_entities(text)
             
@@ -537,36 +548,45 @@ class MiniLMIntentService:
                 if len(high_scoring_intents) > 1:
                     overall_confidence = sum(r["confidence"] for r in high_scoring_intents) / len(high_scoring_intents)
                     
+                    # Post-process intents (map add_expense -> create_ledger, remove duplicates)
+                    raw_intents = [r["intent"] for r in high_scoring_intents]
+                    processed_intents = self._post_process_intents(raw_intents)
+                    
                     return {
                         "success": True,
                         "type": "multi_intent",
-                        "intents": [r["intent"] for r in high_scoring_intents],
+                        "intents": processed_intents,
                         "overall_confidence": overall_confidence,
                         "segments": [text],
                         "results": high_scoring_intents,
                         "original_text": text,
                         "model_used": "enhanced_rule_based",
-                        "total_intents": len(high_scoring_intents)
+                        "total_intents": len(processed_intents)
                     }
                 elif len(high_scoring_intents) == 1:
                     # Single intent detected
                     result = high_scoring_intents[0]
+                    
+                    # Post-process the single intent
+                    processed_intents = self._post_process_intents([result["intent"]])
+                    final_intent = processed_intents[0] if processed_intents else result["intent"]
+                    
                     return {
                         "success": True,
                         "type": "multi_intent",
-                        "intents": [result["intent"]],
+                        "intents": processed_intents,
                         "overall_confidence": result["confidence"],
                         "segments": [text],
                         "results": high_scoring_intents,
                         "original_text": text,
                         "model_used": "enhanced_rule_based",
-                        "total_intents": 1
+                        "total_intents": len(processed_intents)
                     }
             
             # Return single intent result
             return {
                 "success": True,
-                "intent": best_intent,
+                "intent": final_intent,
                 "confidence": confidence,
                 "entities": entities,
                 "original_text": text,
@@ -581,12 +601,15 @@ class MiniLMIntentService:
     
     def _create_fallback_response(self, text: str, multi_intent: bool) -> Dict[str, Any]:
         """Create fallback response when all classification methods fail."""
+        # Default to general_query and post-process to ensure no add_expense
+        default_intents = self._post_process_intents(["general_query"])
+        
         if multi_intent:
             return {
                 "success": False,
                 "error": "Intent classification failed",
                 "type": "multi_intent",
-                "intents": ["general_query"],
+                "intents": default_intents,
                 "overall_confidence": 0.1,
                 "segments": [text],
                 "results": [],
@@ -597,7 +620,7 @@ class MiniLMIntentService:
             return {
                 "success": False,
                 "error": "Intent classification failed",
-                "intent": "general_query",
+                "intent": default_intents[0],
                 "confidence": 0.1,
                 "entities": {},
                 "original_text": text,
@@ -620,4 +643,24 @@ class MiniLMIntentService:
             "library": "transformers" if TRANSFORMERS_AVAILABLE else "not_available",
             "model_type": "fine_tuned_minilm" if os.path.exists(self.model_path) else "base_model",
             "supports_multi_intent": True
-        } 
+        }
+
+    def _post_process_intents(self, intents: List[str]) -> List[str]:
+        """
+        Post-process intents to ensure compliance with business rules:
+        1. Map 'add_expense' to 'create_ledger'
+        2. Remove duplicates while preserving order
+        
+        Args:
+            intents: List of intent labels
+            
+        Returns:
+            Processed list of intents
+        """
+        # Map add_expense to create_ledger
+        processed_intents = [intent.replace("add_expense", "create_ledger") for intent in intents]
+        
+        # Remove duplicates while preserving order
+        deduplicated_intents = list(dict.fromkeys(processed_intents))
+        
+        return deduplicated_intents 
