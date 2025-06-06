@@ -68,6 +68,8 @@ class IntentClassificationRequest(BaseModel):
     confidence_threshold: float = 0.1
 
 class IntentClassificationResponse(BaseModel):
+    model_config = {"protected_namespaces": ()}
+    
     success: bool
     intent: Optional[str] = None
     intents: Optional[List[str]] = None
