@@ -254,7 +254,7 @@ async def train_model(args):
         
         if success:
             logger.info(f"✅ Model training completed successfully in {training_time:.2f} seconds!")
-            logger.info("Model saved to models/pytorch_model.bin")
+            logger.info("Model saved to models/Mini_LM.bin")
             
             # Test the trained model
             await test_trained_model(intent_service)

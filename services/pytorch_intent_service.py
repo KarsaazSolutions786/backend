@@ -152,7 +152,7 @@ class PyTorchIntentService:
         
         # Updated model paths to use the actual models directory
         self.model_directory = Path("models")
-        self.model_file = Path("models/pytorch_model.bin")
+        self.model_file = Path("models/Mini_LM.bin")
         
         # Intent labels matching your requirements
         self.intent_labels = [
@@ -222,7 +222,7 @@ class PyTorchIntentService:
             self._initialize_new_model()
     
     def _load_model_from_file(self):
-        """Load the trained model from pytorch_model.bin."""
+        """Load the trained model from Mini_LM.bin."""
         try:
             logger.info(f"Loading PyTorch model from {self.model_directory}")
             
@@ -249,7 +249,7 @@ class PyTorchIntentService:
                 ignore_mismatched_sizes=True
             )
             
-            # Now load the trained weights from pytorch_model.bin
+            # Now load the trained weights from Mini_LM.bin
             if self.model_file.exists():
                 logger.info(f"Loading trained weights from {self.model_file}")
                 state_dict = torch.load(self.model_file, map_location=self.device)
@@ -268,7 +268,7 @@ class PyTorchIntentService:
                 self.model.load_state_dict(filtered_state_dict, strict=False)
                 logger.info("Trained weights loaded successfully")
             else:
-                logger.warning(f"pytorch_model.bin not found at {self.model_file}, using pretrained weights")
+                logger.warning(f"Mini_LM.bin not found at {self.model_file}, using pretrained weights")
             
             self.model.to(self.device)
             self.model.eval()

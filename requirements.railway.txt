@@ -1,5 +1,6 @@
 # Minimal requirements for Railway deployment
 # Core FastAPI and database dependencies only
+# NOTE: Mini_LM.bin model is tracked with Git LFS to avoid build-time downloads
 
 # FastAPI and ASGI server
 fastapi==0.104.1
