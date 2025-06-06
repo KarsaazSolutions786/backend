@@ -45,6 +45,11 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy the application code
 COPY . .
 
+# Ensure models directory exists and has correct permissions
+# Models like Mini_LM.bin are tracked with Git LFS
+RUN mkdir -p models && \
+    chmod -R 755 models
+
 # Create necessary directories
 RUN mkdir -p logs uploads && \
     chmod -R 777 logs uploads
