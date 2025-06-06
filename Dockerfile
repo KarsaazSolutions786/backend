@@ -20,21 +20,27 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     OPENBLAS_NUM_THREADS=1 \
     VECLIB_MAXIMUM_THREADS=1
 
-# Install system dependencies (minimal for Railway)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     postgresql-client \
     libsndfile1 \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1-mesa-glx \
+    build-essential \
+    libffi-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.railway.txt requirements.txt
 
-# Install Python dependencies in stages
+# Install Python dependencies with better error handling
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt || \
-    (echo "Failed to install requirements" && exit 1)
+    pip install --no-cache-dir --timeout 300 -r requirements.txt
 
 # Copy the application code
 COPY . .
