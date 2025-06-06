@@ -51,6 +51,7 @@ def get_intent_service():
         if pytorch_intent_service is None:
             try:
                 logger.info("Initializing PyTorch intent service for API")
+                # Import only when needed to prevent model downloads in Railway
                 from services.pytorch_intent_service import PyTorchIntentService
                 pytorch_intent_service = PyTorchIntentService()
             except Exception as e:
