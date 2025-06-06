@@ -23,14 +23,21 @@ except ImportError:
 
 # Import transformers with fallback
 try:
-    if TORCH_AVAILABLE:
+    # Only import transformers if not in Railway/minimal mode
+    is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    
+    if TORCH_AVAILABLE and not (is_minimal_mode or is_railway_env):
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
         import torch.nn.functional as F
         TRANSFORMERS_AVAILABLE = True
         logger.info("Transformers library available")
     else:
         TRANSFORMERS_AVAILABLE = False
-        logger.warning("Transformers requires PyTorch - using rule-based classification")
+        if is_minimal_mode or is_railway_env:
+            logger.info("Railway/minimal mode detected - skipping transformers import")
+        else:
+            logger.warning("Transformers requires PyTorch - using rule-based classification")
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logger.error("Transformers library not available. Install with: pip install transformers torch")

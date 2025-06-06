@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Running in full mode - attempting to use PyTorch intent service")
             try:
+                # Import PyTorch service only when not in Railway/minimal mode
                 from services.pytorch_intent_service import PyTorchIntentService
                 intent_service = PyTorchIntentService()
             except Exception as e:

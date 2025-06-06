@@ -102,6 +102,7 @@ if PYTORCH_AVAILABLE:
         
         def __init__(self, model_name: str, num_labels: int, hidden_dropout: float = 0.1):
             super().__init__()
+            # Move the model loading to init to prevent automatic downloading during import
             self.config = AutoConfig.from_pretrained(model_name)
             self.bert = AutoModelForSequenceClassification.from_pretrained(
                 model_name, 

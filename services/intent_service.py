@@ -9,11 +9,19 @@ from pathlib import Path
 
 # Optional PyTorch imports
 try:
-    import torch
-    import torch.nn.functional as F
-    from transformers import AutoTokenizer, AutoModelForSequenceClassification
-    PYTORCH_AVAILABLE = True
-    logger.info("PyTorch and transformers are available")
+    # Only import transformers if not in Railway/minimal mode
+    is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    
+    if not (is_minimal_mode or is_railway_env):
+        import torch
+        import torch.nn.functional as F
+        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        PYTORCH_AVAILABLE = True
+        logger.info("PyTorch and transformers are available")
+    else:
+        PYTORCH_AVAILABLE = False
+        logger.info("Railway/minimal mode detected - skipping transformers import")
 except ImportError as e:
     PYTORCH_AVAILABLE = False
     logger.warning(f"PyTorch not available: {e}. Will use fallback model.")
