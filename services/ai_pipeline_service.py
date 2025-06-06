@@ -14,7 +14,7 @@ from utils.logger import logger
 # Import our AI services
 from services.whisper_stt_service import WhisperSTTService
 from services.minilm_intent_service import MiniLMIntentService
-from services.coqui_tts_service import CoquiTTSService
+from services.tts_service import TextToSpeechService
 
 # Import database services
 from services.database_integration_service import DatabaseIntegrationService
@@ -28,7 +28,7 @@ class AIPipelineService:
     def __init__(self):
         self.whisper_stt = WhisperSTTService()
         self.minilm_intent = MiniLMIntentService()
-        self.coqui_tts = CoquiTTSService()
+        self.coqui_tts = TextToSpeechService()
         self.db_service = DatabaseIntegrationService()
         
         self.pipeline_stats = {
@@ -506,9 +506,9 @@ class AIPipelineService:
                 "ready": self.minilm_intent.is_ready(),
                 "info": self.minilm_intent.get_model_info()
             },
-            "coqui_tts": {
+            "tts_service": {
                 "ready": self.coqui_tts.is_ready(),
-                "info": self.coqui_tts.get_model_info()
+                "info": self.coqui_tts.get_engine_info()
             },
             "database": {
                 "ready": True,  # Database service doesn't have a ready check

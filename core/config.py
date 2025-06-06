@@ -33,6 +33,7 @@ class Settings(BaseModel):
     # AI Models paths (only used when not in minimal mode)
     COQUI_STT_MODEL_PATH: str = "./models/coqui-stt.tflite"
     TTS_MODEL_PATH: str = "./models/tts"
+    COQUI_TTS_MODEL_PATH: str = "./models/coqui.tflite"
     INTENT_MODEL_PATH: str = "./models/intent"
     CHAT_MODEL_PATH: str = "./models/bloom-560m"
     

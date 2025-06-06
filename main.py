@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
         logger.info("Initializing Speech-to-Text service...")
         stt_service = SpeechToTextService()
         
-        logger.info("Initializing Text-to-Speech service...")
+        logger.info("Initializing enhanced Text-to-Speech service with Coqui TTS...")
         tts_service = TextToSpeechService()
         
         logger.info("Initializing Chat service...")

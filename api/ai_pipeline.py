@@ -410,7 +410,7 @@ async def get_model_information(
             "models": {
                 "whisper_stt": ai_pipeline.whisper_stt.get_model_info(),
                 "minilm_intent": ai_pipeline.minilm_intent.get_model_info(),
-                "coqui_tts": ai_pipeline.coqui_tts.get_model_info()
+                "tts_service": ai_pipeline.coqui_tts.get_engine_info()
             },
             "pipeline_ready": ai_pipeline.is_ready(),
             "user_id": current_user["uid"]

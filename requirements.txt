@@ -11,7 +11,7 @@ passlib[bcrypt]
 python-decouple
 APScheduler
 # vosk  # Not compatible with Python 3.13. Use Python 3.10/3.11 for speech-to-text features.
-# TTS   # Not compatible with Python 3.13. Use Python 3.10/3.11 for text-to-speech features.
+# TTS>=0.21.0  # Coqui TTS - Not compatible with Python 3.13. Fallback to pyttsx3/gTTS
 # transformers  # Temporarily disabled due to torch dependency
 # torch  # Not compatible with Python 3.13
 numpy==1.25.2

@@ -269,8 +269,6 @@ models/*.bin
 !models/*.py
 !models/__init__.py
 
-
-
 # Media files
 media/
 static/media/
@@ -302,4 +300,19 @@ yarn-error.log*
 # SSL certificates
 *.crt
 *.cert
-*.ca-bundle 
+*.ca-bundle
+
+# Test files
+test_coqui_tts.py
+test_coqui_output.wav
+
+# Audio processing temp files
+*.wav
+*.mp3
+*.flac
+temp_audio_*
+
+# Environment variables
+.env
+.env.local
+.env.production 
