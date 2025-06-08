@@ -74,13 +74,24 @@ class MiniLMIntentService:
                 r'\b(note|write|jot|remember|record|save|document)\b',
                 r'\b(note about|write down|jot down|remember that|make a note)\b',
                 r'\b(create|make|add|save).*\b(note|memo|list)\b',
-                r'\b(brain|memory|recall|retain)\b'
+                r'\b(brain|memory|recall|retain)\b',
+                r'\b(buy|purchase|get)\s+(groceries|food|items?|chocolates)\b',  # Shopping related
+                r'\bset\s+(?:a\s+)?note\s+to\s+buy\b',  # "set a note to buy"
             ],
             "create_ledger": [
                 r'\b(owe|owes|owed|debt|loan|borrowed|lent|lend)\b',
                 r'\$\d+|\b\d+\s*(dollar|buck|euro|pound)\b',
                 r'\b(money|cash|payment|pay|paid|balance|due)\b',
-                r'\b(track|record|log).*\b(money|expense|payment)\b'
+                r'\b(track|record|log).*\b(money|expense|payment)\b',
+                # Enhanced financial transaction patterns
+                r'\b[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay)\s+(?:me|us)',  # "John will give me"
+                r'\b(?:give|pay)\s+(?:me|us)\s+\$\d+',                    # "give me $50"
+                r'\b[A-Z][a-z]+.*\$\d+',                                  # "John ... $50"
+                r'\$\d+.*\b[A-Z][a-z]+',                                  # "$50 ... John"
+                r'\b(?:will\s+)?(?:give|pay).*\$\d+',                     # "will give ... $50"
+                r'\b[A-Z][a-z]+\s+(?:owes?|owed?)\s+(?:me|us)',          # "John owes me"
+                r'\b[A-Z][a-z]+\s+borrowed',                             # "John borrowed"
+                r'borrowed\s+from\s+[A-Z][a-z]+',                        # "borrowed from John"
             ],
             "add_expense": [
                 r'\b(spent|expense|cost|bought|purchase|paid for)\b',
@@ -319,58 +330,133 @@ class MiniLMIntentService:
             return self._create_rule_based_classification(text, True)
     
     def _segment_text_for_multi_intent(self, text: str) -> List[str]:
-        """Segment text into potential multi-intent components."""
+        """Segment text into potential multi-intent components using enhanced logic."""
         try:
             # Normalize text
             text = text.strip()
             
-            # Try to split using multi-intent separators
-            segments = [text]
+            # Enhanced segmentation using multiple strategies
+            segments = []
             
-            for pattern in self.multi_intent_separators:
-                new_segments = []
-                for segment in segments:
-                    # Split on pattern but keep the separating word with the second part
-                    parts = re.split(pattern, segment, flags=re.IGNORECASE)
-                    if len(parts) > 1:
-                        new_segments.append(parts[0].strip())
-                        # Combine separator pattern match with remaining text
-                        for j in range(1, len(parts)):
-                            if parts[j].strip():
-                                # Add back the separator word for context
-                                separator_match = re.search(pattern, segment, re.IGNORECASE)
-                                if separator_match:
-                                    separator_word = separator_match.group().strip()
-                                    new_segments.append(f"{separator_word} {parts[j].strip()}")
-                                else:
-                                    new_segments.append(parts[j].strip())
-                    else:
-                        new_segments.append(segment)
-                segments = new_segments
+            # Strategy 1: Split by clear intent markers with 'and'
+            intent_transition_patterns = [
+                r'\s+and\s+set\s+(?:a\s+)?(?:reminder|note)',           # " and set a reminder", " and set note"
+                r'\s+and\s+(?:remind|note)\s+',                         # " and remind ", " and note "
+                r'\s+and\s+(?:I\s+want|I\s+need)',                     # " and I want", " and I need"
+                r'\s+and\s+[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay|owe)', # " and John will give", " and John owes"
+                r'\s+and\s+(?:remind\s+me\s+to)',                      # " and remind me to"
+            ]
             
-            # Filter out very short segments and clean up
-            final_segments = []
+            # Find split points using transition patterns
+            split_points = []
+            for pattern in intent_transition_patterns:
+                for match in re.finditer(pattern, text, re.IGNORECASE):
+                    split_points.append(match.start())
+            
+            # Remove duplicates and sort
+            split_points = sorted(list(set(split_points)))
+            
+            # Create segments based on split points
+            if split_points:
+                current_start = 0
+                for split_point in split_points:
+                    if current_start < split_point:
+                        segment = text[current_start:split_point].strip()
+                        if len(segment) > 10:  # Minimum segment length
+                            segments.append(segment)
+                    current_start = split_point
+                
+                # Add the last segment
+                last_segment = text[current_start:].strip()
+                if last_segment:
+                    # Clean up "and" at the beginning
+                    last_segment = re.sub(r'^and\s+', '', last_segment, flags=re.IGNORECASE)
+                    if len(last_segment) > 10:
+                        segments.append(last_segment)
+            
+            # Strategy 2: If no clear splits found, try word-by-word analysis
+            if len(segments) <= 1:
+                segments = []
+                current_segment = ""
+                words = text.split()
+                i = 0
+                
+                while i < len(words):
+                    word = words[i].lower()
+                    
+                    # Check for intent transition markers
+                    is_transition = False
+                    
+                    # Look for transition patterns
+                    if (word == 'and' and i + 1 < len(words)):
+                        next_word = words[i + 1].lower()
+                        
+                        # Strong intent starters after 'and'
+                        strong_starters = ['set', 'remind', 'note', 'john', 'sarah', 'mike', 'alex', 'david', 'mary', 'i']
+                        
+                        if next_word in strong_starters and len(current_segment.split()) >= 4:
+                            is_transition = True
+                            # Look ahead to see if this forms a valid intent
+                            lookahead = ' '.join(words[i+1:i+5])  # Next 4 words
+                            intent_indicators = ['set a', 'remind me', 'note to', 'will give', 'want to', 'owes me']
+                            
+                            if any(indicator in lookahead.lower() for indicator in intent_indicators):
+                                is_transition = True
+                    
+                    if is_transition and current_segment.strip():
+                        segments.append(current_segment.strip())
+                        current_segment = ""
+                        # Skip the transition word 'and'
+                        i += 1
+                        continue
+                    
+                    current_segment += " " + words[i]
+                    i += 1
+                
+                # Add the last segment
+                if current_segment.strip():
+                    segments.append(current_segment.strip())
+            
+            # Strategy 3: Post-process segments to ensure quality
+            cleaned_segments = []
             for segment in segments:
                 segment = segment.strip()
-                if len(segment) > 3:  # Minimum segment length
-                    final_segments.append(segment)
+                
+                # Remove leading/trailing punctuation and conjunctions
+                segment = re.sub(r'^[,.\s]*(?:and\s+)?', '', segment, flags=re.IGNORECASE)
+                segment = re.sub(r'[,.\s]*$', '', segment)
+                
+                # Skip very short segments
+                if len(segment) < 8:
+                    continue
+                
+                # Skip segments that don't contain meaningful intent words
+                intent_words = ['remind', 'set', 'note', 'buy', 'owe', 'owes', 'give', 'pay', 'want', 'need', 'book', 'call']
+                if not any(word in segment.lower() for word in intent_words):
+                    continue
+                    
+                cleaned_segments.append(segment)
             
-            # If we didn't find meaningful segments, return original text
-            if not final_segments:
-                return [text]
+            # If we still don't have good segments, return original text
+            if len(cleaned_segments) <= 1:
+                cleaned_segments = [text]
             
-            logger.info(f"Text segmented into {len(final_segments)} parts: {final_segments}")
-            return final_segments
+            logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
+            return cleaned_segments
             
         except Exception as e:
             logger.error(f"Text segmentation failed: {e}")
             return [text]
     
     def _extract_entities(self, text: str) -> Dict[str, Any]:
-        """Extract entities from text using rule-based approach."""
+        """Extract entities from text using enhanced rule-based approach."""
         entities = {}
         
         try:
+            # Keep original text for pattern matching (since it may have been normalized)
+            original_text = text
+            text_lower = text.lower()
+            
             # Time entities
             time_patterns = [
                 r'\b(\d{1,2}:\d{2}\s*(?:am|pm|AM|PM))\b',
@@ -383,30 +469,89 @@ class MiniLMIntentService:
             
             time_matches = []
             for pattern in time_patterns:
-                matches = re.findall(pattern, text, re.IGNORECASE)
+                matches = re.findall(pattern, original_text, re.IGNORECASE)
                 time_matches.extend(matches)
             
             if time_matches:
                 entities["time"] = time_matches
             
-            # Person entities (names)
-            name_patterns = [
-                r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b',  # Proper names
-                r'\b(mom|dad|mother|father|brother|sister|wife|husband)\b',  # Family
-                r'\b(doctor|dr\.?\s+[A-Z][a-z]+)\b'  # Professionals
+            # Enhanced person name extraction with priority for ledger contexts
+            person_found = None
+            
+            # High priority: Direct ledger patterns (most accurate for financial contexts)
+            # Use case-insensitive patterns since text might be normalized
+            ledger_name_patterns = [
+                r'\b(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\s+(?:owes?|owed?)\s+(?:me|us)',  # "john owes me"
+                r'\b(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\s+(?:will\s+)?(?:give|pay)\s+(?:me|us)',  # "john will give me"
+                r'(?:and\s+)?(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\s+(?:will\s+)?(?:give|pay)',  # "and john will give"
+                r'\b(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\s+borrowed',  # "john borrowed"
+                r'borrowed\s+from\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)',  # "borrowed from john"
+                r'lent\s+(?:to\s+)?(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)',  # "lent to john"
+                r'\b(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\s+lent',  # "john lent"
             ]
             
-            person_matches = []
-            for pattern in name_patterns:
-                matches = re.findall(pattern, text, re.IGNORECASE)
-                person_matches.extend(matches)
+            for pattern in ledger_name_patterns:
+                matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                if matches:
+                    person_found = matches[0].capitalize()  # Capitalize the first letter
+                    break
             
-            # Filter out common words that aren't names
-            common_words = {'call', 'add', 'set', 'make', 'create', 'note', 'remind', 'owe', 'owes'}
-            person_matches = [name for name in person_matches if name.lower() not in common_words]
+            # Medium priority: General conversation patterns (if no ledger pattern found)
+            if not person_found:
+                general_name_patterns = [
+                    r'\bcall\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "call john"
+                    r'\bmeet\s+(?:with\s+)?(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "meet john"
+                    r'\bwith\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "with john"
+                    r'\babout\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "about john"
+                    r'\bto\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "to john"
+                    r'\bfrom\s+(john|sarah|mike|alex|david|mary|jane|bob|alice|tom|lisa|jim|ana|sam|joe|amy)\b',  # "from john"
+                    r'\b(mom|dad|mother|father|brother|sister|wife|husband)\b',  # Family
+                    r'\b(doctor|dr\.?\s+\w+)\b'  # Professionals
+                ]
+                
+                for pattern in general_name_patterns:
+                    matches = re.findall(pattern, text_lower, re.IGNORECASE)
+                    if matches:
+                        person_found = matches[0].capitalize() if matches[0].lower() not in ['mom', 'dad', 'mother', 'father', 'brother', 'sister', 'wife', 'husband', 'doctor'] else matches[0]
+                        break
             
-            if person_matches:
-                entities["person"] = person_matches
+            # Low priority: Try to find capitalized words in the original text if available
+            if not person_found:
+                # Look for capitalized words that could be names, but exclude common words
+                excluded_words = {
+                    'Me', 'You', 'I', 'He', 'She', 'They', 'That', 'Note', 'Money', 'And', 'Set', 
+                    'Will', 'Give', 'Pay', 'Owe', 'Owes', 'Owed', 'Buy', 'Get', 'Go', 'Come',
+                    'Make', 'Take', 'Put', 'Call', 'Tell', 'Ask', 'Say', 'See', 'Know', 'Think',
+                    'Want', 'Need', 'Have', 'Get', 'Do', 'Can', 'Will', 'Should', 'Would', 'Could',
+                    'The', 'This', 'That', 'These', 'Those', 'A', 'An', 'All', 'Some', 'Any',
+                    'Remind', 'Reminder', 'Note', 'Ledger', 'Home', 'Lahore', 'Ticket', 'Book',
+                    'Chocolates', 'Today', 'Tomorrow', 'Tonight', 'Morning', 'Evening', 'Afternoon'
+                }
+                
+                # Try to find the name in the original text before normalization
+                words = original_text.split()
+                for word in words:
+                    # Look for capitalized words that could be names
+                    clean_word = word.strip('.,!?";:')
+                    if (clean_word and clean_word[0].isupper() and len(clean_word) > 2 and 
+                        clean_word not in excluded_words and
+                        not clean_word.lower().startswith(('$', '€', '£', '¥')) and
+                        not clean_word.isdigit()):
+                        person_found = clean_word
+                        break
+                
+                # If still not found, try common names in lowercase text
+                if not person_found:
+                    common_names = ['john', 'sarah', 'mike', 'alex', 'david', 'mary', 'jane', 'bob', 'alice', 'tom', 'lisa', 'jim', 'ana', 'sam', 'joe', 'amy']
+                    words_lower = text_lower.split()
+                    for word in words_lower:
+                        clean_word = word.strip('.,!?";:')
+                        if clean_word in common_names:
+                            person_found = clean_word.capitalize()
+                            break
+            
+            if person_found:
+                entities["person"] = [person_found]
             
             # Amount entities
             amount_patterns = [
@@ -417,26 +562,30 @@ class MiniLMIntentService:
             
             amount_matches = []
             for pattern in amount_patterns:
-                matches = re.findall(pattern, text, re.IGNORECASE)
+                matches = re.findall(pattern, original_text, re.IGNORECASE)
                 amount_matches.extend(matches)
             
             if amount_matches:
                 entities["amount"] = amount_matches
             
             # Content entities (for notes)
-            if any(word in text.lower() for word in ['note', 'remember', 'write', 'jot']):
+            if any(word in text_lower for word in ['note', 'remember', 'write', 'jot', 'buy']):
                 # Extract the main content after keywords
                 content_patterns = [
                     r'note\s+(?:to\s+|about\s+|that\s+)?(.+)',
                     r'remember\s+(?:to\s+|that\s+)?(.+)',
                     r'write\s+(?:down\s+)?(.+)',
-                    r'jot\s+(?:down\s+)?(.+)'
+                    r'jot\s+(?:down\s+)?(.+)',
+                    r'buy\s+(.+)',
                 ]
                 
                 for pattern in content_patterns:
-                    match = re.search(pattern, text, re.IGNORECASE)
+                    match = re.search(pattern, original_text, re.IGNORECASE)
                     if match:
-                        entities["content"] = match.group(1).strip()
+                        content = match.group(1).strip()
+                        # Clean up the content by removing trailing parts that don't belong to the note
+                        content = re.sub(r'\s+and\s+(john|sarah|mike|alex|david|mary|remind|set|call).*$', '', content, flags=re.IGNORECASE)
+                        entities["content"] = content
                         break
             
             return entities
