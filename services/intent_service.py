@@ -98,7 +98,7 @@ class IntentService:
                 "keywords": [
                     "owe", "owes", "owed", "borrowed", "lent", "paid", "pay", "money",
                     "dollar", "dollars", "bucks", "debt", "loan", "expense", "cost",
-                    "spent", "gave", "received", "back", "return"
+                    "spent", "gave", "received", "back", "return", "give"
                 ],
                 "patterns": [
                     r'\b(owe|owes|owed)\b',
@@ -106,9 +106,14 @@ class IntentService:
                     r'\b(paid|pay)\b.*\b(back|me|him|her)\b',
                     r'\$\d+',
                     r'\b\d+\s*(dollars?|bucks?)\b',
-                    r'\b(expense|cost|spent)\b'
+                    r'\b(expense|cost|spent)\b',
+                    r'\b[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay)\s+(?:me|us)',  # "John will give me"
+                    r'\b(?:give|pay)\s+(?:me|us)\s+\$\d+',                    # "give me $50"
+                    r'\b[A-Z][a-z]+.*\$\d+',                                  # "John ... $50"
+                    r'\$\d+.*\b[A-Z][a-z]+',                                  # "$50 ... John"
+                    r'\b(?:will\s+)?(?:give|pay).*\$\d+',                     # "will give ... $50"
                 ],
-                "money_indicators": ["$", "dollar", "dollars", "bucks", "money", "paid", "cost"]
+                "money_indicators": ["$", "dollar", "dollars", "bucks", "money", "paid", "cost", "give", "pay"]
             },
             
             "Notes": {
@@ -125,7 +130,8 @@ class IntentService:
                     r'\b(shopping|grocery)\s+(list|items?)\b',
                     r'\b(meeting\s+)?minutes\b',
                     r'\b(idea|thought|discussion)\b',
-                    r'\b(buy|purchase|get)\s+(groceries|food|items?)\b'  # Shopping related
+                    r'\b(buy|purchase|get)\s+(groceries|food|items?)\b',  # Shopping related
+                    r'\bset\s+(?:a\s+)?note\s+to\s+buy\b',  # "set a note to buy"
                 ],
                 "content_indicators": ["list", "idea", "thought", "discussion", "meeting", "project", "groceries", "shopping", "buy", "purchase"]
             },
@@ -246,51 +252,33 @@ class IntentService:
                 # Check for dollar amounts
                 if re.search(r'\$\d+|\b\d+\s*(dollars?|bucks?)\b', text, re.IGNORECASE):
                     score += 1.2
+                # Extra boost for financial transaction patterns
+                financial_patterns = [
+                    r'\b[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay)\s+(?:me|us)',
+                    r'\b(?:give|pay)\s+(?:me|us)\s*\$',
+                    r'\b[A-Z][a-z]+.*\$\d+',
+                    r'\$\d+.*\b[A-Z][a-z]+',
+                ]
+                for pattern in financial_patterns:
+                    if re.search(pattern, text, re.IGNORECASE):
+                        score += 1.5  # Strong boost for clear financial transactions
+                        break
                     
             elif category == "Notes":
-                # Enhanced note detection
-                # Check for "add/create + note" patterns
-                if re.search(r'\b(add|create|make)\s+(a\s+)?(note|list)\b', text, re.IGNORECASE):
-                    score += 1.5
-                # Check for "note + content" patterns  
-                if re.search(r'\bnote\s+(to\s+|about\s+|that\s+)', text, re.IGNORECASE):
-                    score += 1.2
                 # Check for content indicators
                 content_matches = sum(1 for indicator in rules["content_indicators"] if indicator in text_lower)
                 score += content_matches * 0.5
-                
+                # Reduce score if this looks like a financial transaction
+                if re.search(r'\$\d+|\b\d+\s*(dollars?|bucks?)\b', text, re.IGNORECASE) and re.search(r'\b[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay)', text, re.IGNORECASE):
+                    score *= 0.3  # Heavily penalize note classification for financial transactions
+                    
             elif category == "Chitchat":
                 # Check for question indicators
                 question_matches = sum(1 for indicator in rules["question_indicators"] if indicator in text_lower)
                 score += question_matches * 0.4
-                # Check if it's a question
-                if text.strip().endswith('?'):
-                    score += 0.6
+            
+            category_scores[category] = max(0.0, score)  # Ensure non-negative scores
         
-        # Normalize score to confidence (0-1)
-        for category in category_scores:
-            category_scores[category] = min(1.0, category_scores[category] / 2.5)  # Adjusted normalization
-        
-        # Enhanced fallback heuristics
-        max_score = max(category_scores.values())
-        if max_score < 0.4:
-            # Specific patterns for common cases
-            if re.search(r'\b(add|create|make)\s+(a\s+)?(note|list)\b', text_lower):
-                category_scores["Notes"] = 0.8
-            elif re.search(r'\b(remind|reminder|alarm)\b', text_lower):
-                category_scores["Reminders"] = 0.8
-            elif re.search(r'\b(\$|dollar|owe|paid|money)\b', text_lower):
-                category_scores["Ledger"] = 0.8
-            elif re.search(r'\b(how|what|hello|hi|thank)\b', text_lower):
-                category_scores["Chitchat"] = 0.7
-            else:
-                # Default to Notes if it contains actionable content
-                if len(text.split()) > 2 and not any(word in text_lower for word in ['?', 'how', 'what', 'hello']):
-                    category_scores["Notes"] = 0.6
-                else:
-                    category_scores["Chitchat"] = 0.6
-        
-        logger.info(f"Category scores for '{text}': {category_scores}")
         return category_scores
 
     def _normalize_text(self, text: str) -> str:
@@ -414,78 +402,121 @@ class IntentService:
             r'\b(track|record|log)\s+(expense|payment|cost)\b',  # "track expense"
         ]
         
-        for pattern in single_intent_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                logger.info(f"Text '{text}' matches single intent pattern: {pattern}")
-                return [text]  # Don't split
+        # Only apply single intent check for shorter texts
+        if len(text) < 100:
+            for pattern in single_intent_patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    logger.info(f"Text '{text}' matches single intent pattern: {pattern}")
+                    return [text]  # Don't split
         
-        # If text is short (< 50 chars) and doesn't have clear separators, don't split
-        if len(text) < 50 and not re.search(r'\s+and\s+(?:also\s+)?(?:remind|note|owe|john|sarah|mike)', text, re.IGNORECASE):
-            logger.info(f"Short text '{text}' - treating as single intent")
-            return [text]
-        
-        # Enhanced segmentation for longer texts with multiple clear intents
+        # Enhanced segmentation using multiple strategies
         segments = []
-        current_segment = ""
         
-        # Split text into words
-        words = text.split()
-        i = 0
+        # Strategy 1: Split by clear intent markers with 'and'
+        intent_transition_patterns = [
+            r'\s+and\s+set\s+(?:a\s+)?(?:reminder|note)',           # " and set a reminder", " and set note"
+            r'\s+and\s+(?:remind|note)\s+',                         # " and remind ", " and note "
+            r'\s+and\s+(?:I\s+want|I\s+need)',                     # " and I want", " and I need"
+            r'\s+and\s+[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay|owe)', # " and John will give", " and John owes"
+            r'\s+and\s+(?:remind\s+me\s+to)',                      # " and remind me to"
+        ]
         
-        while i < len(words):
-            word = words[i].lower()
+        # Find split points using transition patterns
+        split_points = []
+        for pattern in intent_transition_patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                split_points.append(match.start())
+        
+        # Remove duplicates and sort
+        split_points = sorted(list(set(split_points)))
+        
+        # Create segments based on split points
+        if split_points:
+            current_start = 0
+            for split_point in split_points:
+                if current_start < split_point:
+                    segment = text[current_start:split_point].strip()
+                    if len(segment) > 10:  # Minimum segment length
+                        segments.append(segment)
+                current_start = split_point
             
-            # Check for intent transition markers
-            is_transition = False
+            # Add the last segment
+            last_segment = text[current_start:].strip()
+            if last_segment:
+                # Clean up "and" at the beginning
+                last_segment = re.sub(r'^and\s+', '', last_segment, flags=re.IGNORECASE)
+                if len(last_segment) > 10:
+                    segments.append(last_segment)
+        
+        # Strategy 2: If no clear splits found, try word-by-word analysis
+        if len(segments) <= 1:
+            segments = []
+            current_segment = ""
+            words = text.split()
+            i = 0
             
-            # Common transition words that indicate new intents
-            transition_words = ['and', 'also', 'then', 'plus']
-            
-            # Intent-specific keywords that start new intents
-            intent_starters = {
-                'reminder': ['remind', 'set', 'alarm', 'schedule', 'appointment'],
-                'ledger': ['john', 'sarah', 'mike', 'alex', 'david', 'mary', 'owe', 'owes', 'borrowed', 'lent', 'paid'],
-                'note': ['note', 'write', 'save', 'jot', 'record'],
-                'chitchat': ['how', 'what', 'who', 'when', 'where', 'why', 'hello', 'hi', 'thanks']
-            }
-            
-            # Check if current word is a transition word followed by intent starter
-            if word in transition_words and i + 1 < len(words):
-                next_word = words[i + 1].lower()
+            while i < len(words):
+                word = words[i].lower()
                 
-                # Look for strong intent starters after transition words
-                for intent_type, starters in intent_starters.items():
-                    if next_word in starters:
-                        # Check if this would create a meaningful segment
-                        if len(current_segment.split()) >= 3:  # Minimum 3 words for a segment
-                            is_transition = True
-                            break
+                # Check for intent transition markers
+                is_transition = False
                 
-                # Check for money amounts or names after "and"
-                if next_word.startswith('$') or next_word[0].isupper():
-                    if len(current_segment.split()) >= 3:
+                # Look for transition patterns
+                if (word == 'and' and i + 1 < len(words)):
+                    next_word = words[i + 1].lower()
+                    
+                    # Strong intent starters after 'and'
+                    strong_starters = ['set', 'remind', 'note', 'john', 'sarah', 'mike', 'alex', 'david', 'mary', 'i']
+                    
+                    if next_word in strong_starters and len(current_segment.split()) >= 4:
                         is_transition = True
-            
-            if is_transition and current_segment.strip():
-                segments.append(current_segment.strip())
-                current_segment = ""
-                # Skip the transition word
+                        # Look ahead to see if this forms a valid intent
+                        lookahead = ' '.join(words[i+1:i+5])  # Next 4 words
+                        intent_indicators = ['set a', 'remind me', 'note to', 'will give', 'want to', 'owes me']
+                        
+                        if any(indicator in lookahead.lower() for indicator in intent_indicators):
+                            is_transition = True
+                
+                if is_transition and current_segment.strip():
+                    segments.append(current_segment.strip())
+                    current_segment = ""
+                    # Skip the transition word 'and'
+                    i += 1
+                    continue
+                
+                current_segment += " " + words[i]
                 i += 1
+            
+            # Add the last segment
+            if current_segment.strip():
+                segments.append(current_segment.strip())
+        
+        # Strategy 3: Post-process segments to ensure quality
+        cleaned_segments = []
+        for segment in segments:
+            segment = segment.strip()
+            
+            # Remove leading/trailing punctuation and conjunctions
+            segment = re.sub(r'^[,.\s]*(?:and\s+)?', '', segment, flags=re.IGNORECASE)
+            segment = re.sub(r'[,.\s]*$', '', segment)
+            
+            # Skip very short segments
+            if len(segment) < 8:
                 continue
             
-            current_segment += " " + words[i]
-            i += 1
+            # Skip segments that don't contain meaningful intent words
+            intent_words = ['remind', 'set', 'note', 'buy', 'owe', 'owes', 'give', 'pay', 'want', 'need', 'book', 'call']
+            if not any(word in segment.lower() for word in intent_words):
+                continue
+                
+            cleaned_segments.append(segment)
         
-        # Add the last segment
-        if current_segment.strip():
-            segments.append(current_segment.strip())
+        # If we still don't have good segments, return original text
+        if len(cleaned_segments) <= 1:
+            cleaned_segments = [text]
         
-        # If we only got one segment, return the original text
-        if len(segments) <= 1:
-            segments = [text]
-        
-        logger.info(f"Text segmentation: '{text}' -> {len(segments)} segments: {segments}")
-        return segments
+        logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
+        return cleaned_segments
     
     def _extract_entities(self, text: str) -> Dict[str, any]:
         """Extract entities from text (enhanced implementation)."""
@@ -505,7 +536,7 @@ class IntentService:
         for pattern in time_patterns:
             matches = re.findall(pattern, text_lower)
             if matches:
-                entities["time"] = matches[0]
+                entities["time"] = [" ".join(str(x) for x in matches[0] if x)]
                 break
         
         # Date patterns
@@ -518,47 +549,104 @@ class IntentService:
         for pattern in date_patterns:
             matches = re.findall(pattern, text_lower)
             if matches:
-                entities["date"] = matches[0]
+                entities["date"] = [matches[0] if isinstance(matches[0], str) else " ".join(matches[0])]
                 break
         
-        # Extract names (enhanced approach for different contexts)
-        name_patterns = [
-            # General conversation patterns
-            r'\bcall\s+([A-Z][a-z]+)\b',
-            r'\bmeet\s+([A-Z][a-z]+)\b',
-            r'\bwith\s+([A-Z][a-z]+)\b',
-            
-            # Ledger/financial patterns
-            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?|borrowed?|lent)',  # "John owes", "John borrowed"
-            r'(?:owes?|owed?|borrowed?|lent)\s+([A-Z][a-z]+)',     # "owes John", "borrowed from John"
-            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',        # "John will give", "John pay"
-            r'(?:give|pay)\s+([A-Z][a-z]+)',                      # "give John", "pay John"
-            r'\b([A-Z][a-z]+)\s+.*?\$\d+',                        # "John ... $50"
-            r'\$\d+.*?\b([A-Z][a-z]+)',                           # "$50 ... John"
-            
-            # Additional name patterns
-            r'\b([A-Z][a-z]+)\s+(?:and|&)',                       # "John and", "John &"
-            r'(?:from|to)\s+([A-Z][a-z]+)',                       # "from John", "to John"
+        # Enhanced name extraction with priority for ledger contexts
+        person_found = None
+        
+        # High priority: Direct ledger patterns (most accurate for financial contexts)
+        ledger_name_patterns = [
+            r'\b([A-Z][a-z]+)\s+(?:owes?|owed?)\s+(?:me|us)',          # "John owes me"
+            r'\b([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)\s+(?:me|us)', # "John will give me", "John pay me"
+            r'(?:and\s+)?([A-Z][a-z]+)\s+(?:will\s+)?(?:give|pay)',    # "and John will give"
+            r'\b([A-Z][a-z]+)\s+borrowed',                             # "John borrowed"
+            r'borrowed\s+from\s+([A-Z][a-z]+)',                       # "borrowed from John"
+            r'lent\s+(?:to\s+)?([A-Z][a-z]+)',                        # "lent to John"
+            r'\b([A-Z][a-z]+)\s+lent',                                 # "John lent"
         ]
         
-        for pattern in name_patterns:
+        for pattern in ledger_name_patterns:
             matches = re.findall(pattern, text)
             if matches:
-                entities["person"] = matches[0]
+                person_found = matches[0]
                 break
+        
+        # Medium priority: General conversation patterns (if no ledger pattern found)
+        if not person_found:
+            general_name_patterns = [
+                r'\bcall\s+([A-Z][a-z]+)\b',                          # "call John"
+                r'\bmeet\s+(?:with\s+)?([A-Z][a-z]+)\b',              # "meet John", "meet with John"
+                r'\bwith\s+([A-Z][a-z]+)\b',                          # "with John"
+                r'\babout\s+([A-Z][a-z]+)\b',                         # "about John"
+                r'\bto\s+([A-Z][a-z]+)\b',                            # "to John"
+                r'\bfrom\s+([A-Z][a-z]+)\b',                          # "from John"
+            ]
+            
+            for pattern in general_name_patterns:
+                matches = re.findall(pattern, text)
+                if matches:
+                    person_found = matches[0]
+                    break
+        
+        # Low priority: Standalone capitalized words (only if no other pattern found)
+        if not person_found:
+            # Look for capitalized words that could be names, but exclude common words
+            excluded_words = {
+                'Me', 'You', 'I', 'He', 'She', 'They', 'That', 'Note', 'Money', 'And', 'Set', 
+                'Will', 'Give', 'Pay', 'Owe', 'Owes', 'Owed', 'Buy', 'Get', 'Go', 'Come',
+                'Make', 'Take', 'Put', 'Call', 'Tell', 'Ask', 'Say', 'See', 'Know', 'Think',
+                'Want', 'Need', 'Have', 'Get', 'Do', 'Can', 'Will', 'Should', 'Would', 'Could',
+                'The', 'This', 'That', 'These', 'Those', 'A', 'An', 'All', 'Some', 'Any',
+                'Remind', 'Reminder', 'Note', 'Ledger', 'Home', 'Lahore', 'Ticket', 'Book',
+                'Chocolates'
+            }
+            
+            words = text.split()
+            for word in words:
+                # Look for capitalized words that could be names
+                clean_word = word.strip('.,!?";:')
+                if (clean_word and clean_word[0].isupper() and len(clean_word) > 2 and 
+                    clean_word not in excluded_words and
+                    not clean_word.lower().startswith(('$', '€', '£', '¥')) and
+                    not clean_word.isdigit()):
+                    person_found = clean_word
+                    break
+        
+        if person_found:
+            entities["person"] = [person_found]
         
         # Extract monetary amounts for ledger entries
         money_patterns = [
-            r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)',     # $50, $1,000, $50.00
-            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*dollars?',  # 50 dollars, 1000 dollars
-            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*bucks?',    # 50 bucks
+            r'\$(\d+(?:,\d{3})*(?:\.\d{2})?)',                        # $50, $1,000, $50.00
+            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*dollars?',               # 50 dollars, 1000 dollars
+            r'(\d+(?:,\d{3})*(?:\.\d{2})?)\s*bucks?',                 # 50 bucks
         ]
         
         for pattern in money_patterns:
             matches = re.findall(pattern, text_lower)
             if matches:
-                entities["amount"] = matches[0]
+                entities["amount"] = [matches[0]]
                 break
+        
+        # Extract content for notes (when note-related keywords are present)
+        if any(word in text_lower for word in ['note', 'remember', 'write', 'jot', 'buy']):
+            content_patterns = [
+                r'note\s+(?:to\s+|about\s+|that\s+)?(.+)',
+                r'remember\s+(?:to\s+|that\s+)?(.+)',
+                r'write\s+(?:down\s+)?(.+)',
+                r'jot\s+(?:down\s+)?(.+)',
+                r'buy\s+(.+)',
+            ]
+            
+            for pattern in content_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    content = match.group(1).strip()
+                    # Clean up the content by removing trailing parts that don't belong to the note
+                    content = re.sub(r'\s+and\s+(john|sarah|mike|alex|david|mary|remind|set|call).*$', '', content, flags=re.IGNORECASE)
+                    entities["content"] = content
+                    break
         
         return entities
     

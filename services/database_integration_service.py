@@ -321,23 +321,49 @@ class DatabaseIntegrationService:
             "created_at": datetime.now()
         }
         
-        # Extract amount if available
+        # Extract amount if available (handle both array and single value formats)
         amount_entities = entities.get("amount", [])
         if amount_entities:
             try:
-                # Parse amount from the first entity
-                amount_str = amount_entities[0] if isinstance(amount_entities, list) else str(amount_entities)
+                # Handle both array and single value formats
+                if isinstance(amount_entities, list) and amount_entities:
+                    amount_str = amount_entities[0]
+                else:
+                    amount_str = str(amount_entities)
+                
                 # Extract numeric value
                 amount_match = re.search(r'(\d+(?:\.\d{2})?)', str(amount_str))
                 if amount_match:
                     data["amount"] = float(amount_match.group(1))
-            except (ValueError, IndexError):
+                else:
+                    data["amount"] = 0.0
+            except (ValueError, IndexError, TypeError):
                 data["amount"] = 0.0
+        else:
+            data["amount"] = 0.0
         
-        # Extract contact name using improved logic
-        contact_name = self._extract_contact_name(result["original_text"], entities)
+        # Extract contact name (handle both array and single value formats)
+        person_entities = entities.get("person", [])
+        contact_name = None
+        
+        if person_entities:
+            try:
+                # Handle both array and single value formats
+                if isinstance(person_entities, list) and person_entities:
+                    contact_name = person_entities[0]
+                else:
+                    contact_name = str(person_entities)
+            except (TypeError, IndexError):
+                contact_name = None
+        
+        # Fallback: extract contact name from original text if not found in entities
+        if not contact_name:
+            contact_name = self._extract_contact_name(result["original_text"], entities)
+        
         if contact_name:
             data["contact_name"] = contact_name
+        else:
+            data["contact_name"] = "Unknown Contact"  # Default fallback
         
         return {
             "table": "ledger_entries",
