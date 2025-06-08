@@ -239,14 +239,8 @@ class DatabaseIntegrationService:
             if parsed_time:
                 data["time"] = parsed_time
         
-        # Add description with metadata
-        description_data = {
-            "original_text": result["original_text"],
-            "confidence": result.get("confidence", 0.0),
-            "model_used": result.get("model_used", "unknown"),
-            "entities": entities
-        }
-        data["description"] = json.dumps(description_data)
+        # Store only the original text in description, not the metadata
+        data["description"] = result["original_text"]
         
         return {
             "table": "reminders",
