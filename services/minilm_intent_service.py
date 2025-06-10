@@ -109,7 +109,7 @@ class MiniLMIntentService:
         
         # Multi-intent detection patterns (improved)
         self.multi_intent_separators = [
-            r'\band\s+(?:also\s+)?(?:please\s+)?(?:set|create|add|make|remind|schedule|note|record|track)',
+            r'\band\s+(?:also\s+)?(?:set|create|add|make|remind|schedule|note|record|track)',
             r'\balso\s+(?:please\s+)?(?:set|create|add|make|remind|schedule|note|record|track)',
             r'\bthen\s+(?:please\s+)?(?:set|create|add|make|remind|schedule|note|record|track)',
             r'\bplus\s+(?:please\s+)?(?:set|create|add|make|remind|schedule|note|record|track)',
@@ -576,7 +576,8 @@ class MiniLMIntentService:
                     r'remember\s+(?:to\s+|that\s+)?(.+)',
                     r'write\s+(?:down\s+)?(.+)',
                     r'jot\s+(?:down\s+)?(.+)',
-                    r'buy\s+(.+)',
+                    r'(?:to\s+)?buy\s+(.+)',                              # "buy chocolates" or "to buy chocolates"
+                    r'^to\s+(.+)',                                        # segments starting with "to"
                 ]
                 
                 for pattern in content_patterns:
@@ -585,8 +586,30 @@ class MiniLMIntentService:
                         content = match.group(1).strip()
                         # Clean up the content by removing trailing parts that don't belong to the note
                         content = re.sub(r'\s+and\s+(john|sarah|mike|alex|david|mary|remind|set|call).*$', '', content, flags=re.IGNORECASE)
+                        
+                        # For "to buy" patterns, include the action word for better context
+                        if pattern == r'(?:to\s+)?buy\s+(.+)' or pattern == r'^to\s+(.+)':
+                            # Check if this looks like a "buy" action
+                            if 'buy' in original_text.lower():
+                                # Extract the full "buy X" phrase
+                                buy_match = re.search(r'(?:to\s+)?(buy\s+.+?)(?:\s+and|$)', original_text, re.IGNORECASE)
+                                if buy_match:
+                                    content = buy_match.group(1).strip()
+                            elif pattern == r'^to\s+(.+)':
+                                # For segments starting with "to", include the "to" if it makes sense
+                                if original_text.lower().startswith('to ') and not any(skip_word in content.lower() for skip_word in ['and', 'then', 'also']):
+                                    content = f"to {content}".strip()
+                        
                         entities["content"] = content
                         break
+                
+                # If no pattern matched but we have "buy" in the text, try a more flexible approach
+                if "content" not in entities and "buy" in text_lower:
+                    # Extract everything after "buy" or "to buy"
+                    buy_match = re.search(r'(?:to\s+)?buy\s+([^.]+?)(?:\s+and\s+\w+.*)?$', original_text, re.IGNORECASE)
+                    if buy_match:
+                        content = f"buy {buy_match.group(1).strip()}"
+                        entities["content"] = content
             
             return entities
             
