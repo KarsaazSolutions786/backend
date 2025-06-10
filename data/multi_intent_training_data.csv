@@ -1,0 +1,397 @@
+text,intent,type,intents,segments
+remember to drop off today,create_reminder,single_intent,['create_reminder'],
+set alarm to visit at noon,create_reminder,single_intent,['create_reminder'],
+set alarm to collect at 4 PM,create_reminder,single_intent,['create_reminder'],
+can you appointment to return on Monday,create_reminder,single_intent,['create_reminder'],
+schedule collect for 4 PM,create_reminder,single_intent,['create_reminder'],
+remind important me to prepare at midnight,create_reminder,single_intent,['create_reminder'],
+schedule start for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+would you please remind me about contact next Tuesday,create_reminder,single_intent,['create_reminder'],
+remind me to kindly call at 9:15 AM,create_reminder,single_intent,['create_reminder'],
+schedule clean for 4 PM,create_reminder,single_intent,['create_reminder'],
+remind urgent me about review this weekend,create_reminder,single_intent,['create_reminder'],
+reminder for update today,create_reminder,single_intent,['create_reminder'],
+appointment to clean next Tuesday,create_reminder,single_intent,['create_reminder'],
+would you set alarm to update at 11:45 PM,create_reminder,single_intent,['create_reminder'],
+remind importanter for shower today,create_reminder,single_intent,['create_reminder'],
+schedule submit for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+alert me to text at lunch time,create_reminder,single_intent,['create_reminder'],
+can you appointment to collect on Monday,create_reminder,single_intent,['create_reminder'],
+schedule call for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+don't forget to practice next week,create_reminder,single_intent,['create_reminder'],
+schedule deliver for 10 AM,create_reminder,single_intent,['create_reminder'],
+reminder for pick up this weekend,create_reminder,single_intent,['create_reminder'],
+would you set a reminder to book on Friday,create_reminder,single_intent,['create_reminder'],
+alert me to give next week,create_reminder,single_intent,['create_reminder'],
+reminder for start at lunch time,create_reminder,single_intent,['create_reminder'],
+appointment to email at lunch time,create_reminder,single_intent,['create_reminder'],
+set a reminder to exercise this weekend,create_reminder,single_intent,['create_reminder'],
+please remind me about workout this morning,create_reminder,single_intent,['create_reminder'],
+alert me to workout at lunch time,create_reminder,single_intent,['create_reminder'],
+remind me about modify later,create_reminder,single_intent,['create_reminder'],
+don't forget to fetch this weekend,create_reminder,single_intent,['create_reminder'],
+alert me to buy next week,create_reminder,single_intent,['create_reminder'],
+reminder for arrive at lunch time,create_reminder,single_intent,['create_reminder'],
+remember shopping list,create_note,single_intent,['create_note'],
+could you jot down important documents,create_note,single_intent,['create_note'],
+could you add to my notes vacation plans,create_note,single_intent,['create_note'],
+add to my notes contact information,create_note,single_intent,['create_note'],
+remember project ideas,create_note,single_intent,['create_note'],
+note that milk and bread,create_note,single_intent,['create_note'],
+write down shopping list,create_note,single_intent,['create_note'],
+create a note about research notes,create_note,single_intent,['create_note'],
+would you make a kindly note that websites,create_note,single_intent,['create_note'],
+would you add to my notes meeting agenda,create_note,single_intent,['create_note'],
+could you note that milk and bread,create_note,single_intent,['create_note'],
+make a note that important documents,create_note,single_intent,['create_note'],
+note that shopping list,create_note,single_intent,['create_note'],
+record phone numbers,create_note,single_intent,['create_note'],
+note to sleep,create_note,single_intent,['create_note'],
+could you create a kindly note about shopping list,create_note,single_intent,['create_note'],
+save milk and bread,create_note,single_intent,['create_note'],
+remember book recommendations,create_note,single_intent,['create_note'],
+create a note about research notes,create_note,single_intent,['create_note'],
+make a note that recipe ingredients,create_note,single_intent,['create_note'],
+note that vacation plans,create_note,single_intent,['create_note'],
+note that research notes,create_note,single_intent,['create_note'],
+note that gift ideas,create_note,single_intent,['create_note'],
+save groceries,create_note,single_intent,['create_note'],
+jot down shopping list,create_note,single_intent,['create_note'],
+note to workout,create_note,single_intent,['create_note'],
+jot down gift ideas,create_note,single_intent,['create_note'],
+remember shopping list,create_note,single_intent,['create_note'],
+note to drop off,create_note,single_intent,['create_note'],
+create a note about milk and bread,create_note,single_intent,['create_note'],
+could you add to my notes groceries,create_note,single_intent,['create_note'],
+make a please note that passwords,create_note,single_intent,['create_note'],
+keep track of milk and bread,create_note,single_intent,['create_note'],
+expense of $25 for coffee,create_ledger,single_intent,['create_ledger'],
+borrowed $45 from doctor for phone bill,create_ledger,single_intent,['create_ledger'],
+boss owes me $30,create_ledger,single_intent,['create_ledger'],
+I lent $15 to Jim,create_ledger,single_intent,['create_ledger'],
+expense of $25 for phone bill,create_ledger,single_intent,['create_ledger'],
+paid $100 to Alice,create_ledger,single_intent,['create_ledger'],
+cost $15 for lunch,create_ledger,single_intent,['create_ledger'],
+I owe Bob $50,create_ledger,single_intent,['create_ledger'],
+colleague borrowed $200 from me,create_ledger,single_intent,['create_ledger'],
+paid $25 to Jane,create_ledger,single_intent,['create_ledger'],
+Ryan will pay me $200,create_ledger,single_intent,['create_ledger'],
+Sarah paid me $150,create_ledger,single_intent,['create_ledger'],
+expense of $30 for travel expenses,create_ledger,single_intent,['create_ledger'],
+expense of $15 for clothes,create_ledger,single_intent,['create_ledger'],
+Alex owes $150 for books,create_ledger,single_intent,['create_ledger'],
+could you Mike owes me $45,create_ledger,single_intent,['create_ledger'],
+spent $80 on utilities,create_ledger,single_intent,['create_ledger'],
+can you Alex owes me $150,create_ledger,single_intent,['create_ledger'],
+Sarah paid me $200,create_ledger,single_intent,['create_ledger'],
+Sarah owes $45 for lunch,create_ledger,single_intent,['create_ledger'],
+can you expense of $45 for travel expenses,create_ledger,single_intent,['create_ledger'],
+could you paid $75 to Joe,create_ledger,single_intent,['create_ledger'],
+borrowed $10 from Mike for gas,create_ledger,single_intent,['create_ledger'],
+partner owes $10 for phone bill,create_ledger,single_intent,['create_ledger'],
+I owe Alex $150,create_ledger,single_intent,['create_ledger'],
+John owes me $15,create_ledger,single_intent,['create_ledger'],
+expense of $80 for phone bill,create_ledger,single_intent,['create_ledger'],
+I lent $15 to Ryan,create_ledger,single_intent,['create_ledger'],
+could you roommate paid me $10,create_ledger,single_intent,['create_ledger'],
+colleague paid me $50,create_ledger,single_intent,['create_ledger'],
+borrowed $45 from partner for travel expenses,create_ledger,single_intent,['create_ledger'],
+expense of $100 for books,create_ledger,single_intent,['create_ledger'],
+cost $75 for lunch,create_ledger,single_intent,['create_ledger'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+would you what can you help with,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+can you nice to meet you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+good morning,chit_chat,single_intent,['chit_chat'],
+thank you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+thank you,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+would you thank you,chit_chat,single_intent,['chit_chat'],
+could you how does this work,chit_chat,single_intent,['chit_chat'],
+what can you help with,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+could you hello how are you,chit_chat,single_intent,['chit_chat'],
+how's the weather,chit_chat,single_intent,['chit_chat'],
+good morning,chit_chat,single_intent,['chit_chat'],
+would you good morning,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+nice to meet you,chit_chat,single_intent,['chit_chat'],
+what can you help with,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+what features do you have,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+borrowed $200 from Mike for taxi plus also remember to text today,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['borrowed $200 from Mike for taxi', 'remember to text today']"
+remember to review this weekend and then please note that meeting agenda additionally cost $10 for dinner,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remember to review this weekend', 'please note that meeting agenda', 'cost $10 for dinner']"
+can you Bob owes me $25 also set urgent alarm to contact at 1 PM,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['Bob owes me $25', 'set alarm to contact at 1 PM']"
+remember book recommendations besides set a please remind urgenter to contact this weekend,create_note,multi_intent,"['create_note', 'create_reminder']","['remember book recommendations', 'set a remind urgenter to contact this weekend']"
+can you remind importanter for eat later and then Mary owes $100 for phone bill,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['can you remind importanter for eat later', 'Mary owes $100 for phone bill']"
+spent $15 on concert tickets then set a reminder to clean later,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $15 on concert tickets', 'set a reminder to clean later']"
+appointment to get on Friday besides could you jot down meeting agenda,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to get on Friday', 'could you jot down meeting agenda']"
+remember to drink on Monday then borrowed $25 from friend for rent,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['remember to drink on Monday', 'borrowed $25 from friend for rent']"
+could you record movie suggestions moreover spent $100 on phone bill,create_note,multi_intent,"['create_note', 'create_ledger']","['record movie suggestions', 'spent $100 on phone bill']"
+add to my notes groceries moreover cost $25 for clothes,create_note,multi_intent,"['create_note', 'create_ledger']","['add to my notes groceries', 'cost $25 for clothes']"
+can you would you write down vacation plans additionally Jim paid me $80,create_note,multi_intent,"['create_note', 'create_ledger']","['would you write down vacation plans', 'Jim paid me $80']"
+could you Sarah paid me $100 and also set a remind importanter to study next month,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['could you Sarah paid me $100', 'set a reminder to study next month']"
+can you alert me to deliver tomorrow also write down milk and bread then John owes $120 for clothes,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['alert me to deliver tomorrow', 'write down milk and bread', 'John owes $120 for clothes']"
+make a note that research notes and Sarah will pay me $50,create_note,multi_intent,"['create_note', 'create_ledger']","['make a note that research notes', 'Sarah will pay me $50']"
+would you can you add to my notes research notes and then cost $10 for gas,create_note,multi_intent,"['create_note', 'create_ledger']","['can you add to my notes research notes', 'cost $10 for gas']"
+don't forget to deliver this evening additionally would you make a note that passwords as well as Ryan paid me $45,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","[""don't forget to deliver this evening"", 'would you make a note that passwords', 'Ryan paid me $45']"
+remember to drive next month and document recipe ingredients and then expense of $75 for books,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remember to drive next month', 'document recipe ingredients', 'expense of $75 for books']"
+record research notes and then can you remember to confirm tonight,create_note,multi_intent,"['create_note', 'create_reminder']","['record research notes', 'can you remember to confirm tonight']"
+can you create a please note about book recommendations plus borrowed $150 from boss for coffee,create_note,multi_intent,"['create_note', 'create_ledger']","['create a please note about book recommendations', 'borrowed $150 from boss for coffee']"
+could you spent $75 on books plus appointment to travel next week,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['could you spent $75 on books', 'appointment to travel next week']"
+jot down phone numbers plus can you spent $30 on internet,create_note,multi_intent,"['create_note', 'create_ledger']","['jot down phone numbers', 'can you spent $30 on internet']"
+would you please set important alarm to drink at 3:30 AM also spent $50 on gas,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you please set important alarm to drink at 3:30 AM', 'spent $50 on gas']"
+spent $15 on movie tickets besides reminder for schedule this morning,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $15 on movie tickets', 'reminder for schedule this morning']"
+could you paid $10 to client furthermore don't forget to pack on Monday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['paid $10 to client', ""don't forget to pack on Monday""]"
+appointment to shower on Monday and would you jot down contact information,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to shower on Monday', 'would you jot down contact information']"
+remind important me about call today as well as note that groceries,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind me about call today', 'note that groceries']"
+remind urgenter for prepare on Friday and then remember groceries and I lent $80 to client,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind urgenter for prepare on Friday', 'remember groceries', 'I lent $80 to client']"
+spent $200 on dinner then reminder for exercise this morning,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $200 on dinner', 'reminder for exercise this morning']"
+appointment to get this evening plus note to study,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to get this evening', 'note to study']"
+would you please note that book recommendations and then don't forget to send at lunch time,create_note,multi_intent,"['create_note', 'create_reminder']","['note that book recommendations', ""don't forget to send at lunch time""]"
+would you remember meeting agenda then expense of $200 for medicine,create_note,multi_intent,"['create_note', 'create_ledger']","['would you remember meeting agenda', 'expense of $200 for medicine']"
+kindly set a reminder to collect in 30 minutes furthermore note that project ideas also Joe owes $150 for rent,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['set a reminder to collect in 30 minutes', 'note that project ideas', 'Joe owes $150 for rent']"
+would you alert me to visit later additionally can you spent $120 on lunch,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you alert me to visit later', 'can you spent $120 on lunch']"
+remind me about complete this evening also record contact information then borrowed $150 from mom for coffee,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind me about complete this evening', 'record contact information', 'borrowed $150 from mom for coffee']"
+could you Alice will pay me $45 besides remember to commute next week,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['Alice will pay me $45', 'remember to commute next week']"
+could you please note to fetch besides would you Amy owes me $75,create_note,multi_intent,"['create_note', 'create_ledger']","['could you please note to fetch', 'would you Amy owes me $75']"
+remember to give next month and then could you Amy owes me $30,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['remember to give next month', 'could you Amy owes me $30']"
+don't forget to confirm later besides create a kindly note about gift ideas besides Ana borrowed $200 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","[""don't forget to confirm later"", 'create a note about gift ideas', 'Ana borrowed $200 from me']"
+I lent $200 to Chris then set a reminder to modify at lunch time,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['I lent $200 to Chris', 'set a reminder to modify at lunch time']"
+alert me to buy at lunch time and then document websites additionally mom borrowed $30 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['alert me to buy at lunch time', 'document websites', 'mom borrowed $30 from me']"
+remind important me about return in 30 minutes as well as make a note that addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind important me about return in 30 minutes', 'make a note that addresses']"
+could you remember to contact tonight and then note to wake up and then Emma borrowed $80 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['could you remember to contact tonight', 'note to wake up', 'Emma borrowed $80 from me']"
+record shopping list also set important a remind urgenter to drink in an hour,create_note,multi_intent,"['create_note', 'create_reminder']","['record shopping list', 'set important a remind urgenter to drink in an hour']"
+save recipe ingredients also doctor owes $30 for utilities,create_note,multi_intent,"['create_note', 'create_ledger']","['save recipe ingredients', 'doctor owes $30 for utilities']"
+set a reminder to brush teeth tonight also spent $75 on internet,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set a reminder to brush teeth tonight', 'spent $75 on internet']"
+would you would you schedule complete for 9:15 AM and then keep track of addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['would you schedule complete for 9:15 AM', 'keep track of addresses']"
+can you remind me to visit at 8 AM moreover add to my notes addresses and would you spent $50 on dinner,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['can you remind me to visit at 8 AM', 'add to my notes addresses', 'would you spent $50 on dinner']"
+don't forget to unpack on Friday and then remember passwords,create_reminder,multi_intent,"['create_reminder', 'create_note']","[""don't forget to unpack on Friday"", 'remember passwords']"
+document phone numbers moreover don't forget to return this evening,create_note,multi_intent,"['create_note', 'create_reminder']","['document phone numbers', ""don't forget to return this evening""]"
+remind me about fetch next Tuesday moreover add to my notes contact information,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind me about fetch next Tuesday', 'add to my notes contact information']"
+can you create a note about contact information and also set important a reminder to start tonight,create_note,multi_intent,"['create_note', 'create_reminder']","['can you create a note about contact information', 'set important a reminder to start tonight']"
+don't forget to study on Friday moreover I lent $200 to Chris,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","[""don't forget to study on Friday"", 'I lent $200 to Chris']"
+can you I lent $15 to Sam as well as kindly remind important me about review tomorrow,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['I lent $15 to Sam', 'remind important me about review tomorrow']"
+would you client owes me $10 also could you alert me to drink next Tuesday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['would you client owes me $10', 'could you alert me to drink next Tuesday']"
+please remind me to workout at 1 PM plus keep track of movie suggestions then spent $75 on coffee,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind me to workout at 1 PM', 'keep track of movie suggestions', 'spent $75 on coffee']"
+can you reminder for check on Monday and also cost $45 for gas,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['reminder for check on Monday', 'cost $45 for gas']"
+please remind me about pay next Tuesday and teacher will pay me $150,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['please remind me about pay next Tuesday', 'teacher will pay me $150']"
+would you write down phone numbers then spent $15 on utilities,create_note,multi_intent,"['create_note', 'create_ledger']","['write down phone numbers', 'spent $15 on utilities']"
+alert me to finish on Friday besides paid $200 to Sam,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['alert me to finish on Friday', 'paid $200 to Sam']"
+please set a reminder to eat today also can you paid $80 to teacher,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set a reminder to eat today', 'can you paid $80 to teacher']"
+jot down contact information plus boss borrowed $10 from me,create_note,multi_intent,"['create_note', 'create_ledger']","['jot down contact information', 'boss borrowed $10 from me']"
+would you set alarm to pack at 5 PM besides would you cost $80 for lunch,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you set alarm to pack at 5 PM', 'would you cost $80 for lunch']"
+would you remind me to sleep at 6 PM moreover document addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['would you remind me to sleep at 6 PM', 'document addresses']"
+kindly set urgent alarm to finish at 10 AM moreover I owe friend $120,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set urgent alarm to finish at 10 AM', 'I owe friend $120']"
+could you paid $120 to Mike plus can you remember to book on Friday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['paid $120 to Mike', 'can you remember to book on Friday']"
+don't forget to drop off next Tuesday and could you I lent $15 to Tom,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","[""don't forget to drop off next Tuesday"", 'could you I lent $15 to Tom']"
+remember to drop off today,create_reminder,single_intent,['create_reminder'],
+set alarm to visit at noon,create_reminder,single_intent,['create_reminder'],
+set alarm to collect at 4 PM,create_reminder,single_intent,['create_reminder'],
+can you appointment to return on Monday,create_reminder,single_intent,['create_reminder'],
+schedule collect for 4 PM,create_reminder,single_intent,['create_reminder'],
+remind important me to prepare at midnight,create_reminder,single_intent,['create_reminder'],
+schedule start for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+would you please remind me about contact next Tuesday,create_reminder,single_intent,['create_reminder'],
+warn me to kindly call at 9:15 AM,create_reminder,single_intent,['create_reminder'],
+schedule clean for 4 PM,create_reminder,single_intent,['create_reminder'],
+remind urgent me about review this weekend,create_reminder,single_intent,['create_reminder'],
+reminder for update today,create_reminder,single_intent,['create_reminder'],
+appointment to clean next Tuesday,create_reminder,single_intent,['create_reminder'],
+would you set alarm to update at 11:45 PM,create_reminder,single_intent,['create_reminder'],
+warn importanter for shower today,create_reminder,single_intent,['create_reminder'],
+schedule submit for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+alert me to text at lunch time,create_reminder,single_intent,['create_reminder'],
+can you appointment to collect on Monday,create_reminder,single_intent,['create_reminder'],
+schedule reach for 7:30 PM,create_reminder,single_intent,['create_reminder'],
+don't forget to practice next week,create_reminder,single_intent,['create_reminder'],
+schedule deliver for 10 AM,create_reminder,single_intent,['create_reminder'],
+reminder for pick up this weekend,create_reminder,single_intent,['create_reminder'],
+would you set a reminder to book on Friday,create_reminder,single_intent,['create_reminder'],
+alert me to give next week,create_reminder,single_intent,['create_reminder'],
+reminder for start at lunch time,create_reminder,single_intent,['create_reminder'],
+appointment to email at lunch time,create_reminder,single_intent,['create_reminder'],
+set a reminder to exercise this weekend,create_reminder,single_intent,['create_reminder'],
+please remind me about workout this morning,create_reminder,single_intent,['create_reminder'],
+alert me to workout at lunch time,create_reminder,single_intent,['create_reminder'],
+remind me about modify later,create_reminder,single_intent,['create_reminder'],
+don't forget to fetch this weekend,create_reminder,single_intent,['create_reminder'],
+alert me to get next week,create_reminder,single_intent,['create_reminder'],
+reminder for arrive at lunch time,create_reminder,single_intent,['create_reminder'],
+remember shopping list,create_note,single_intent,['create_note'],
+could you jot down important documents,create_note,single_intent,['create_note'],
+could you add to my notes vacation plans,create_note,single_intent,['create_note'],
+add to my notes contact information,create_note,single_intent,['create_note'],
+remember project ideas,create_note,single_intent,['create_note'],
+note that milk and bread,create_note,single_intent,['create_note'],
+write down shopping list,create_note,single_intent,['create_note'],
+create a note about research notes,create_note,single_intent,['create_note'],
+would you make a kindly note that websites,create_note,single_intent,['create_note'],
+would you add to my notes meeting agenda,create_note,single_intent,['create_note'],
+could you note that milk and bread,create_note,single_intent,['create_note'],
+make a record that important documents,create_note,single_intent,['create_note'],
+note that shopping list,create_note,single_intent,['create_note'],
+record phone numbers,create_note,single_intent,['create_note'],
+note to sleep,create_note,single_intent,['create_note'],
+could you create a kindly note about shopping list,create_note,single_intent,['create_note'],
+save milk and bread,create_note,single_intent,['create_note'],
+remember book recommendations,create_note,single_intent,['create_note'],
+create a write about research notes,create_note,single_intent,['create_note'],
+make a note that recipe ingredients,create_note,single_intent,['create_note'],
+note that vacation plans,create_note,single_intent,['create_note'],
+note that research notes,create_note,single_intent,['create_note'],
+save that gift ideas,create_note,single_intent,['create_note'],
+save groceries,create_note,single_intent,['create_note'],
+jot down shopping list,create_note,single_intent,['create_note'],
+note to workout,create_note,single_intent,['create_note'],
+jot down gift ideas,create_note,single_intent,['create_note'],
+remember shopping list,create_note,single_intent,['create_note'],
+note to drop off,create_note,single_intent,['create_note'],
+create a note about milk and bread,create_note,single_intent,['create_note'],
+could you add to my notes groceries,create_note,single_intent,['create_note'],
+make a please record that passwords,create_note,single_intent,['create_note'],
+keep track of milk and bread,create_note,single_intent,['create_note'],
+expense of $25 for coffee,create_ledger,single_intent,['create_ledger'],
+borrowed $45 from doctor for phone bill,create_ledger,single_intent,['create_ledger'],
+boss owes me $30,create_ledger,single_intent,['create_ledger'],
+I lent $15 to Jim,create_ledger,single_intent,['create_ledger'],
+expense of $25 for phone bill,create_ledger,single_intent,['create_ledger'],
+paid $100 to Alice,create_ledger,single_intent,['create_ledger'],
+cost $15 for lunch,create_ledger,single_intent,['create_ledger'],
+I owe Bob $50,create_ledger,single_intent,['create_ledger'],
+colleague borrowed $200 from me,create_ledger,single_intent,['create_ledger'],
+paid $25 to Jane,create_ledger,single_intent,['create_ledger'],
+Ryan will pay me $200,create_ledger,single_intent,['create_ledger'],
+Sarah paid me $150,create_ledger,single_intent,['create_ledger'],
+expense of $30 for travel expenses,create_ledger,single_intent,['create_ledger'],
+expense of $15 for clothes,create_ledger,single_intent,['create_ledger'],
+Alex owes $150 for books,create_ledger,single_intent,['create_ledger'],
+could you Mike owes me $45,create_ledger,single_intent,['create_ledger'],
+spent $80 on utilities,create_ledger,single_intent,['create_ledger'],
+can you Alex owes me $150,create_ledger,single_intent,['create_ledger'],
+Sarah paid me $200,create_ledger,single_intent,['create_ledger'],
+Sarah owes $45 for lunch,create_ledger,single_intent,['create_ledger'],
+can you expense of $45 for travel expenses,create_ledger,single_intent,['create_ledger'],
+could you paid $75 to Joe,create_ledger,single_intent,['create_ledger'],
+borrowed $10 from Mike for gas,create_ledger,single_intent,['create_ledger'],
+partner borrowed $10 for phone bill,create_ledger,single_intent,['create_ledger'],
+I owe Alex $150,create_ledger,single_intent,['create_ledger'],
+John owes me $15,create_ledger,single_intent,['create_ledger'],
+expense of $80 for phone bill,create_ledger,single_intent,['create_ledger'],
+I lent $15 to Ryan,create_ledger,single_intent,['create_ledger'],
+could you roommate paid me $10,create_ledger,single_intent,['create_ledger'],
+colleague paid me $50,create_ledger,single_intent,['create_ledger'],
+borrowed $45 from partner for travel expenses,create_ledger,single_intent,['create_ledger'],
+expense of $100 for books,create_ledger,single_intent,['create_ledger'],
+cost $75 for lunch,create_ledger,single_intent,['create_ledger'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+would you what can you help with,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+can you nice to meet you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+good morning,chit_chat,single_intent,['chit_chat'],
+thank you,chit_chat,single_intent,['chit_chat'],
+help me please,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+thank you,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+would you thank you,chit_chat,single_intent,['chit_chat'],
+could you how does this work,chit_chat,single_intent,['chit_chat'],
+what can you help with,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+hello how are you,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+could you hello how are you,chit_chat,single_intent,['chit_chat'],
+how's the weather,chit_chat,single_intent,['chit_chat'],
+good morning,chit_chat,single_intent,['chit_chat'],
+would you good morning,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+nice to visit you,chit_chat,single_intent,['chit_chat'],
+what can you help with,chit_chat,single_intent,['chit_chat'],
+how does this work,chit_chat,single_intent,['chit_chat'],
+what features do you have,chit_chat,single_intent,['chit_chat'],
+what time is it,chit_chat,single_intent,['chit_chat'],
+borrowed $200 from Mike for taxi plus also remember to text today,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['borrowed $200 from Mike for taxi', 'remember to text today']"
+remember to review this weekend and then please save that meeting agenda additionally cost $10 for dinner,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remember to review this weekend', 'please note that meeting agenda', 'cost $10 for dinner']"
+can you Bob owes me $25 also set urgent alarm to contact at 1 PM,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['Bob owes me $25', 'set alarm to contact at 1 PM']"
+remember book recommendations besides set a please remind urgenter to contact this weekend,create_note,multi_intent,"['create_note', 'create_reminder']","['remember book recommendations', 'set a remind urgenter to contact this weekend']"
+can you warn importanter for eat later and then Mary owes $100 for phone bill,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['can you remind importanter for eat later', 'Mary owes $100 for phone bill']"
+spent $15 on concert tickets then set a reminder to clean later,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $15 on concert tickets', 'set a reminder to clean later']"
+appointment to get on Friday besides could you jot down meeting agenda,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to get on Friday', 'could you jot down meeting agenda']"
+remember to drink on Monday then borrowed $25 from friend for rent,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['remember to drink on Monday', 'borrowed $25 from friend for rent']"
+could you record movie suggestions moreover spent $100 on phone bill,create_note,multi_intent,"['create_note', 'create_ledger']","['record movie suggestions', 'spent $100 on phone bill']"
+add to my notes groceries moreover cost $25 for clothes,create_note,multi_intent,"['create_note', 'create_ledger']","['add to my notes groceries', 'cost $25 for clothes']"
+can you would you write down vacation plans additionally Jim paid me $80,create_note,multi_intent,"['create_note', 'create_ledger']","['would you write down vacation plans', 'Jim paid me $80']"
+could you Sarah paid me $100 and also set a remind importanter to study next month,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['could you Sarah paid me $100', 'set a reminder to study next month']"
+can you alert me to deliver tomorrow also write down milk and bread then John borrowed $120 for clothes,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['alert me to deliver tomorrow', 'write down milk and bread', 'John owes $120 for clothes']"
+make a note that research notes and Sarah will pay me $50,create_note,multi_intent,"['create_note', 'create_ledger']","['make a note that research notes', 'Sarah will pay me $50']"
+would you can you add to my notes research notes and then cost $10 for gas,create_note,multi_intent,"['create_note', 'create_ledger']","['can you add to my notes research notes', 'cost $10 for gas']"
+don't forget to deliver this evening additionally would you make a note that passwords as well as Ryan paid me $45,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","[""don't forget to deliver this evening"", 'would you make a note that passwords', 'Ryan paid me $45']"
+remember to drive next month and document recipe ingredients and then expense of $75 for books,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remember to drive next month', 'document recipe ingredients', 'expense of $75 for books']"
+record research notes and then can you remember to confirm tonight,create_note,multi_intent,"['create_note', 'create_reminder']","['record research notes', 'can you remember to confirm tonight']"
+can you create a please note about book recommendations plus borrowed $150 from boss for coffee,create_note,multi_intent,"['create_note', 'create_ledger']","['create a please note about book recommendations', 'borrowed $150 from boss for coffee']"
+could you spent $75 on books plus appointment to travel next week,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['could you spent $75 on books', 'appointment to travel next week']"
+jot down phone numbers plus can you spent $30 on internet,create_note,multi_intent,"['create_note', 'create_ledger']","['jot down phone numbers', 'can you spent $30 on internet']"
+would you please set important alarm to drink at 3:30 AM also spent $50 on gas,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you please set important alarm to drink at 3:30 AM', 'spent $50 on gas']"
+spent $15 on movie tickets besides reminder for schedule this morning,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $15 on movie tickets', 'reminder for schedule this morning']"
+could you paid $10 to client furthermore don't forget to pack on Monday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['paid $10 to client', ""don't forget to pack on Monday""]"
+appointment to shower on Monday and would you jot down contact information,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to shower on Monday', 'would you jot down contact information']"
+remind important me about call today as well as note that groceries,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind me about call today', 'note that groceries']"
+warn urgenter for prepare on Friday and then remember groceries and I lent $80 to client,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind urgenter for prepare on Friday', 'remember groceries', 'I lent $80 to client']"
+spent $200 on dinner then reminder for exercise this morning,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['spent $200 on dinner', 'reminder for exercise this morning']"
+appointment to get this evening plus note to study,create_reminder,multi_intent,"['create_reminder', 'create_note']","['appointment to get this evening', 'note to study']"
+would you please note that book recommendations and then don't forget to send at lunch time,create_note,multi_intent,"['create_note', 'create_reminder']","['note that book recommendations', ""don't forget to send at lunch time""]"
+would you remember meeting agenda then expense of $200 for medicine,create_note,multi_intent,"['create_note', 'create_ledger']","['would you remember meeting agenda', 'expense of $200 for medicine']"
+kindly set a reminder to collect in 30 minutes furthermore note that project ideas also Joe owes $150 for rent,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['set a reminder to collect in 30 minutes', 'note that project ideas', 'Joe owes $150 for rent']"
+would you alert me to visit later additionally can you spent $120 on lunch,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you alert me to visit later', 'can you spent $120 on lunch']"
+alert me about complete this evening also record contact information then borrowed $150 from mom for coffee,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind me about complete this evening', 'record contact information', 'borrowed $150 from mom for coffee']"
+could you Alice will pay me $45 besides remember to commute next week,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['Alice will pay me $45', 'remember to commute next week']"
+could you please jot to fetch besides would you Amy should pay me $75,create_note,multi_intent,"['create_note', 'create_ledger']","['could you please note to fetch', 'would you Amy owes me $75']"
+remember to give next month and then could you Amy owes me $30,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['remember to give next month', 'could you Amy owes me $30']"
+don't forget to confirm later besides create a kindly record about gift ideas besides Ana borrowed $200 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","[""don't forget to confirm later"", 'create a note about gift ideas', 'Ana borrowed $200 from me']"
+I lent $200 to Chris then set a reminder to modify at lunch time,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['I lent $200 to Chris', 'set a reminder to modify at lunch time']"
+alert me to acquire at lunch time and then document websites additionally mom borrowed $30 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['alert me to buy at lunch time', 'document websites', 'mom borrowed $30 from me']"
+notify important me about return in 30 minutes as well as make a save that addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind important me about return in 30 minutes', 'make a note that addresses']"
+could you remember to contact tonight and then note to wake up and then Emma borrowed $80 from me,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['could you remember to contact tonight', 'note to wake up', 'Emma borrowed $80 from me']"
+record shopping list also set important a remind urgenter to drink in an hour,create_note,multi_intent,"['create_note', 'create_reminder']","['record shopping list', 'set important a remind urgenter to drink in an hour']"
+save recipe ingredients also doctor borrowed $30 for utilities,create_note,multi_intent,"['create_note', 'create_ledger']","['save recipe ingredients', 'doctor owes $30 for utilities']"
+set a reminder to brush teeth tonight also spent $75 on internet,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set a reminder to brush teeth tonight', 'spent $75 on internet']"
+would you would you schedule complete for 9:15 AM and then keep track of addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['would you schedule complete for 9:15 AM', 'keep track of addresses']"
+can you remind me to visit at 8 AM moreover add to my notes addresses and would you spent $50 on dinner,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['can you remind me to visit at 8 AM', 'add to my notes addresses', 'would you spent $50 on dinner']"
+don't forget to unpack on Friday and then remember passwords,create_reminder,multi_intent,"['create_reminder', 'create_note']","[""don't forget to unpack on Friday"", 'remember passwords']"
+document phone numbers moreover don't forget to return this evening,create_note,multi_intent,"['create_note', 'create_reminder']","['document phone numbers', ""don't forget to return this evening""]"
+remind me about fetch next Tuesday moreover add to my notes contact information,create_reminder,multi_intent,"['create_reminder', 'create_note']","['remind me about fetch next Tuesday', 'add to my notes contact information']"
+can you create a write about contact information and also set important a reminder to start tonight,create_note,multi_intent,"['create_note', 'create_reminder']","['can you create a note about contact information', 'set important a reminder to start tonight']"
+don't forget to study on Friday moreover I lent $200 to Chris,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","[""don't forget to study on Friday"", 'I lent $200 to Chris']"
+can you I lent $15 to Sam as well as kindly remind important me about review tomorrow,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['I lent $15 to Sam', 'remind important me about review tomorrow']"
+would you client owes me $10 also could you alert me to drink next Tuesday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['would you client owes me $10', 'could you alert me to drink next Tuesday']"
+please remind me to workout at 1 PM plus keep track of movie suggestions then spent $75 on coffee,create_reminder,multi_intent,"['create_reminder', 'create_note', 'create_ledger']","['remind me to workout at 1 PM', 'keep track of movie suggestions', 'spent $75 on coffee']"
+can you reminder for check on Monday and also cost $45 for gas,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['reminder for check on Monday', 'cost $45 for gas']"
+please remind me about pay next Tuesday and teacher will pay me $150,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['please remind me about pay next Tuesday', 'teacher will pay me $150']"
+would you write down phone numbers then spent $15 on utilities,create_note,multi_intent,"['create_note', 'create_ledger']","['write down phone numbers', 'spent $15 on utilities']"
+alert me to finish on Friday besides paid $200 to Sam,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['alert me to finish on Friday', 'paid $200 to Sam']"
+please set a reminder to eat today also can you paid $80 to teacher,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set a reminder to eat today', 'can you paid $80 to teacher']"
+jot down contact information plus boss borrowed $10 from me,create_note,multi_intent,"['create_note', 'create_ledger']","['jot down contact information', 'boss borrowed $10 from me']"
+would you set alarm to pack at 5 PM besides would you cost $80 for lunch,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['would you set alarm to pack at 5 PM', 'would you cost $80 for lunch']"
+would you remind me to sleep at 6 PM moreover document addresses,create_reminder,multi_intent,"['create_reminder', 'create_note']","['would you remind me to sleep at 6 PM', 'document addresses']"
+kindly set urgent alarm to finish at 10 AM moreover I owe friend $120,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","['set urgent alarm to finish at 10 AM', 'I owe friend $120']"
+could you paid $120 to Mike plus can you remember to book on Friday,create_ledger,multi_intent,"['create_ledger', 'create_reminder']","['paid $120 to Mike', 'can you remember to book on Friday']"
+don't forget to drop off next Tuesday and could you I lent $15 to Tom,create_reminder,multi_intent,"['create_reminder', 'create_ledger']","[""don't forget to drop off next Tuesday"", 'could you I lent $15 to Tom']"

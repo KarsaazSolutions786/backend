@@ -1,0 +1,4142 @@
+[
+  {
+    "text":"remember to drop off today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set alarm to visit at noon",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set alarm to collect at 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you appointment to return on Monday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule collect for 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind important me to prepare at midnight",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule start for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you please remind me about contact next Tuesday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind me to kindly call at 9:15 AM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule clean for 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind urgent me about review this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for update today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"appointment to clean next Tuesday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you set alarm to update at 11:45 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind importanter for shower today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule submit for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to text at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you appointment to collect on Monday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule call for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"don't forget to practice next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule deliver for 10 AM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for pick up this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you set a reminder to book on Friday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to give next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for start at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"appointment to email at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set a reminder to exercise this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"please remind me about workout this morning",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to workout at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind me about modify later",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"don't forget to fetch this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to buy next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for arrive at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you jot down important documents",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you add to my notes vacation plans",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"add to my notes contact information",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember project ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"write down shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a note about research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you make a kindly note that websites",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you add to my notes meeting agenda",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you note that milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a note that important documents",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"record phone numbers",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to sleep",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you create a kindly note about shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"save milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember book recommendations",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a note about research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a note that recipe ingredients",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that vacation plans",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that gift ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"save groceries",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"jot down shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to workout",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"jot down gift ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to drop off",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a note about milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you add to my notes groceries",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a please note that passwords",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"keep track of milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $25 for coffee",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $45 from doctor for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"boss owes me $30",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I lent $15 to Jim",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $25 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"paid $100 to Alice",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"cost $15 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I owe Bob $50",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"colleague borrowed $200 from me",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"paid $25 to Jane",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Ryan will pay me $200",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah paid me $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $30 for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $15 for clothes",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Alex owes $150 for books",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you Mike owes me $45",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"spent $80 on utilities",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you Alex owes me $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah paid me $200",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah owes $45 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you expense of $45 for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you paid $75 to Joe",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $10 from Mike for gas",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"partner owes $10 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I owe Alex $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"John owes me $15",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $80 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I lent $15 to Ryan",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you roommate paid me $10",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"colleague paid me $50",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $45 from partner for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $100 for books",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"cost $75 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you nice to meet you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how's the weather",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"nice to meet you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what features do you have",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $200 from Mike for taxi plus also remember to text today",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "borrowed $200 from Mike for taxi",
+      "remember to text today"
+    ]
+  },
+  {
+    "text":"remember to review this weekend and then please note that meeting agenda additionally cost $10 for dinner",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to review this weekend",
+      "please note that meeting agenda",
+      "cost $10 for dinner"
+    ]
+  },
+  {
+    "text":"can you Bob owes me $25 also set urgent alarm to contact at 1 PM",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "Bob owes me $25",
+      "set alarm to contact at 1 PM"
+    ]
+  },
+  {
+    "text":"remember book recommendations besides set a please remind urgenter to contact this weekend",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "remember book recommendations",
+      "set a remind urgenter to contact this weekend"
+    ]
+  },
+  {
+    "text":"can you remind importanter for eat later and then Mary owes $100 for phone bill",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you remind importanter for eat later",
+      "Mary owes $100 for phone bill"
+    ]
+  },
+  {
+    "text":"spent $15 on concert tickets then set a reminder to clean later",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $15 on concert tickets",
+      "set a reminder to clean later"
+    ]
+  },
+  {
+    "text":"appointment to get on Friday besides could you jot down meeting agenda",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to get on Friday",
+      "could you jot down meeting agenda"
+    ]
+  },
+  {
+    "text":"remember to drink on Monday then borrowed $25 from friend for rent",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to drink on Monday",
+      "borrowed $25 from friend for rent"
+    ]
+  },
+  {
+    "text":"could you record movie suggestions moreover spent $100 on phone bill",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "record movie suggestions",
+      "spent $100 on phone bill"
+    ]
+  },
+  {
+    "text":"add to my notes groceries moreover cost $25 for clothes",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "add to my notes groceries",
+      "cost $25 for clothes"
+    ]
+  },
+  {
+    "text":"can you would you write down vacation plans additionally Jim paid me $80",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you write down vacation plans",
+      "Jim paid me $80"
+    ]
+  },
+  {
+    "text":"could you Sarah paid me $100 and also set a remind importanter to study next month",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "could you Sarah paid me $100",
+      "set a reminder to study next month"
+    ]
+  },
+  {
+    "text":"can you alert me to deliver tomorrow also write down milk and bread then John owes $120 for clothes",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to deliver tomorrow",
+      "write down milk and bread",
+      "John owes $120 for clothes"
+    ]
+  },
+  {
+    "text":"make a note that research notes and Sarah will pay me $50",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "make a note that research notes",
+      "Sarah will pay me $50"
+    ]
+  },
+  {
+    "text":"would you can you add to my notes research notes and then cost $10 for gas",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you add to my notes research notes",
+      "cost $10 for gas"
+    ]
+  },
+  {
+    "text":"don't forget to deliver this evening additionally would you make a note that passwords as well as Ryan paid me $45",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to deliver this evening",
+      "would you make a note that passwords",
+      "Ryan paid me $45"
+    ]
+  },
+  {
+    "text":"remember to drive next month and document recipe ingredients and then expense of $75 for books",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to drive next month",
+      "document recipe ingredients",
+      "expense of $75 for books"
+    ]
+  },
+  {
+    "text":"record research notes and then can you remember to confirm tonight",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "record research notes",
+      "can you remember to confirm tonight"
+    ]
+  },
+  {
+    "text":"can you create a please note about book recommendations plus borrowed $150 from boss for coffee",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "create a please note about book recommendations",
+      "borrowed $150 from boss for coffee"
+    ]
+  },
+  {
+    "text":"could you spent $75 on books plus appointment to travel next week",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "could you spent $75 on books",
+      "appointment to travel next week"
+    ]
+  },
+  {
+    "text":"jot down phone numbers plus can you spent $30 on internet",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "jot down phone numbers",
+      "can you spent $30 on internet"
+    ]
+  },
+  {
+    "text":"would you please set important alarm to drink at 3:30 AM also spent $50 on gas",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you please set important alarm to drink at 3:30 AM",
+      "spent $50 on gas"
+    ]
+  },
+  {
+    "text":"spent $15 on movie tickets besides reminder for schedule this morning",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $15 on movie tickets",
+      "reminder for schedule this morning"
+    ]
+  },
+  {
+    "text":"could you paid $10 to client furthermore don't forget to pack on Monday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "paid $10 to client",
+      "don't forget to pack on Monday"
+    ]
+  },
+  {
+    "text":"appointment to shower on Monday and would you jot down contact information",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to shower on Monday",
+      "would you jot down contact information"
+    ]
+  },
+  {
+    "text":"remind important me about call today as well as note that groceries",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind me about call today",
+      "note that groceries"
+    ]
+  },
+  {
+    "text":"remind urgenter for prepare on Friday and then remember groceries and I lent $80 to client",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind urgenter for prepare on Friday",
+      "remember groceries",
+      "I lent $80 to client"
+    ]
+  },
+  {
+    "text":"spent $200 on dinner then reminder for exercise this morning",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $200 on dinner",
+      "reminder for exercise this morning"
+    ]
+  },
+  {
+    "text":"appointment to get this evening plus note to study",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to get this evening",
+      "note to study"
+    ]
+  },
+  {
+    "text":"would you please note that book recommendations and then don't forget to send at lunch time",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "note that book recommendations",
+      "don't forget to send at lunch time"
+    ]
+  },
+  {
+    "text":"would you remember meeting agenda then expense of $200 for medicine",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you remember meeting agenda",
+      "expense of $200 for medicine"
+    ]
+  },
+  {
+    "text":"kindly set a reminder to collect in 30 minutes furthermore note that project ideas also Joe owes $150 for rent",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to collect in 30 minutes",
+      "note that project ideas",
+      "Joe owes $150 for rent"
+    ]
+  },
+  {
+    "text":"would you alert me to visit later additionally can you spent $120 on lunch",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you alert me to visit later",
+      "can you spent $120 on lunch"
+    ]
+  },
+  {
+    "text":"remind me about complete this evening also record contact information then borrowed $150 from mom for coffee",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind me about complete this evening",
+      "record contact information",
+      "borrowed $150 from mom for coffee"
+    ]
+  },
+  {
+    "text":"could you Alice will pay me $45 besides remember to commute next week",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "Alice will pay me $45",
+      "remember to commute next week"
+    ]
+  },
+  {
+    "text":"could you please note to fetch besides would you Amy owes me $75",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "could you please note to fetch",
+      "would you Amy owes me $75"
+    ]
+  },
+  {
+    "text":"remember to give next month and then could you Amy owes me $30",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to give next month",
+      "could you Amy owes me $30"
+    ]
+  },
+  {
+    "text":"don't forget to confirm later besides create a kindly note about gift ideas besides Ana borrowed $200 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to confirm later",
+      "create a note about gift ideas",
+      "Ana borrowed $200 from me"
+    ]
+  },
+  {
+    "text":"I lent $200 to Chris then set a reminder to modify at lunch time",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "I lent $200 to Chris",
+      "set a reminder to modify at lunch time"
+    ]
+  },
+  {
+    "text":"alert me to buy at lunch time and then document websites additionally mom borrowed $30 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to buy at lunch time",
+      "document websites",
+      "mom borrowed $30 from me"
+    ]
+  },
+  {
+    "text":"remind important me about return in 30 minutes as well as make a note that addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind important me about return in 30 minutes",
+      "make a note that addresses"
+    ]
+  },
+  {
+    "text":"could you remember to contact tonight and then note to wake up and then Emma borrowed $80 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "could you remember to contact tonight",
+      "note to wake up",
+      "Emma borrowed $80 from me"
+    ]
+  },
+  {
+    "text":"record shopping list also set important a remind urgenter to drink in an hour",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "record shopping list",
+      "set important a remind urgenter to drink in an hour"
+    ]
+  },
+  {
+    "text":"save recipe ingredients also doctor owes $30 for utilities",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "save recipe ingredients",
+      "doctor owes $30 for utilities"
+    ]
+  },
+  {
+    "text":"set a reminder to brush teeth tonight also spent $75 on internet",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to brush teeth tonight",
+      "spent $75 on internet"
+    ]
+  },
+  {
+    "text":"would you would you schedule complete for 9:15 AM and then keep track of addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "would you schedule complete for 9:15 AM",
+      "keep track of addresses"
+    ]
+  },
+  {
+    "text":"can you remind me to visit at 8 AM moreover add to my notes addresses and would you spent $50 on dinner",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you remind me to visit at 8 AM",
+      "add to my notes addresses",
+      "would you spent $50 on dinner"
+    ]
+  },
+  {
+    "text":"don't forget to unpack on Friday and then remember passwords",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "don't forget to unpack on Friday",
+      "remember passwords"
+    ]
+  },
+  {
+    "text":"document phone numbers moreover don't forget to return this evening",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "document phone numbers",
+      "don't forget to return this evening"
+    ]
+  },
+  {
+    "text":"remind me about fetch next Tuesday moreover add to my notes contact information",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind me about fetch next Tuesday",
+      "add to my notes contact information"
+    ]
+  },
+  {
+    "text":"can you create a note about contact information and also set important a reminder to start tonight",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "can you create a note about contact information",
+      "set important a reminder to start tonight"
+    ]
+  },
+  {
+    "text":"don't forget to study on Friday moreover I lent $200 to Chris",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to study on Friday",
+      "I lent $200 to Chris"
+    ]
+  },
+  {
+    "text":"can you I lent $15 to Sam as well as kindly remind important me about review tomorrow",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "I lent $15 to Sam",
+      "remind important me about review tomorrow"
+    ]
+  },
+  {
+    "text":"would you client owes me $10 also could you alert me to drink next Tuesday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "would you client owes me $10",
+      "could you alert me to drink next Tuesday"
+    ]
+  },
+  {
+    "text":"please remind me to workout at 1 PM plus keep track of movie suggestions then spent $75 on coffee",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind me to workout at 1 PM",
+      "keep track of movie suggestions",
+      "spent $75 on coffee"
+    ]
+  },
+  {
+    "text":"can you reminder for check on Monday and also cost $45 for gas",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "reminder for check on Monday",
+      "cost $45 for gas"
+    ]
+  },
+  {
+    "text":"please remind me about pay next Tuesday and teacher will pay me $150",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "please remind me about pay next Tuesday",
+      "teacher will pay me $150"
+    ]
+  },
+  {
+    "text":"would you write down phone numbers then spent $15 on utilities",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "write down phone numbers",
+      "spent $15 on utilities"
+    ]
+  },
+  {
+    "text":"alert me to finish on Friday besides paid $200 to Sam",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to finish on Friday",
+      "paid $200 to Sam"
+    ]
+  },
+  {
+    "text":"please set a reminder to eat today also can you paid $80 to teacher",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to eat today",
+      "can you paid $80 to teacher"
+    ]
+  },
+  {
+    "text":"jot down contact information plus boss borrowed $10 from me",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "jot down contact information",
+      "boss borrowed $10 from me"
+    ]
+  },
+  {
+    "text":"would you set alarm to pack at 5 PM besides would you cost $80 for lunch",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you set alarm to pack at 5 PM",
+      "would you cost $80 for lunch"
+    ]
+  },
+  {
+    "text":"would you remind me to sleep at 6 PM moreover document addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "would you remind me to sleep at 6 PM",
+      "document addresses"
+    ]
+  },
+  {
+    "text":"kindly set urgent alarm to finish at 10 AM moreover I owe friend $120",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set urgent alarm to finish at 10 AM",
+      "I owe friend $120"
+    ]
+  },
+  {
+    "text":"could you paid $120 to Mike plus can you remember to book on Friday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "paid $120 to Mike",
+      "can you remember to book on Friday"
+    ]
+  },
+  {
+    "text":"don't forget to drop off next Tuesday and could you I lent $15 to Tom",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to drop off next Tuesday",
+      "could you I lent $15 to Tom"
+    ]
+  },
+  {
+    "text":"remember to drop off today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set alarm to visit at noon",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set alarm to collect at 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you appointment to return on Monday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule collect for 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind important me to prepare at midnight",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule start for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you please remind me about contact next Tuesday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"warn me to kindly call at 9:15 AM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule clean for 4 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind urgent me about review this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for update today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"appointment to clean next Tuesday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you set alarm to update at 11:45 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"warn importanter for shower today",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule submit for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to text at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you appointment to collect on Monday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule reach for 7:30 PM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"don't forget to practice next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"schedule deliver for 10 AM",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for pick up this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you set a reminder to book on Friday",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to give next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for start at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"appointment to email at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"set a reminder to exercise this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"please remind me about workout this morning",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to workout at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remind me about modify later",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"don't forget to fetch this weekend",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"alert me to get next week",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"reminder for arrive at lunch time",
+    "intent":"create_reminder",
+    "type":"single_intent",
+    "intents":[
+      "create_reminder"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you jot down important documents",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you add to my notes vacation plans",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"add to my notes contact information",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember project ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"write down shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a note about research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you make a kindly note that websites",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you add to my notes meeting agenda",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you note that milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a record that important documents",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"record phone numbers",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to sleep",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you create a kindly note about shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"save milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember book recommendations",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a write about research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a note that recipe ingredients",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that vacation plans",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note that research notes",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"save that gift ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"save groceries",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"jot down shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to workout",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"jot down gift ideas",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"remember shopping list",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"note to drop off",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"create a note about milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you add to my notes groceries",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"make a please record that passwords",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"keep track of milk and bread",
+    "intent":"create_note",
+    "type":"single_intent",
+    "intents":[
+      "create_note"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $25 for coffee",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $45 from doctor for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"boss owes me $30",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I lent $15 to Jim",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $25 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"paid $100 to Alice",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"cost $15 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I owe Bob $50",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"colleague borrowed $200 from me",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"paid $25 to Jane",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Ryan will pay me $200",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah paid me $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $30 for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $15 for clothes",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Alex owes $150 for books",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you Mike owes me $45",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"spent $80 on utilities",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you Alex owes me $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah paid me $200",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"Sarah owes $45 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you expense of $45 for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you paid $75 to Joe",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $10 from Mike for gas",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"partner borrowed $10 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I owe Alex $150",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"John owes me $15",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $80 for phone bill",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"I lent $15 to Ryan",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you roommate paid me $10",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"colleague paid me $50",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $45 from partner for travel expenses",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"expense of $100 for books",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"cost $75 for lunch",
+    "intent":"create_ledger",
+    "type":"single_intent",
+    "intents":[
+      "create_ledger"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"can you nice to meet you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"help me please",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you thank you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"could you hello how are you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how's the weather",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"would you good morning",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"nice to visit you",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what can you help with",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"how does this work",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what features do you have",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"what time is it",
+    "intent":"chit_chat",
+    "type":"single_intent",
+    "intents":[
+      "chit_chat"
+    ],
+    "segments":null
+  },
+  {
+    "text":"borrowed $200 from Mike for taxi plus also remember to text today",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "borrowed $200 from Mike for taxi",
+      "remember to text today"
+    ]
+  },
+  {
+    "text":"remember to review this weekend and then please save that meeting agenda additionally cost $10 for dinner",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to review this weekend",
+      "please note that meeting agenda",
+      "cost $10 for dinner"
+    ]
+  },
+  {
+    "text":"can you Bob owes me $25 also set urgent alarm to contact at 1 PM",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "Bob owes me $25",
+      "set alarm to contact at 1 PM"
+    ]
+  },
+  {
+    "text":"remember book recommendations besides set a please remind urgenter to contact this weekend",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "remember book recommendations",
+      "set a remind urgenter to contact this weekend"
+    ]
+  },
+  {
+    "text":"can you warn importanter for eat later and then Mary owes $100 for phone bill",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you remind importanter for eat later",
+      "Mary owes $100 for phone bill"
+    ]
+  },
+  {
+    "text":"spent $15 on concert tickets then set a reminder to clean later",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $15 on concert tickets",
+      "set a reminder to clean later"
+    ]
+  },
+  {
+    "text":"appointment to get on Friday besides could you jot down meeting agenda",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to get on Friday",
+      "could you jot down meeting agenda"
+    ]
+  },
+  {
+    "text":"remember to drink on Monday then borrowed $25 from friend for rent",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to drink on Monday",
+      "borrowed $25 from friend for rent"
+    ]
+  },
+  {
+    "text":"could you record movie suggestions moreover spent $100 on phone bill",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "record movie suggestions",
+      "spent $100 on phone bill"
+    ]
+  },
+  {
+    "text":"add to my notes groceries moreover cost $25 for clothes",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "add to my notes groceries",
+      "cost $25 for clothes"
+    ]
+  },
+  {
+    "text":"can you would you write down vacation plans additionally Jim paid me $80",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you write down vacation plans",
+      "Jim paid me $80"
+    ]
+  },
+  {
+    "text":"could you Sarah paid me $100 and also set a remind importanter to study next month",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "could you Sarah paid me $100",
+      "set a reminder to study next month"
+    ]
+  },
+  {
+    "text":"can you alert me to deliver tomorrow also write down milk and bread then John borrowed $120 for clothes",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to deliver tomorrow",
+      "write down milk and bread",
+      "John owes $120 for clothes"
+    ]
+  },
+  {
+    "text":"make a note that research notes and Sarah will pay me $50",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "make a note that research notes",
+      "Sarah will pay me $50"
+    ]
+  },
+  {
+    "text":"would you can you add to my notes research notes and then cost $10 for gas",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you add to my notes research notes",
+      "cost $10 for gas"
+    ]
+  },
+  {
+    "text":"don't forget to deliver this evening additionally would you make a note that passwords as well as Ryan paid me $45",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to deliver this evening",
+      "would you make a note that passwords",
+      "Ryan paid me $45"
+    ]
+  },
+  {
+    "text":"remember to drive next month and document recipe ingredients and then expense of $75 for books",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to drive next month",
+      "document recipe ingredients",
+      "expense of $75 for books"
+    ]
+  },
+  {
+    "text":"record research notes and then can you remember to confirm tonight",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "record research notes",
+      "can you remember to confirm tonight"
+    ]
+  },
+  {
+    "text":"can you create a please note about book recommendations plus borrowed $150 from boss for coffee",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "create a please note about book recommendations",
+      "borrowed $150 from boss for coffee"
+    ]
+  },
+  {
+    "text":"could you spent $75 on books plus appointment to travel next week",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "could you spent $75 on books",
+      "appointment to travel next week"
+    ]
+  },
+  {
+    "text":"jot down phone numbers plus can you spent $30 on internet",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "jot down phone numbers",
+      "can you spent $30 on internet"
+    ]
+  },
+  {
+    "text":"would you please set important alarm to drink at 3:30 AM also spent $50 on gas",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you please set important alarm to drink at 3:30 AM",
+      "spent $50 on gas"
+    ]
+  },
+  {
+    "text":"spent $15 on movie tickets besides reminder for schedule this morning",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $15 on movie tickets",
+      "reminder for schedule this morning"
+    ]
+  },
+  {
+    "text":"could you paid $10 to client furthermore don't forget to pack on Monday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "paid $10 to client",
+      "don't forget to pack on Monday"
+    ]
+  },
+  {
+    "text":"appointment to shower on Monday and would you jot down contact information",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to shower on Monday",
+      "would you jot down contact information"
+    ]
+  },
+  {
+    "text":"remind important me about call today as well as note that groceries",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind me about call today",
+      "note that groceries"
+    ]
+  },
+  {
+    "text":"warn urgenter for prepare on Friday and then remember groceries and I lent $80 to client",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind urgenter for prepare on Friday",
+      "remember groceries",
+      "I lent $80 to client"
+    ]
+  },
+  {
+    "text":"spent $200 on dinner then reminder for exercise this morning",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "spent $200 on dinner",
+      "reminder for exercise this morning"
+    ]
+  },
+  {
+    "text":"appointment to get this evening plus note to study",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "appointment to get this evening",
+      "note to study"
+    ]
+  },
+  {
+    "text":"would you please note that book recommendations and then don't forget to send at lunch time",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "note that book recommendations",
+      "don't forget to send at lunch time"
+    ]
+  },
+  {
+    "text":"would you remember meeting agenda then expense of $200 for medicine",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you remember meeting agenda",
+      "expense of $200 for medicine"
+    ]
+  },
+  {
+    "text":"kindly set a reminder to collect in 30 minutes furthermore note that project ideas also Joe owes $150 for rent",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to collect in 30 minutes",
+      "note that project ideas",
+      "Joe owes $150 for rent"
+    ]
+  },
+  {
+    "text":"would you alert me to visit later additionally can you spent $120 on lunch",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you alert me to visit later",
+      "can you spent $120 on lunch"
+    ]
+  },
+  {
+    "text":"alert me about complete this evening also record contact information then borrowed $150 from mom for coffee",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind me about complete this evening",
+      "record contact information",
+      "borrowed $150 from mom for coffee"
+    ]
+  },
+  {
+    "text":"could you Alice will pay me $45 besides remember to commute next week",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "Alice will pay me $45",
+      "remember to commute next week"
+    ]
+  },
+  {
+    "text":"could you please jot to fetch besides would you Amy should pay me $75",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "could you please note to fetch",
+      "would you Amy owes me $75"
+    ]
+  },
+  {
+    "text":"remember to give next month and then could you Amy owes me $30",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "remember to give next month",
+      "could you Amy owes me $30"
+    ]
+  },
+  {
+    "text":"don't forget to confirm later besides create a kindly record about gift ideas besides Ana borrowed $200 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to confirm later",
+      "create a note about gift ideas",
+      "Ana borrowed $200 from me"
+    ]
+  },
+  {
+    "text":"I lent $200 to Chris then set a reminder to modify at lunch time",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "I lent $200 to Chris",
+      "set a reminder to modify at lunch time"
+    ]
+  },
+  {
+    "text":"alert me to acquire at lunch time and then document websites additionally mom borrowed $30 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to buy at lunch time",
+      "document websites",
+      "mom borrowed $30 from me"
+    ]
+  },
+  {
+    "text":"notify important me about return in 30 minutes as well as make a save that addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind important me about return in 30 minutes",
+      "make a note that addresses"
+    ]
+  },
+  {
+    "text":"could you remember to contact tonight and then note to wake up and then Emma borrowed $80 from me",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "could you remember to contact tonight",
+      "note to wake up",
+      "Emma borrowed $80 from me"
+    ]
+  },
+  {
+    "text":"record shopping list also set important a remind urgenter to drink in an hour",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "record shopping list",
+      "set important a remind urgenter to drink in an hour"
+    ]
+  },
+  {
+    "text":"save recipe ingredients also doctor borrowed $30 for utilities",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "save recipe ingredients",
+      "doctor owes $30 for utilities"
+    ]
+  },
+  {
+    "text":"set a reminder to brush teeth tonight also spent $75 on internet",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to brush teeth tonight",
+      "spent $75 on internet"
+    ]
+  },
+  {
+    "text":"would you would you schedule complete for 9:15 AM and then keep track of addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "would you schedule complete for 9:15 AM",
+      "keep track of addresses"
+    ]
+  },
+  {
+    "text":"can you remind me to visit at 8 AM moreover add to my notes addresses and would you spent $50 on dinner",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "can you remind me to visit at 8 AM",
+      "add to my notes addresses",
+      "would you spent $50 on dinner"
+    ]
+  },
+  {
+    "text":"don't forget to unpack on Friday and then remember passwords",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "don't forget to unpack on Friday",
+      "remember passwords"
+    ]
+  },
+  {
+    "text":"document phone numbers moreover don't forget to return this evening",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "document phone numbers",
+      "don't forget to return this evening"
+    ]
+  },
+  {
+    "text":"remind me about fetch next Tuesday moreover add to my notes contact information",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "remind me about fetch next Tuesday",
+      "add to my notes contact information"
+    ]
+  },
+  {
+    "text":"can you create a write about contact information and also set important a reminder to start tonight",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_reminder"
+    ],
+    "segments":[
+      "can you create a note about contact information",
+      "set important a reminder to start tonight"
+    ]
+  },
+  {
+    "text":"don't forget to study on Friday moreover I lent $200 to Chris",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to study on Friday",
+      "I lent $200 to Chris"
+    ]
+  },
+  {
+    "text":"can you I lent $15 to Sam as well as kindly remind important me about review tomorrow",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "I lent $15 to Sam",
+      "remind important me about review tomorrow"
+    ]
+  },
+  {
+    "text":"would you client owes me $10 also could you alert me to drink next Tuesday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "would you client owes me $10",
+      "could you alert me to drink next Tuesday"
+    ]
+  },
+  {
+    "text":"please remind me to workout at 1 PM plus keep track of movie suggestions then spent $75 on coffee",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "remind me to workout at 1 PM",
+      "keep track of movie suggestions",
+      "spent $75 on coffee"
+    ]
+  },
+  {
+    "text":"can you reminder for check on Monday and also cost $45 for gas",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "reminder for check on Monday",
+      "cost $45 for gas"
+    ]
+  },
+  {
+    "text":"please remind me about pay next Tuesday and teacher will pay me $150",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "please remind me about pay next Tuesday",
+      "teacher will pay me $150"
+    ]
+  },
+  {
+    "text":"would you write down phone numbers then spent $15 on utilities",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "write down phone numbers",
+      "spent $15 on utilities"
+    ]
+  },
+  {
+    "text":"alert me to finish on Friday besides paid $200 to Sam",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "alert me to finish on Friday",
+      "paid $200 to Sam"
+    ]
+  },
+  {
+    "text":"please set a reminder to eat today also can you paid $80 to teacher",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set a reminder to eat today",
+      "can you paid $80 to teacher"
+    ]
+  },
+  {
+    "text":"jot down contact information plus boss borrowed $10 from me",
+    "intent":"create_note",
+    "type":"multi_intent",
+    "intents":[
+      "create_note",
+      "create_ledger"
+    ],
+    "segments":[
+      "jot down contact information",
+      "boss borrowed $10 from me"
+    ]
+  },
+  {
+    "text":"would you set alarm to pack at 5 PM besides would you cost $80 for lunch",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "would you set alarm to pack at 5 PM",
+      "would you cost $80 for lunch"
+    ]
+  },
+  {
+    "text":"would you remind me to sleep at 6 PM moreover document addresses",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_note"
+    ],
+    "segments":[
+      "would you remind me to sleep at 6 PM",
+      "document addresses"
+    ]
+  },
+  {
+    "text":"kindly set urgent alarm to finish at 10 AM moreover I owe friend $120",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "set urgent alarm to finish at 10 AM",
+      "I owe friend $120"
+    ]
+  },
+  {
+    "text":"could you paid $120 to Mike plus can you remember to book on Friday",
+    "intent":"create_ledger",
+    "type":"multi_intent",
+    "intents":[
+      "create_ledger",
+      "create_reminder"
+    ],
+    "segments":[
+      "paid $120 to Mike",
+      "can you remember to book on Friday"
+    ]
+  },
+  {
+    "text":"don't forget to drop off next Tuesday and could you I lent $15 to Tom",
+    "intent":"create_reminder",
+    "type":"multi_intent",
+    "intents":[
+      "create_reminder",
+      "create_ledger"
+    ],
+    "segments":[
+      "don't forget to drop off next Tuesday",
+      "could you I lent $15 to Tom"
+    ]
+  }
+]
