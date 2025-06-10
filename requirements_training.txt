@@ -1,0 +1,34 @@
+# Training dependencies for multi-intent classification model
+# Install with: pip install -r requirements_training.txt
+
+# Core ML libraries
+torch>=1.11.0
+transformers>=4.21.0
+scikit-learn>=1.1.0
+
+# Data processing
+pandas>=1.4.0
+numpy>=1.21.0
+
+# Model evaluation and metrics
+accelerate>=0.20.0
+
+# Optional: For faster training on GPU
+# torchaudio>=0.11.0  # Uncomment if using audio features
+# torchvision>=0.12.0  # Uncomment if using vision features
+
+# Progress tracking
+tqdm>=4.64.0
+
+# For better tokenization
+sentencepiece>=0.1.96
+
+# Dataset handling
+datasets>=2.0.0
+
+# Weights & Biases for experiment tracking (optional)
+# wandb>=0.13.0  # Uncomment for experiment tracking
+
+# Jupyter for interactive development (optional)
+# jupyter>=1.0.0  # Uncomment for notebook development
+# ipywidgets>=7.6.0  # Uncomment for notebook widgets 

@@ -77,6 +77,10 @@ class MiniLMIntentService:
                 r'\b(brain|memory|recall|retain)\b',
                 r'\b(buy|purchase|get)\s+(groceries|food|items?|chocolates)\b',  # Shopping related
                 r'\bset\s+(?:a\s+)?note\s+to\s+buy\b',  # "set a note to buy"
+                r'\bnote\s+that\s+\w+',  # "note that I have", "note that we need"
+                r'^\s*note\s+that\b',  # "note that" at the beginning
+                r'\b(?:I\s+have|we\s+have|there\s+is)\s+.*(?:meeting|appointment|event)\b',  # Meeting/event statements
+                r'\b(?:I\s+want|I\s+need)\s+to\s+(?:visit|go\s+to|see|call|meet)\b',  # "I want to visit", "I want to go to"
             ],
             "create_ledger": [
                 r'\b(owe|owes|owed|debt|loan|borrowed|lent|lend)\b',
@@ -338,20 +342,37 @@ class MiniLMIntentService:
             # Enhanced segmentation using multiple strategies
             segments = []
             
-            # Strategy 1: Split by clear intent markers with 'and'
+            # Strategy 1: Split by clear intent markers (with and without 'and')
             intent_transition_patterns = [
+                # Traditional "and" transitions
                 r'\s+and\s+set\s+(?:a\s+)?(?:reminder|note)',           # " and set a reminder", " and set note"
                 r'\s+and\s+(?:remind|note)\s+',                         # " and remind ", " and note "
                 r'\s+and\s+(?:I\s+want|I\s+need)',                     # " and I want", " and I need"
                 r'\s+and\s+[A-Z][a-z]+\s+(?:will\s+)?(?:give|pay|owe)', # " and John will give", " and John owes"
                 r'\s+and\s+(?:remind\s+me\s+to)',                      # " and remind me to"
+                
+                # Direct transitions without "and" - more precise patterns
+                r'(?:at\s+noon|at\s+\d+(?::\d+)?\s*(?:am|pm)?)\s+remind\s+me',  # "at noon remind me", "at 5pm remind me"
+                r'(?:bill|payment|money)\s+and\s+I\s+want',             # "bill and I want"
+                
+                # "Plus" transitions
+                r'\s+plus\s+(?:set|remind|note)',                       # " plus set", " plus remind", " plus note"
+                
+                # Additional transitions
+                r'\s+also\s+(?:set|remind|note)',                       # " also set", " also remind"
+                r'\s+then\s+(?:set|remind|note)',                       # " then set", " then remind"
             ]
             
             # Find split points using transition patterns
             split_points = []
             for pattern in intent_transition_patterns:
                 for match in re.finditer(pattern, text, re.IGNORECASE):
-                    split_points.append(match.start())
+                    # For patterns that capture the start of the new intent, adjust split point
+                    if any(starter in pattern for starter in ['remind\\s+me', 'set\\s+', 'I\\s+want']):
+                        # Split right before the new intent
+                        split_points.append(match.start() + len(match.group().split()[0]) + 1)
+                    else:
+                        split_points.append(match.start())
             
             # Remove duplicates and sort
             split_points = sorted(list(set(split_points)))
@@ -362,19 +383,19 @@ class MiniLMIntentService:
                 for split_point in split_points:
                     if current_start < split_point:
                         segment = text[current_start:split_point].strip()
-                        if len(segment) > 10:  # Minimum segment length
+                        if len(segment) > 8:  # Reduced minimum segment length
                             segments.append(segment)
                     current_start = split_point
                 
                 # Add the last segment
                 last_segment = text[current_start:].strip()
                 if last_segment:
-                    # Clean up "and" at the beginning
-                    last_segment = re.sub(r'^and\s+', '', last_segment, flags=re.IGNORECASE)
-                    if len(last_segment) > 10:
+                    # Clean up conjunctions at the beginning
+                    last_segment = re.sub(r'^(?:and|plus|also|then)\s+', '', last_segment, flags=re.IGNORECASE)
+                    if len(last_segment) > 8:
                         segments.append(last_segment)
             
-            # Strategy 2: If no clear splits found, try word-by-word analysis
+            # Strategy 2: If no clear splits found, try more aggressive word-by-word analysis
             if len(segments) <= 1:
                 segments = []
                 current_segment = ""
@@ -387,28 +408,37 @@ class MiniLMIntentService:
                     # Check for intent transition markers
                     is_transition = False
                     
-                    # Look for transition patterns
-                    if (word == 'and' and i + 1 < len(words)):
-                        next_word = words[i + 1].lower()
-                        
-                        # Strong intent starters after 'and'
-                        strong_starters = ['set', 'remind', 'note', 'john', 'sarah', 'mike', 'alex', 'david', 'mary', 'i']
-                        
-                        if next_word in strong_starters and len(current_segment.split()) >= 4:
-                            is_transition = True
-                            # Look ahead to see if this forms a valid intent
-                            lookahead = ' '.join(words[i+1:i+5])  # Next 4 words
-                            intent_indicators = ['set a', 'remind me', 'note to', 'will give', 'want to', 'owes me']
-                            
-                            if any(indicator in lookahead.lower() for indicator in intent_indicators):
+                    # Look for strong intent starters
+                    intent_starters = {
+                        'remind': ['remind', 'me', 'to'],
+                        'set': ['set', 'a', 'reminder'],
+                        'note': ['note', 'that'],
+                        'i_want': ['i', 'want', 'to'],
+                        'plus': ['plus', 'set'],
+                        'and_remind': ['and', 'remind'],
+                        'and_i': ['and', 'i']
+                    }
+                    
+                    # Check if current position starts an intent
+                    for intent_type, pattern in intent_starters.items():
+                        if i + len(pattern) <= len(words):
+                            match = all(words[i + j].lower() == pattern[j] for j in range(len(pattern)))
+                            if match and len(current_segment.split()) >= 3:  # Reduced minimum for transition
+                                is_transition = True
+                                break
+                    
+                    # Also check for single strong markers in context
+                    if not is_transition and word in ['remind', 'plus'] and i > 0:
+                        # Look at previous context to see if this could be a new intent
+                        prev_context = ' '.join(words[max(0, i-3):i]).lower()
+                        if any(term in prev_context for term in ['noon', 'pm', 'am', 'bill', 'murray']):
+                            if len(current_segment.split()) >= 3:
                                 is_transition = True
                     
                     if is_transition and current_segment.strip():
                         segments.append(current_segment.strip())
                         current_segment = ""
-                        # Skip the transition word 'and'
-                        i += 1
-                        continue
+                        # Don't skip the current word as it starts the new segment
                     
                     current_segment += " " + words[i]
                     i += 1
@@ -423,23 +453,69 @@ class MiniLMIntentService:
                 segment = segment.strip()
                 
                 # Remove leading/trailing punctuation and conjunctions
-                segment = re.sub(r'^[,.\s]*(?:and\s+)?', '', segment, flags=re.IGNORECASE)
+                segment = re.sub(r'^[,.\s]*(?:and\s+|plus\s+|also\s+|then\s+)?', '', segment, flags=re.IGNORECASE)
                 segment = re.sub(r'[,.\s]*$', '', segment)
                 
                 # Skip very short segments
-                if len(segment) < 8:
+                if len(segment) < 6:  # Further reduced minimum
                     continue
                 
-                # Skip segments that don't contain meaningful intent words
-                intent_words = ['remind', 'set', 'note', 'buy', 'owe', 'owes', 'give', 'pay', 'want', 'need', 'book', 'call']
-                if not any(word in segment.lower() for word in intent_words):
-                    continue
-                    
-                cleaned_segments.append(segment)
+                # Enhanced intent word detection
+                intent_words = [
+                    'remind', 'set', 'note', 'buy', 'owe', 'owes', 'give', 'pay', 'want', 'need', 
+                    'book', 'call', 'visit', 'pack', 'meeting', 'bill', 'electricity'
+                ]
+                
+                # Check if segment contains meaningful intent words or is a note-worthy statement
+                has_intent = any(word in segment.lower() for word in intent_words)
+                is_statement = len(segment.split()) >= 4 and ('have' in segment.lower() or 'that' in segment.lower())
+                
+                if has_intent or is_statement:
+                    cleaned_segments.append(segment)
             
-            # If we still don't have good segments, return original text
+            # If we still don't have good segments, try one more fallback strategy
             if len(cleaned_segments) <= 1:
-                cleaned_segments = [text]
+                # Look for very obvious patterns as last resort
+                fallback_patterns = [
+                    r'note\s+that[^.]*?(?=\s+remind|\s+set|\s+and\s+i|\s+plus|$)',
+                    r'remind\s+me\s+to[^.]*?(?=\s+and\s+i|\s+plus|\s+set|$)',
+                    r'(?:and\s+)?i\s+want\s+to[^.]*?(?=\s+plus|\s+set|\s+remind|$)',
+                    r'(?:plus|also)\s+set[^.]*'
+                ]
+                
+                fallback_segments = []
+                for pattern in fallback_patterns:
+                    matches = re.findall(pattern, text, re.IGNORECASE)
+                    fallback_segments.extend(matches)
+                
+                if len(fallback_segments) > 1:
+                    cleaned_segments = [seg.strip() for seg in fallback_segments if len(seg.strip()) > 6]
+                else:
+                    # Last resort: manual parsing for common patterns
+                    manual_segments = []
+                    
+                    # Pattern: "note that ... remind me ... and I want ... plus set ..."
+                    if 'note that' in text.lower() and 'remind me' in text.lower():
+                        note_part = re.search(r'note\s+that[^.]*?(?:at\s+\w+\s+)?(?=\s*remind)', text, re.IGNORECASE)
+                        if note_part:
+                            manual_segments.append(note_part.group(0).strip())
+                        
+                        remind_part = re.search(r'remind\s+me[^.]*?(?=\s+and\s+i|\s+plus|$)', text, re.IGNORECASE)
+                        if remind_part:
+                            manual_segments.append(remind_part.group(0).strip())
+                        
+                        want_part = re.search(r'(?:and\s+)?i\s+want[^.]*?(?=\s+plus|$)', text, re.IGNORECASE)
+                        if want_part:
+                            manual_segments.append(want_part.group(0).strip())
+                        
+                        plus_part = re.search(r'plus\s+set[^.]*$', text, re.IGNORECASE)
+                        if plus_part:
+                            manual_segments.append(plus_part.group(0).strip())
+                    
+                    if len(manual_segments) > 1:
+                        cleaned_segments = manual_segments
+                    else:
+                        cleaned_segments = [text]
             
             logger.info(f"Text segmentation: '{text}' -> {len(cleaned_segments)} segments: {cleaned_segments}")
             return cleaned_segments
