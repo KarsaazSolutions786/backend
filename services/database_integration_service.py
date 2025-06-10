@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import json
 import re
+import os
 
 # Import logger first
 from utils.logger import logger
@@ -218,15 +219,124 @@ class DatabaseIntegrationService:
             logger.error(f"Error preparing database record: {e}")
             return None
     
+    def _generate_reminder_title(self, text: str, entities: Dict[str, Any]) -> str:
+        """Generate a concise title for the reminder based on text content and entities."""
+        try:
+            # Clean the text
+            clean_text = text.strip('"').lower()
+            
+            # Remove common reminder prefixes to get to the core action
+            prefixes_to_remove = [
+                r'^set\s+(?:a\s+)?reminder\s+to\s+',
+                r'^remind\s+me\s+to\s+',
+                r'^create\s+(?:a\s+)?reminder\s+to\s+',
+                r'^make\s+(?:a\s+)?reminder\s+to\s+',
+                r'^add\s+(?:a\s+)?reminder\s+to\s+'
+            ]
+            
+            for prefix in prefixes_to_remove:
+                clean_text = re.sub(prefix, '', clean_text, flags=re.IGNORECASE).strip()
+            
+            # Remove time information to focus on action only
+            time_patterns = [
+                r'\s+at\s+\d+(?::\d+)?\s*(?:am|pm|a\.m\.|p\.m\.)?.*$',  # " at 7 00 p.m"
+                r'\s+on\s+\w+.*$',                                      # " on Monday"
+                r'\s+tomorrow.*$',                                      # " tomorrow"
+                r'\s+today.*$',                                         # " today"
+                r'\s+tonight.*$',                                       # " tonight"
+                r'\s+in\s+\d+.*$'                                       # " in 5 minutes"
+            ]
+            
+            for pattern in time_patterns:
+                clean_text = re.sub(pattern, '', clean_text, flags=re.IGNORECASE).strip()
+            
+            # Extract person from entities if available
+            person = None
+            if entities.get("person"):
+                if isinstance(entities["person"], list) and entities["person"]:
+                    person = entities["person"][0]
+                elif isinstance(entities["person"], str):
+                    person = entities["person"]
+            
+            # Extract key action words and create title
+            action_words = ['call', 'meet', 'contact', 'email', 'text', 'visit', 'pick up', 'buy', 'do', 'go', 'book', 'schedule']
+            
+            for action in action_words:
+                if action in clean_text:
+                    if person:
+                        return f"{action.capitalize()} {person}"
+                    else:
+                        # Extract the object after the action
+                        parts = clean_text.split(action, 1)
+                        if len(parts) > 1:
+                            # Get the meaningful part after the action
+                            remaining = parts[1].strip()
+                            # Remove common words and extract core object
+                            remaining = re.sub(r'^(?:to\s+|the\s+|a\s+|an\s+)', '', remaining)
+                            obj_words = remaining.split()[:2]  # Take first 2 words for brevity
+                            if obj_words:
+                                obj = ' '.join(obj_words)
+                                return f"{action.capitalize()} {obj}".strip()
+                        return action.capitalize()
+            
+            # Handle specific common patterns
+            if 'go' in clean_text:
+                # Extract destination (remove time/location extras)
+                go_match = re.search(r'go\s+(?:to\s+)?(\w+)', clean_text)
+                if go_match:
+                    destination = go_match.group(1).capitalize()
+                    return f"Go to {destination}"
+                return "Go somewhere"
+            
+            if 'book' in clean_text:
+                # Extract what to book
+                book_match = re.search(r'book\s+(?:a\s+)?(\w+)', clean_text)
+                if book_match:
+                    item = book_match.group(1).capitalize()
+                    return f"Book {item}"
+                return "Book something"
+            
+            # If person found but no specific action, create generic reminder
+            if person:
+                return f"Reminder about {person}"
+            
+            # Use first few meaningful words as title, removing common filler words
+            words = clean_text.split()
+            meaningful_words = []
+            filler_words = {'the', 'a', 'an', 'to', 'for', 'of', 'in', 'on', 'at', 'by', 'with', 'and', 'or'}
+            
+            for word in words[:4]:  # Check first 4 words
+                if word not in filler_words and len(word) > 2:
+                    meaningful_words.append(word)
+                if len(meaningful_words) >= 2:  # Stop after 2 meaningful words for brevity
+                    break
+            
+            if meaningful_words:
+                return ' '.join(meaningful_words).capitalize()
+            
+            # Final fallback
+            return "Reminder"
+            
+        except Exception as e:
+            logger.error(f"Error generating reminder title: {e}")
+            return "Reminder"
+    
     async def _prepare_reminder_record(self, 
                                      entities: Dict[str, Any], 
                                      result: Dict[str, Any], 
                                      user_id: str) -> Dict[str, Any]:
         """Prepare reminder record for database."""
+        
+        # Get the segment text if available (for multi-intent), otherwise use original text
+        segment_text = result.get("segment", result.get("original_text", ""))
+        
+        # Generate a clean title using the segment text
+        title = self._generate_reminder_title(segment_text, entities)
+        
         data = {
             "id": str(uuid.uuid4()),  # Generate UUID
             "user_id": user_id,
-            "title": result["original_text"],
+            "title": title,
             "created_at": datetime.now()
         }
         
@@ -239,8 +349,8 @@ class DatabaseIntegrationService:
             if parsed_time:
                 data["time"] = parsed_time
         
-        # Store only the original text in description, not the metadata
-        data["description"] = result["original_text"]
+        # Store the segment text as description (clean text without full transcription)
+        data["description"] = segment_text
         
         return {
             "table": "reminders",
