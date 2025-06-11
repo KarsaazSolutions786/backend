@@ -8,6 +8,7 @@ uvicorn[standard]==0.24.0
 # Pydantic for data validation
 pydantic==2.5.0
 pydantic-settings==2.1.0
+email-validator==2.1.0
 
 # Database
 sqlalchemy==2.0.23
@@ -29,9 +30,21 @@ python-dotenv==1.0.0
 
 # Basic audio processing (minimal)
 numpy==1.24.4
+scipy==1.11.4
+librosa==0.10.1
+soundfile==0.12.1
+SpeechRecognition==3.10.0
+
+# Text-to-Speech (minimal)
+pyttsx3
+gTTS
 
 # Utilities
 APScheduler==3.10.4
 
 # Firebase auth
-firebase-admin==6.2.0 
+firebase-admin==6.2.0
+
+# Additional dependencies that may be needed
+python-decouple==3.8
+asyncpg==0.29.0 

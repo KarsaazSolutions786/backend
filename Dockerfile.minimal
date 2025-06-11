@@ -35,6 +35,7 @@ COPY main.py ./
 COPY core/ ./core/
 COPY models/ ./models/
 COPY api/ ./api/
+COPY services/ ./services/
 COPY connect_db.py ./
 COPY firebase_auth.py ./
 COPY utils/ ./utils/
