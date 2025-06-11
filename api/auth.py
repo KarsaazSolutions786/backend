@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, Field, validator
 from typing import Optional
 from datetime import timedelta, datetime
 from sqlalchemy.orm import Session
@@ -12,31 +12,53 @@ import uuid
 import hashlib
 import secrets
 import jwt
+import re
 
 router = APIRouter()
 
-# Pydantic models
+# Email validation regex
+EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+
+# Pydantic models with simplified validation
 class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    language: Optional[str] = "en"
-    timezone: Optional[str] = "UTC"
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., min_length=6, description="User password")
+    language: Optional[str] = Field(default="en", description="User language preference")
+    timezone: Optional[str] = Field(default="UTC", description="User timezone")
+
+    @validator('email')
+    def validate_email(cls, v):
+        if not EMAIL_REGEX.match(v):
+            raise ValueError('Invalid email address')
+        return v.lower()
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="User password")
+
+    @validator('email')
+    def validate_email(cls, v):
+        if not EMAIL_REGEX.match(v):
+            raise ValueError('Invalid email address')
+        return v.lower()
 
 class FirebaseUserCreate(BaseModel):
-    email: EmailStr
-    language: Optional[str] = None
-    timezone: Optional[str] = None
+    email: str = Field(..., description="User email address")
+    language: Optional[str] = Field(default=None, description="User language preference")
+    timezone: Optional[str] = Field(default=None, description="User timezone")
+
+    @validator('email')
+    def validate_email(cls, v):
+        if not EMAIL_REGEX.match(v):
+            raise ValueError('Invalid email address')
+        return v.lower()
 
 class UserPreferencesCreate(BaseModel):
-    allow_friends: Optional[bool] = True
-    receive_shared_notes: Optional[bool] = True
-    notification_sound: Optional[str] = "default"
-    tts_language: Optional[str] = "en"
-    chat_history_enabled: Optional[bool] = True
+    allow_friends: Optional[bool] = Field(default=True, description="Allow friends to connect")
+    receive_shared_notes: Optional[bool] = Field(default=True, description="Receive shared notes from friends")
+    notification_sound: Optional[str] = Field(default="default", description="Notification sound preference")
+    tts_language: Optional[str] = Field(default="en", description="Text-to-speech language")
+    chat_history_enabled: Optional[bool] = Field(default=True, description="Enable chat history storage")
 
 class UserResponse(BaseModel):
     id: str

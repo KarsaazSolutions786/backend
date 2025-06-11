@@ -16,8 +16,8 @@ import json
 import torch
 from transformers import (
     AutoTokenizer, 
-    AutoModelForCausalLM, 
-    TrainingArguments, 
+    AutoModelForCausalLM,
+    TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling
 )
@@ -79,18 +79,18 @@ class BloomChatFineTuner:
         # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
             "bigscience/bloom-560m",
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
-        
-        # Load custom weights if available
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        device_map="auto" if torch.cuda.is_available() else None,
+    )
+    
+    # Load custom weights if available
         if os.path.exists(self.base_model_path):
             logger.info(f"Loading custom weights from {self.base_model_path}")
-            try:
+        try:
                 custom_weights = torch.load(self.base_model_path, map_location='cpu')
                 self.model.load_state_dict(custom_weights, strict=False)
-                logger.info("Custom weights loaded successfully")
-            except Exception as e:
+            logger.info("Custom weights loaded successfully")
+        except Exception as e:
                 logger.warning(f"Could not load custom weights: {e}, using base model")
         
         logger.info("Base model loaded successfully")
