@@ -7,14 +7,19 @@ FROM python:3.11-slim as builder
 # Set working directory
 WORKDIR /app
 
+# Build argument for minimal mode
+ARG MINIMAL_MODE=false
+ENV MINIMAL_MODE=${MINIMAL_MODE}
+
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libpq-dev \
-    libsndfile1-dev \
-    libffi-dev \
-    pkg-config \
+    curl \
     git \
+    libpq-dev \
+    pkg-config \
+    libsndfile1-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
@@ -90,119 +95,115 @@ RUN mkdir -p logs uploads scripts && \
     chmod -R 777 logs uploads
 
 # Create startup script for handling both minimal and full modes
-RUN cat > /app/start_server.sh << 'EOF'
-#!/bin/bash
-set -e
-
-echo "Starting Eindr Backend..."
-echo "MINIMAL_MODE: ${MINIMAL_MODE:-false}"
-echo "PORT: ${PORT:-8000}"
-
-# Function to start main FastAPI server
-start_main_server() {
-    echo "Starting main FastAPI server on port ${PORT}..."
-    exec python -m uvicorn main:app \
-        --host 0.0.0.0 \
-        --port ${PORT} \
-        --timeout-keep-alive 30 \
-        --workers 1 \
-        --limit-concurrency 100 \
-        --limit-max-requests 1000
-}
-
-# Function to start vLLM server for Bloom-560M
-start_vllm_server() {
-    if [ -f "./models/Bloom560m.bin" ]; then
-        echo "Starting vLLM server for Bloom-560M on port ${VLLM_SERVER_PORT}..."
-        python -m vllm.entrypoints.openai.api_server \
-            --model ./models/Bloom560m.bin \
-            --host 0.0.0.0 \
-            --port ${VLLM_SERVER_PORT} \
-            --max-model-len ${VLLM_MAX_MODEL_LEN:-2048} \
-            --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.8} \
-            --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1} \
-            --disable-log-requests \
-            --served-model-name bigscience/bloom-560m &
-        
-        VLLM_PID=$!
-        echo "vLLM server started with PID: $VLLM_PID"
-        
-        # Wait for vLLM to be ready
-        echo "Waiting for vLLM server to be ready..."
-        for i in {1..30}; do
-            if curl -s http://localhost:${VLLM_SERVER_PORT}/health > /dev/null 2>&1; then
-                echo "✅ vLLM server is ready!"
-                break
-            fi
-            echo "Waiting for vLLM server... ($i/30)"
-            sleep 5
-        done
-        
-        # Store PID for cleanup
-        echo $VLLM_PID > /tmp/vllm.pid
-    else
-        echo "⚠️  Bloom560m.bin not found, skipping vLLM server"
-    fi
-}
-
-# Function to cleanup on exit
-cleanup() {
-    echo "Cleaning up..."
-    if [ -f /tmp/vllm.pid ]; then
-        VLLM_PID=$(cat /tmp/vllm.pid)
-        if kill -0 $VLLM_PID 2>/dev/null; then
-            echo "Stopping vLLM server (PID: $VLLM_PID)..."
-            kill $VLLM_PID
-        fi
-        rm -f /tmp/vllm.pid
-    fi
-    exit 0
-}
-
-# Set up signal handlers
-trap cleanup SIGTERM SIGINT
-
-if [ "${MINIMAL_MODE:-false}" = "true" ]; then
-    echo "🚀 Starting in MINIMAL MODE (Railway deployment)"
-    start_main_server
-else
-    echo "🚀 Starting in FULL MODE with Bloom-560M"
-    
-    # Start vLLM server in background
-    start_vllm_server
-    
-    # Start main server in foreground
-    start_main_server
-fi
-EOF
+RUN printf '#!/bin/bash\n\
+set -e\n\
+\n\
+echo "Starting Eindr Backend..."\n\
+echo "MINIMAL_MODE: ${MINIMAL_MODE:-false}"\n\
+echo "PORT: ${PORT:-8000}"\n\
+\n\
+# Function to start main FastAPI server\n\
+start_main_server() {\n\
+    echo "Starting main FastAPI server on port ${PORT}..."\n\
+    exec python -m uvicorn main:app \\\n\
+        --host 0.0.0.0 \\\n\
+        --port ${PORT} \\\n\
+        --timeout-keep-alive 30 \\\n\
+        --workers 1 \\\n\
+        --limit-concurrency 100 \\\n\
+        --limit-max-requests 1000\n\
+}\n\
+\n\
+# Function to start vLLM server for Bloom-560M\n\
+start_vllm_server() {\n\
+    if [ -f "./models/Bloom560m.bin" ]; then\n\
+        echo "Starting vLLM server for Bloom-560M on port ${VLLM_SERVER_PORT}..."\n\
+        python -m vllm.entrypoints.openai.api_server \\\n\
+            --model ./models/Bloom560m.bin \\\n\
+            --host 0.0.0.0 \\\n\
+            --port ${VLLM_SERVER_PORT} \\\n\
+            --max-model-len ${VLLM_MAX_MODEL_LEN:-2048} \\\n\
+            --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.8} \\\n\
+            --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1} \\\n\
+            --disable-log-requests \\\n\
+            --served-model-name bigscience/bloom-560m &\n\
+        \n\
+        VLLM_PID=$!\n\
+        echo "vLLM server started with PID: $VLLM_PID"\n\
+        \n\
+        # Wait for vLLM to be ready\n\
+        echo "Waiting for vLLM server to be ready..."\n\
+        for i in {1..30}; do\n\
+            if curl -s http://localhost:${VLLM_SERVER_PORT}/health > /dev/null 2>&1; then\n\
+                echo "✅ vLLM server is ready!"\n\
+                break\n\
+            fi\n\
+            echo "Waiting for vLLM server... ($i/30)"\n\
+            sleep 5\n\
+        done\n\
+        \n\
+        # Store PID for cleanup\n\
+        echo $VLLM_PID > /tmp/vllm.pid\n\
+    else\n\
+        echo "⚠️  Bloom560m.bin not found, skipping vLLM server"\n\
+    fi\n\
+}\n\
+\n\
+# Function to cleanup on exit\n\
+cleanup() {\n\
+    echo "Cleaning up..."\n\
+    if [ -f /tmp/vllm.pid ]; then\n\
+        VLLM_PID=$(cat /tmp/vllm.pid)\n\
+        if kill -0 $VLLM_PID 2>/dev/null; then\n\
+            echo "Stopping vLLM server (PID: $VLLM_PID)..."\n\
+            kill $VLLM_PID\n\
+        fi\n\
+        rm -f /tmp/vllm.pid\n\
+    fi\n\
+    exit 0\n\
+}\n\
+\n\
+# Set up signal handlers\n\
+trap cleanup SIGTERM SIGINT\n\
+\n\
+if [ "${MINIMAL_MODE:-false}" = "true" ]; then\n\
+    echo "🚀 Starting in MINIMAL MODE (Railway deployment)"\n\
+    start_main_server\n\
+else\n\
+    echo "🚀 Starting in FULL MODE with Bloom-560M"\n\
+    \n\
+    # Start vLLM server in background\n\
+    start_vllm_server\n\
+    \n\
+    # Start main server in foreground\n\
+    start_main_server\n\
+fi\n' > /app/start_server.sh
 
 # Make startup script executable
 RUN chmod +x /app/start_server.sh
 
 # Create healthcheck script
-RUN cat > /app/healthcheck.sh << 'EOF'
-#!/bin/bash
-# Health check for both minimal and full modes
-
-# Check main FastAPI server
-if ! curl -f http://localhost:${PORT}/health >/dev/null 2>&1; then
-    echo "Main server health check failed"
-    exit 1
-fi
-
-# In full mode, also check vLLM server
-if [ "${MINIMAL_MODE:-false}" != "true" ]; then
-    if [ -f "./models/Bloom560m.bin" ]; then
-        if ! curl -f http://localhost:${VLLM_SERVER_PORT}/health >/dev/null 2>&1; then
-            echo "vLLM server health check failed"
-            exit 1
-        fi
-    fi
-fi
-
-echo "Health check passed"
-exit 0
-EOF
+RUN printf '#!/bin/bash\n\
+# Health check for both minimal and full modes\n\
+\n\
+# Check main FastAPI server\n\
+if ! curl -f http://localhost:${PORT}/health >/dev/null 2>&1; then\n\
+    echo "Main server health check failed"\n\
+    exit 1\n\
+fi\n\
+\n\
+# In full mode, also check vLLM server\n\
+if [ "${MINIMAL_MODE:-false}" != "true" ]; then\n\
+    if [ -f "./models/Bloom560m.bin" ]; then\n\
+        if ! curl -f http://localhost:${VLLM_SERVER_PORT}/health >/dev/null 2>&1; then\n\
+            echo "vLLM server health check failed"\n\
+            exit 1\n\
+        fi\n\
+    fi\n\
+fi\n\
+\n\
+echo "Health check passed"\n\
+exit 0\n' > /app/healthcheck.sh
 
 RUN chmod +x /app/healthcheck.sh
 
