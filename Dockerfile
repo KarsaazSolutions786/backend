@@ -1,5 +1,5 @@
-# Multi-stage Dockerfile for Eindr Backend with Bloom-560M support
-# Supports both minimal mode (Railway) and full AI mode (with vLLM)
+# Multi-stage Dockerfile for Eindr Backend with optimized size
+# Supports both minimal mode (Railway) and full AI mode (with runtime model loading)
 
 # ====== Build Stage ======
 FROM python:3.11-slim as builder
@@ -11,7 +11,7 @@ WORKDIR /app
 ARG MINIMAL_MODE=false
 ENV MINIMAL_MODE=${MINIMAL_MODE}
 
-# Install build dependencies
+# Install only essential build dependencies and clean up in same layer
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
@@ -20,26 +20,33 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libsndfile1-dev \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Copy requirements
+# Copy requirements first for better caching
 COPY requirements.txt requirements.railway.txt ./
 
-# Create virtual environment and install dependencies
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Install Python dependencies based on mode
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+# Create virtual environment and install dependencies in one layer
+RUN python -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install --no-cache-dir --upgrade pip setuptools wheel && \
     if [ "$MINIMAL_MODE" = "true" ]; then \
         echo "Installing minimal dependencies for Railway..."; \
         pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.railway.txt; \
     else \
-        echo "Installing full dependencies including vLLM..."; \
-        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt && \
-        pip install --no-cache-dir vllm==0.2.7 && \
+        echo "Installing full dependencies..."; \
+        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt; \
+        if command -v nvcc >/dev/null 2>&1; then \
+            echo "GPU detected, installing vLLM with CUDA support..."; \
+            pip install --no-cache-dir vllm==0.2.7; \
+        else \
+            echo "No GPU detected, skipping vLLM for smaller image..."; \
+        fi; \
         pip install --no-cache-dir accelerate>=0.20.0; \
-    fi
+    fi && \
+    pip cache purge && \
+    find /opt/venv -name "*.pyc" -delete && \
+    find /opt/venv -name "__pycache__" -type d -exec rm -rf {} + || true
 
 # ====== Production Stage ======
 FROM python:3.11-slim
@@ -61,50 +68,55 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     NUMEXPR_NUM_THREADS=1 \
     OPENBLAS_NUM_THREADS=1 \
     VECLIB_MAXIMUM_THREADS=1 \
-    # vLLM configurations
-    VLLM_SERVER_PORT=8001 \
-    VLLM_SERVER_URL=http://localhost:8001
+    # Model configurations
+    MODEL_DOWNLOAD_URL="" \
+    HUGGINGFACE_HUB_CACHE=/app/models/cache
 
-# Install runtime dependencies
+# Install minimal runtime dependencies and clean up in same layer
 RUN apt-get update && apt-get install -y \
     curl \
     libpq-dev \
     postgresql-client \
     libsndfile1 \
     ffmpeg \
-    libsm6 \
-    libxext6 \
-    libgl1-mesa-glx \
     procps \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && apt-get autoremove -y
 
 # Copy virtual environment from builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy the application code
+# Copy only essential application code (models excluded via .dockerignore)
 COPY . .
 
-# Ensure models directory exists and has correct permissions
-# Bloom560m.bin is tracked with Git LFS
-RUN mkdir -p models && \
-    chmod -R 755 models
-
-# Create necessary directories
-RUN mkdir -p logs uploads scripts && \
-    chmod -R 777 logs uploads
-
-# Create startup script for handling both minimal and full modes
-RUN printf '#!/bin/bash\n\
+# Create directories and startup scripts in single layer
+RUN mkdir -p models logs uploads scripts models/cache && \
+    chmod -R 755 models && \
+    chmod -R 777 logs uploads && \
+    printf '#!/bin/bash\n\
 set -e\n\
 \n\
-echo "Starting Eindr Backend..."\n\
+echo "🚀 Starting Eindr Backend..."\n\
 echo "MINIMAL_MODE: ${MINIMAL_MODE:-false}"\n\
 echo "PORT: ${PORT:-8000}"\n\
 \n\
+# Function to download models if needed\n\
+download_models() {\n\
+    if [ "${MINIMAL_MODE:-false}" != "true" ] && [ ! -f "./models/Bloom560m.bin" ]; then\n\
+        if [ -n "$MODEL_DOWNLOAD_URL" ]; then\n\
+            echo "📥 Downloading Bloom-560M model..."\n\
+            curl -L "$MODEL_DOWNLOAD_URL" -o ./models/Bloom560m.bin || echo "⚠️ Model download failed, continuing without Bloom-560M"\n\
+        else\n\
+            echo "ℹ️ MODEL_DOWNLOAD_URL not set, skipping Bloom-560M download"\n\
+        fi\n\
+    fi\n\
+}\n\
+\n\
 # Function to start main FastAPI server\n\
 start_main_server() {\n\
-    echo "Starting main FastAPI server on port ${PORT}..."\n\
+    echo "🌟 Starting main FastAPI server on port ${PORT}..."\n\
     exec python -m uvicorn main:app \\\n\
         --host 0.0.0.0 \\\n\
         --port ${PORT} \\\n\
@@ -114,105 +126,39 @@ start_main_server() {\n\
         --limit-max-requests 1000\n\
 }\n\
 \n\
-# Function to start vLLM server for Bloom-560M\n\
-start_vllm_server() {\n\
-    if [ -f "./models/Bloom560m.bin" ]; then\n\
-        echo "Starting vLLM server for Bloom-560M on port ${VLLM_SERVER_PORT}..."\n\
-        python -m vllm.entrypoints.openai.api_server \\\n\
-            --model ./models/Bloom560m.bin \\\n\
-            --host 0.0.0.0 \\\n\
-            --port ${VLLM_SERVER_PORT} \\\n\
-            --max-model-len ${VLLM_MAX_MODEL_LEN:-2048} \\\n\
-            --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION:-0.8} \\\n\
-            --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE:-1} \\\n\
-            --disable-log-requests \\\n\
-            --served-model-name bigscience/bloom-560m &\n\
-        \n\
-        VLLM_PID=$!\n\
-        echo "vLLM server started with PID: $VLLM_PID"\n\
-        \n\
-        # Wait for vLLM to be ready\n\
-        echo "Waiting for vLLM server to be ready..."\n\
-        for i in {1..30}; do\n\
-            if curl -s http://localhost:${VLLM_SERVER_PORT}/health > /dev/null 2>&1; then\n\
-                echo "✅ vLLM server is ready!"\n\
-                break\n\
-            fi\n\
-            echo "Waiting for vLLM server... ($i/30)"\n\
-            sleep 5\n\
-        done\n\
-        \n\
-        # Store PID for cleanup\n\
-        echo $VLLM_PID > /tmp/vllm.pid\n\
-    else\n\
-        echo "⚠️  Bloom560m.bin not found, skipping vLLM server"\n\
-    fi\n\
-}\n\
-\n\
-# Function to cleanup on exit\n\
-cleanup() {\n\
-    echo "Cleaning up..."\n\
-    if [ -f /tmp/vllm.pid ]; then\n\
-        VLLM_PID=$(cat /tmp/vllm.pid)\n\
-        if kill -0 $VLLM_PID 2>/dev/null; then\n\
-            echo "Stopping vLLM server (PID: $VLLM_PID)..."\n\
-            kill $VLLM_PID\n\
-        fi\n\
-        rm -f /tmp/vllm.pid\n\
-    fi\n\
-    exit 0\n\
-}\n\
-\n\
-# Set up signal handlers\n\
-trap cleanup SIGTERM SIGINT\n\
+# Download models if needed\n\
+download_models\n\
 \n\
 if [ "${MINIMAL_MODE:-false}" = "true" ]; then\n\
     echo "🚀 Starting in MINIMAL MODE (Railway deployment)"\n\
     start_main_server\n\
 else\n\
-    echo "🚀 Starting in FULL MODE with Bloom-560M"\n\
-    \n\
-    # Start vLLM server in background\n\
-    start_vllm_server\n\
-    \n\
-    # Start main server in foreground\n\
+    echo "🚀 Starting in FULL MODE"\n\
+    if [ -f "./models/Bloom560m.bin" ]; then\n\
+        echo "✅ Bloom-560M model found, full AI features available"\n\
+    else\n\
+        echo "⚠️ Bloom-560M model not found, using fallback chat service"\n\
+    fi\n\
     start_main_server\n\
-fi\n' > /app/start_server.sh
-
-# Make startup script executable
-RUN chmod +x /app/start_server.sh
-
-# Create healthcheck script
-RUN printf '#!/bin/bash\n\
-# Health check for both minimal and full modes\n\
-\n\
-# Check main FastAPI server\n\
+fi\n' > /app/start_server.sh && \
+    chmod +x /app/start_server.sh && \
+    printf '#!/bin/bash\n\
+# Lightweight health check\n\
 if ! curl -f http://localhost:${PORT}/health >/dev/null 2>&1; then\n\
-    echo "Main server health check failed"\n\
+    echo "Health check failed"\n\
     exit 1\n\
 fi\n\
-\n\
-# In full mode, also check vLLM server\n\
-if [ "${MINIMAL_MODE:-false}" != "true" ]; then\n\
-    if [ -f "./models/Bloom560m.bin" ]; then\n\
-        if ! curl -f http://localhost:${VLLM_SERVER_PORT}/health >/dev/null 2>&1; then\n\
-            echo "vLLM server health check failed"\n\
-            exit 1\n\
-        fi\n\
-    fi\n\
-fi\n\
-\n\
 echo "Health check passed"\n\
-exit 0\n' > /app/healthcheck.sh
+exit 0\n' > /app/healthcheck.sh && \
+    chmod +x /app/healthcheck.sh && \
+    find /app -name "*.pyc" -delete && \
+    find /app -name "__pycache__" -type d -exec rm -rf {} + || true
 
-RUN chmod +x /app/healthcheck.sh
-
-# Expose ports
+# Expose port
 EXPOSE ${PORT}
-EXPOSE ${VLLM_SERVER_PORT}
 
-# Health check that works with both modes
-HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
+# Lightweight health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD /app/healthcheck.sh
 
 # Use startup script as entrypoint

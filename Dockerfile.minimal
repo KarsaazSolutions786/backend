@@ -1,0 +1,64 @@
+# Ultra-minimal Dockerfile for Eindr Backend
+# Creates the smallest possible image with basic API functionality only
+
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Set environment variables for minimal footprint
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    PORT=8000 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MINIMAL_MODE=true
+
+# Install only essential runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && apt-get autoremove -y
+
+# Copy minimal requirements and install dependencies
+COPY requirements.minimal.txt ./
+RUN pip install --no-cache-dir -r requirements.minimal.txt && \
+    pip cache purge && \
+    find /usr/local -name "*.pyc" -delete && \
+    find /usr/local -name "__pycache__" -type d -exec rm -rf {} + || true
+
+# Copy only essential application files
+COPY main.py ./
+COPY core/ ./core/
+COPY models/ ./models/
+COPY api/ ./api/
+COPY connect_db.py ./
+COPY firebase_auth.py ./
+COPY utils/ ./utils/
+
+# Create startup script for minimal mode
+RUN printf '#!/bin/bash\n\
+set -e\n\
+echo "🚀 Starting Eindr Backend (Minimal Mode)"\n\
+echo "PORT: ${PORT:-8000}"\n\
+exec python -m uvicorn main:app \\\n\
+    --host 0.0.0.0 \\\n\
+    --port ${PORT} \\\n\
+    --workers 1\n' > /app/start.sh && \
+    chmod +x /app/start.sh && \
+    mkdir -p logs && \
+    find /app -name "*.pyc" -delete && \
+    find /app -name "__pycache__" -type d -exec rm -rf {} + || true
+
+# Expose port
+EXPOSE ${PORT}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=2 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Use startup script
+CMD ["/app/start.sh"] 
