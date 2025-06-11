@@ -33,10 +33,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     if [ "$MINIMAL_MODE" = "true" ]; then \
         echo "Installing minimal dependencies for Railway..."; \
-        pip install --no-cache-dir -r requirements.railway.txt; \
+        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.railway.txt; \
     else \
         echo "Installing full dependencies including vLLM..."; \
-        pip install --no-cache-dir -r requirements.txt && \
+        pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt && \
         pip install --no-cache-dir vllm==0.2.7 && \
         pip install --no-cache-dir accelerate>=0.20.0; \
     fi
