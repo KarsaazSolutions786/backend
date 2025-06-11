@@ -70,7 +70,7 @@ class BloomChatFineTuner:
     def load_base_model(self):
         """Load base Bloom-560M model from binary weights."""
         logger.info("Loading base Bloom-560M model...")
-        
+    
         # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m")
         if self.tokenizer.pad_token is None:
@@ -79,18 +79,18 @@ class BloomChatFineTuner:
         # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
             "bigscience/bloom-560m",
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        device_map="auto" if torch.cuda.is_available() else None,
-    )
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None,
+        )
     
-    # Load custom weights if available
+        # Load custom weights if available
         if os.path.exists(self.base_model_path):
             logger.info(f"Loading custom weights from {self.base_model_path}")
-        try:
+            try:
                 custom_weights = torch.load(self.base_model_path, map_location='cpu')
                 self.model.load_state_dict(custom_weights, strict=False)
-            logger.info("Custom weights loaded successfully")
-        except Exception as e:
+                logger.info("Custom weights loaded successfully")
+            except Exception as e:
                 logger.warning(f"Could not load custom weights: {e}, using base model")
         
         logger.info("Base model loaded successfully")
@@ -124,9 +124,9 @@ class BloomChatFineTuner:
             # Create conversation format
             conversation = f"System: {item['system']}\nUser: {item['user']}\nAssistant: {item['assistant']}"
             formatted_data.append({"text": conversation})
-        
-        return Dataset.from_list(formatted_data)
     
+        return Dataset.from_list(formatted_data)
+
     def tokenize_data(self, dataset: Dataset) -> Dataset:
         """Tokenize the dataset for training."""
         logger.info("Tokenizing training data...")
@@ -230,16 +230,16 @@ class BloomChatFineTuner:
             # Step 2: Load and preprocess training data
             dataset = self.load_training_data()
             tokenized_dataset = self.tokenize_data(dataset)
-            
+        
             # Step 3: Setup LoRA
             self.setup_lora()
             
             # Step 4: Train
             trainer = self.train(tokenized_dataset)
-            
+        
             # Step 5: Save LoRA weights
             self.save_lora_weights()
-            
+        
             # Step 6: Merge and save final model
             self.merge_and_save()
             

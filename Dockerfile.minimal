@@ -13,7 +13,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    MINIMAL_MODE=true
+    MINIMAL_MODE=true \
+    ENABLE_MODEL_DOWNLOAD=false
 
 # Install only essential runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

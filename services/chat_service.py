@@ -70,60 +70,69 @@ class ChatService:
             self.model_info = {"error": str(e)}
     
     def _initialize_bloom_model(self):
-        """Initialize Bloom-560M model with enhanced settings"""
+        """Initialize Bloom-560M model with fallback."""
         try:
-            # Try loading the fine-tuned chat model first
-            chat_model_path = "./Models/Bloom_560M_chat"
-            if os.path.exists(chat_model_path) and os.path.exists(os.path.join(chat_model_path, "config.json")):
-                logger.info(f"Loading fine-tuned Bloom-560M chat model from {chat_model_path}")
-                model_path = chat_model_path
+            # Check if we're in Railway deployment
+            is_railway = os.getenv("RAILWAY_ENVIRONMENT") is not None
+            is_minimal = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+            
+            if is_railway or is_minimal:
+                logger.info("Railway/minimal mode detected - skipping Bloom-560M model loading to prevent timeouts")
+                self.bloom_model = None
+                self.bloom_tokenizer = None
+                return False
+            
+            # Priority 1: Try fine-tuned chat model
+            fine_tuned_path = "Models/Bloom_560M_chat"
+            if os.path.exists(fine_tuned_path) and os.path.isdir(fine_tuned_path):
+                logger.info(f"Loading fine-tuned Bloom chat model from {fine_tuned_path}")
+                self.bloom_tokenizer = AutoTokenizer.from_pretrained(fine_tuned_path)
+                self.bloom_model = AutoModelForCausalLM.from_pretrained(
+                    fine_tuned_path,
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="auto" if torch.cuda.is_available() else None,
+                    low_cpu_mem_usage=True
+                )
+                logger.info("✅ Fine-tuned Bloom chat model loaded successfully")
+                return True
+            
+            # Priority 2: Try local binary model
+            binary_model_path = "Models/bloom560m.bin" 
+            if os.path.exists(binary_model_path):
+                logger.info(f"Loading Bloom model from local binary: {binary_model_path}")
+                self.bloom_tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m")
+                self.bloom_model = AutoModelForCausalLM.from_pretrained("bigscience/bloom-560m")
+                
+                # Load custom weights
+                custom_weights = torch.load(binary_model_path, map_location='cpu')
+                self.bloom_model.load_state_dict(custom_weights, strict=False)
+                logger.info("✅ Local Bloom model loaded successfully")
+                return True
+            
+            # Priority 3: Download from Hugging Face (only if explicitly enabled)
+            download_enabled = os.getenv("ENABLE_MODEL_DOWNLOAD", "false").lower() == "true"
+            if download_enabled:
+                logger.info("Downloading Bloom-560M from Hugging Face (this may take several minutes)...")
+                self.bloom_tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m")
+                self.bloom_model = AutoModelForCausalLM.from_pretrained(
+                    "bigscience/bloom-560m",
+                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                    device_map="auto" if torch.cuda.is_available() else None,
+                    low_cpu_mem_usage=True
+                )
+                logger.info("✅ Bloom model downloaded and loaded successfully")
+                return True
             else:
-                # Fallback to original model
-                logger.info("Fine-tuned chat model not found, falling back to original Bloom-560M")
-                model_path = "bigscience/bloom-560m"
-            
-            # Load tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            
-            # Ensure we have a pad token
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Load model
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None,
-                low_cpu_mem_usage=True
-            )
-            
-            # Load custom weights if using HuggingFace model and custom weights exist
-            if model_path == "bigscience/bloom-560m":
-                custom_weights_path = "./Models/Bloom560m.bin"
-                if os.path.exists(custom_weights_path):
-                    logger.info(f"Loading custom weights from {custom_weights_path}")
-                    try:
-                        custom_weights = torch.load(custom_weights_path, map_location='cpu')
-                        self.model.load_state_dict(custom_weights, strict=False)
-                        logger.info("Custom weights loaded successfully")
-                    except Exception as e:
-                        logger.warning(f"Could not load custom weights: {e}")
-            
-            # Store model info
-            self.model_info = {
-                "model_name": "bloom-560m-chat" if "chat" in model_path else "bloom-560m",
-                "mode": "fine_tuned" if "chat" in model_path else "direct_inference",
-                "parameters": "560M",
-                "model_path": model_path
-            }
-            
-            logger.info(f"Bloom-560M model initialized successfully: {self.model_info}")
-            self.model_ready = True
-            
+                logger.info("Model download disabled - Bloom features will be unavailable")
+                self.bloom_model = None
+                self.bloom_tokenizer = None
+                return False
+                
         except Exception as e:
             logger.error(f"Failed to initialize Bloom model: {e}")
-            self.model_ready = False
-            self.model_info = {"error": str(e)}
+            self.bloom_model = None
+            self.bloom_tokenizer = None
+            return False
     
     def _setup_enhanced_fallback(self):
         """Setup enhanced fallback mode when model loading fails."""
@@ -389,9 +398,17 @@ Eindr: Not much, just here to help you stay organized! What would you like to wo
         return random.choice(safe_responses)
     
     def _generate_enhanced_contextual_response(self, message: str, context: Optional[Dict] = None) -> str:
-        """Generate responses - NO HARDCODED RESPONSES ALLOWED."""
-        # This method now only handles model unavailability
-        return f"[ERROR: Bloom-560M model not available. Install PyTorch and transformers to get AI-generated responses. Current message: '{message}']"
+        """Generate responses using simple rule-based fallback when model unavailable."""
+        # Check if we're in minimal/Railway mode
+        is_railway = os.getenv("RAILWAY_ENVIRONMENT") is not None
+        is_minimal = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+        
+        if is_railway or is_minimal:
+            # Use simple rule-based responses for Railway deployment
+            return self._get_simple_response(message)
+        else:
+            # For local development without model
+            return f"[ERROR: Bloom-560M model not available. Install PyTorch and transformers to get AI-generated responses. Current message: '{message}']"
     
     def _get_fallback_response(self, context: Optional[Dict] = None) -> str:
         """NO HARDCODED FALLBACKS - Force model usage."""
@@ -623,3 +640,39 @@ Eindr: Not much, just here to help you stay organized! What would you like to wo
                     torch.cuda.empty_cache()
             except:
                 pass 
+    
+    def _get_simple_response(self, message: str) -> str:
+        """Generate simple rule-based responses when Bloom model is unavailable."""
+        message_lower = message.lower().strip()
+        
+        # Greeting responses
+        greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
+        if any(greeting in message_lower for greeting in greetings):
+            return "Hello! How can I help you today? I can assist with reminders, notes, expenses, and general questions."
+        
+        # Reminder-related responses
+        if any(word in message_lower for word in ["remind", "reminder", "schedule", "appointment"]):
+            return "I'd be happy to help you set up a reminder! Please tell me what you'd like to be reminded about and when."
+        
+        # Note-related responses
+        if any(word in message_lower for word in ["note", "write", "save", "remember"]):
+            return "I can help you save notes! What would you like me to note down for you?"
+        
+        # Expense-related responses
+        if any(word in message_lower for word in ["expense", "money", "cost", "spend", "buy", "paid"]):
+            return "I can help you track expenses! Please tell me how much you spent and what it was for."
+        
+        # Question responses
+        if message_lower.startswith(("what", "how", "when", "where", "why", "who")):
+            return "That's a great question! While I'm running in minimal mode, I can help you with reminders, notes, and expense tracking. For more complex questions, you might want to try when the full AI model is available."
+        
+        # Help responses
+        if any(word in message_lower for word in ["help", "support", "assist"]):
+            return "I'm here to help! I can assist you with:\n• Setting reminders\n• Taking notes\n• Tracking expenses\n• Basic conversation\n\nWhat would you like to do?"
+        
+        # Thank you responses
+        if any(word in message_lower for word in ["thank", "thanks"]):
+            return "You're welcome! Is there anything else I can help you with?"
+        
+        # Default response
+        return "I understand you're trying to communicate with me. While I'm running in minimal mode, I can help you with reminders, notes, and expense tracking. What would you like to do?" 
