@@ -236,6 +236,131 @@ To use real AI models:
    - Download Bloom model
    - Uncomment real implementation in `services/chat_service.py`
 
+## 🧠 Fine-tuning Bloom-560M for Chat
+
+The raw Bloom-560M model generates irrelevant or code-like text. To improve its behavior as a helpful assistant, you can fine-tune it using PEFT/LoRA.
+
+### Prerequisites
+
+1. **Base model weights** at `Models/bloom560m.bin`
+2. **Training data** in JSONL format at `data/chat_pairs.jsonl` with ≥2000 examples
+3. **Required dependencies**: 
+   ```bash
+   pip install transformers torch peft datasets
+   ```
+
+### Training Data Format
+
+Create `data/chat_pairs.jsonl` with conversation examples:
+
+```jsonl
+{"system":"You are a helpful assistant.","user":"hello there","assistant":"Hello! How can I help you today?"}
+{"system":"You are a helpful assistant.","user":"set a reminder","assistant":"I'd be happy to help you set a reminder! What would you like to be reminded about and when?"}
+{"system":"You are a helpful assistant.","user":"hey how are you","assistant":"I'm doing great, thanks for asking! How can I assist you?"}
+```
+
+### Fine-tuning Process
+
+1. **Run the fine-tuning script**:
+   ```bash
+   python scripts/finetune_bloom.py
+   ```
+
+2. **What happens during fine-tuning**:
+   - Loads base Bloom-560M model from `Models/bloom560m.bin`
+   - Applies LoRA (Low-Rank Adaptation) with:
+     - `r=8`, `α=16`
+     - Target modules: `["query_key_value"]`
+     - 2 epochs, batch_size=8, lr=2e-5
+   - Saves LoRA weights to `Models/Bloom_560M_lora`
+   - Merges and saves final model to `Models/Bloom_560M_chat`
+
+3. **Model Loading Priority**:
+   - `services/chat_service.py` automatically loads `Models/Bloom_560M_chat` if available
+   - Falls back to original model if fine-tuned version is missing
+
+### Testing the Fine-tuned Model
+
+Run the unit tests to verify the model behavior:
+
+```bash
+# Run specific chat service tests
+python -m pytest tests/test_chat_service.py -v
+
+# Test specific behaviors
+python -m pytest tests/test_chat_service.py::TestChatService::test_greeting_response -v
+python -m pytest tests/test_chat_service.py::TestChatService::test_reminder_request_response -v
+```
+
+### Expected Improvements
+
+After fine-tuning, the model should:
+
+- **Greetings**: Respond politely to "hello there", "hey how are you", etc.
+- **Reminders**: Ask clarifying questions when user says "set a reminder"
+- **Consistency**: Provide helpful, contextual responses instead of code or random text
+- **Brevity**: Generate concise, relevant responses
+
+### Fine-tuning Configuration
+
+The script uses these optimized settings:
+
+```python
+# LoRA Configuration
+LoraConfig(
+    r=8,                    # Low rank for efficiency
+    lora_alpha=16,          # Scaling factor
+    target_modules=["query_key_value"],  # Attention layers only
+    lora_dropout=0.1,
+    task_type=TaskType.CAUSAL_LM
+)
+
+# Training Parameters
+TrainingArguments(
+    num_train_epochs=2,
+    per_device_train_batch_size=8,
+    learning_rate=2e-5,
+    warmup_steps=100,
+    fp16=True  # Memory optimization
+)
+```
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **"Training data not found"**:
+   ```bash
+   # Ensure you have the training data
+   ls data/chat_pairs.jsonl
+   wc -l data/chat_pairs.jsonl  # Should show ≥2000 lines
+   ```
+
+2. **"CUDA out of memory"**:
+   ```bash
+   # Reduce batch size or use CPU-only training
+   # Edit scripts/finetune_bloom.py: per_device_train_batch_size=4
+   ```
+
+3. **"Base model not found"**:
+   ```bash
+   # Ensure base model exists
+   ls Models/bloom560m.bin
+   ```
+
+### Production Deployment
+
+After fine-tuning:
+
+1. The fine-tuned model is automatically used by `ChatService`
+2. Original model serves as fallback if fine-tuned version fails
+3. Model info endpoint shows which version is loaded:
+   ```bash
+   curl -X GET "http://localhost:8000/api/v1/stt/model-info"
+   ```
+
+This fine-tuning process significantly improves the chat assistant's behavior while keeping the same API interface.
+
 ## 📝 Example Usage
 
 ### Create a Reminder via API

@@ -1,44 +1,46 @@
 """
-AI Pipeline Service
-Integrates Whisper STT, MiniLM Intent Classification, and Coqui TTS 
-for complete voice-to-database-to-speech workflow.
+AI Pipeline Service for Eindr Backend
+Coordinates STT, Intent Classification, Database Operations, and TTS
 """
 
 import os
 import asyncio
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Any, Optional
 from pathlib import Path
 from core.config import settings
-from utils.logger import logger
-
-# Import our AI services
 from services.whisper_stt_service import WhisperSTTService
 from services.minilm_intent_service import MiniLMIntentService
-from services.tts_service import TextToSpeechService
-
-# Import database services
 from services.database_integration_service import DatabaseIntegrationService
+from services.coqui_tts_service import CoquiTTSService
+from services.chat_service import ChatService
+from utils.logger import logger
+import time
 
 class AIPipelineService:
-    """
-    Integrated AI Pipeline Service
-    Coordinates Whisper STT, MiniLM Intent Classification, Coqui TTS, and Database operations.
-    """
+    """Service that coordinates the complete AI pipeline."""
     
     def __init__(self):
+        # Initialize core services
         self.whisper_stt = WhisperSTTService()
         self.minilm_intent = MiniLMIntentService()
-        self.coqui_tts = TextToSpeechService()
-        self.db_service = DatabaseIntegrationService()
+        self.database_service = DatabaseIntegrationService()
+        self.coqui_tts = CoquiTTSService()
+        self.chat_service = ChatService()  # Add chat service
         
+        # Pipeline statistics
         self.pipeline_stats = {
             "total_requests": 0,
             "successful_requests": 0,
             "failed_requests": 0,
-            "average_processing_time": 0.0
+            "average_processing_time": 0.0,
+            "stt_success_rate": 0.0,
+            "intent_success_rate": 0.0,
+            "tts_success_rate": 0.0,
+            "chat_requests": 0,  # Track chat requests
+            "chat_success_rate": 0.0
         }
         
-        logger.info("AI Pipeline Service initialized")
+        logger.info("AI Pipeline Service initialized with all components including ChatService")
     
     async def process_complete_pipeline(
         self, 
@@ -51,136 +53,270 @@ class AIPipelineService:
         voice: str = "default"
     ) -> Dict[str, Any]:
         """
-        Complete AI pipeline: Audio → Transcription → Intent Classification → Database → TTS Response
+        Process complete AI pipeline: STT → Intent → Database → TTS
         
         Args:
             audio_file_path: Path to audio file
-            user_id: User ID for database operations
-            language: Language for transcription
-            multi_intent: Whether to detect multiple intents
-            store_in_database: Whether to save results to database
-            generate_audio_response: Whether to generate TTS response
-            voice: Voice for TTS response
+            user_id: User identifier
+            language: Language code for STT
+            multi_intent: Enable multi-intent processing
+            store_in_database: Store results in database
+            generate_audio_response: Generate TTS response
+            voice: Voice for TTS
             
         Returns:
-            Complete pipeline results
+            Dictionary containing complete pipeline results
         """
-        import time
         start_time = time.time()
         
         try:
             self.pipeline_stats["total_requests"] += 1
             
-            # Initialize result structure
-            result = {
-                "success": False,
-                "pipeline_completed": False,
-                "processing_steps": {
-                    "audio_validation": False,
-                    "transcription": False,
-                    "intent_classification": False,
-                    "database_processing": False,
-                    "tts_generation": False
+            # Step 1: Speech-to-Text
+            logger.info(f"Starting STT for user {user_id}")
+            stt_result = await self.whisper_stt.transcribe_audio(audio_file_path, language)
+            
+            if not stt_result.get("success", False):
+                self.pipeline_stats["failed_requests"] += 1
+                return {
+                    "success": False,
+                    "error": f"STT failed: {stt_result.get('error', 'Unknown error')}",
+                    "pipeline_stage": "stt"
+                }
+            
+            transcription = stt_result.get("transcription", "")
+            if not transcription:
+                self.pipeline_stats["failed_requests"] += 1
+                return {
+                    "success": False,
+                    "error": "Empty transcription",
+                    "pipeline_stage": "stt"
+                }
+            
+            logger.info(f"STT successful: '{transcription}'")
+            
+            # Step 2: Intent Classification
+            logger.info(f"Starting intent classification for: '{transcription}'")
+            intent_result = await self.minilm_intent.classify_intent(transcription, multi_intent)
+            
+            if not intent_result.get("success", False):
+                self.pipeline_stats["failed_requests"] += 1
+                return {
+                    "success": False,
+                    "error": f"Intent classification failed: {intent_result.get('error', 'Unknown error')}",
+                    "transcription": transcription,
+                    "pipeline_stage": "intent"
+                }
+            
+            intent = intent_result.get("intent")
+            confidence = intent_result.get("confidence", 0.0)
+            logger.info(f"Intent classification successful: {intent} (confidence: {confidence:.2f})")
+            
+            # Step 3: Handle chit_chat and general_query with ChatService
+            if intent in ["chit_chat", "general_query"]:
+                logger.info(f"Routing {intent} to ChatService")
+                self.pipeline_stats["chat_requests"] += 1
+                
+                # Generate conversational response
+                chat_context = {
+                    "intent": intent,
+                    "confidence": confidence,
+                    "original_transcription": transcription,
+                    "processing_result": {"success": True, "data": {}}
+                }
+                
+                try:
+                    chat_response = await self.chat_service.generate_response(
+                        message=transcription,
+                        user_id=user_id,
+                        context=chat_context
+                    )
+                    
+                    # Generate TTS for chat response if requested
+                    tts_result = None
+                    if generate_audio_response:
+                        try:
+                            audio_data = await self.coqui_tts.synthesize_speech(chat_response, voice)
+                            if audio_data:
+                                tts_result = {
+                                    "success": True,
+                                    "response_text": chat_response,
+                                    "audio_data": audio_data,
+                                    "audio_size": len(audio_data),
+                                    "voice_used": voice
+                                }
+                            else:
+                                tts_result = {
+                                    "success": False,
+                                    "error": "TTS synthesis failed",
+                                    "response_text": chat_response,
+                                    "audio_size": 0,
+                                    "voice_used": voice
+                                }
+                        except Exception as e:
+                            logger.warning(f"TTS generation failed for chat response: {e}")
+                            tts_result = {
+                                "success": False,
+                                "error": f"TTS generation failed: {str(e)}",
+                                "response_text": chat_response,
+                                "audio_size": 0,
+                                "voice_used": voice
+                            }
+                    
+                    processing_time = time.time() - start_time
+                    self.pipeline_stats["successful_requests"] += 1
+                    self._update_average_processing_time(processing_time)
+                    
+                    return {
+                        "success": True,
+                        "transcription": transcription,
+                        "transcription_confidence": stt_result.get("confidence", 0.0),
+                        "language_detected": language,
+                        "intent_result": intent_result,
+                        "tts_result": tts_result or {
+                            "success": False,
+                            "error": "TTS not requested",
+                            "response_text": chat_response,
+                            "audio_size": 0,
+                            "voice_used": voice
+                        },
+                        "processing_time": processing_time,
+                        "pipeline_stage": "chat_complete",
+                        "pipeline_completed": True,
+                        "chat_service_used": True,
+                        "user_id": user_id
+                    }
+                    
+                except Exception as e:
+                    logger.error(f"ChatService failed: {e}")
+                    # Fallback to simple response
+                    fallback_response = "I understand! How can I help you stay organized today?"
+                    
+                    tts_result = None
+                    if generate_audio_response:
+                        try:
+                            audio_data = await self.coqui_tts.synthesize_speech(fallback_response, voice)
+                            if audio_data:
+                                tts_result = {
+                                    "success": True,
+                                    "response_text": fallback_response,
+                                    "audio_data": audio_data,
+                                    "audio_size": len(audio_data),
+                                    "voice_used": voice
+                                }
+                            else:
+                                tts_result = {
+                                    "success": False,
+                                    "error": "TTS synthesis failed",
+                                    "response_text": fallback_response,
+                                    "audio_size": 0,
+                                    "voice_used": voice
+                                }
+                        except Exception as e:
+                            logger.warning(f"TTS generation failed for fallback: {e}")
+                            tts_result = {
+                                "success": False,
+                                "error": f"TTS generation failed: {str(e)}",
+                                "response_text": fallback_response,
+                                "audio_size": 0,
+                                "voice_used": voice
+                            }
+                    
+                    return {
+                        "success": True,
+                        "transcription": transcription,
+                        "transcription_confidence": stt_result.get("confidence", 0.0),
+                        "language_detected": language,
+                        "intent_result": intent_result,
+                        "tts_result": tts_result or {
+                            "success": False,
+                            "error": "TTS not requested",
+                            "response_text": fallback_response,
+                            "audio_size": 0,
+                            "voice_used": voice
+                        },
+                        "processing_time": time.time() - start_time,
+                        "pipeline_stage": "chat_fallback",
+                        "pipeline_completed": True,
+                        "chat_service_used": False,
+                        "user_id": user_id
+                    }
+            
+            # Step 3: Database Operations (for other intents)
+            db_result = None
+            if store_in_database:
+                logger.info(f"Starting database operations for intent: {intent}")
+                db_result = await self._process_database_operations(intent_result, user_id)
+                
+                if not db_result.get("success", False):
+                    logger.warning(f"Database operations failed: {db_result.get('error', 'Unknown error')}")
+            
+            # Step 4: Generate Response Text
+            logger.info("Generating response text")
+            response_text = self._generate_response_text(intent_result, db_result)
+            
+            # Step 5: Text-to-Speech (if requested)
+            tts_result = None
+            if generate_audio_response:
+                logger.info("Starting TTS generation")
+                tts_result = await self._generate_tts_response(intent_result, db_result, voice)
+                
+                if not tts_result.get("success", False):
+                    logger.warning(f"TTS generation failed: {tts_result.get('error', 'Unknown error')}")
+            
+            # Calculate processing time and update stats
+            processing_time = time.time() - start_time
+            self.pipeline_stats["successful_requests"] += 1
+            self._update_average_processing_time(processing_time)
+            
+            logger.info(f"Pipeline completed successfully in {processing_time:.2f}s")
+            
+            return {
+                "success": True,
+                "transcription": transcription,
+                "transcription_confidence": stt_result.get("confidence", 0.0),
+                "language_detected": language,
+                "intent_result": intent_result,
+                "database_result": db_result,
+                "tts_result": tts_result or {
+                    "success": False,
+                    "error": "TTS not requested",
+                    "response_text": response_text,
+                    "audio_size": 0,
+                    "voice_used": voice
                 },
+                "processing_time": processing_time,
+                "pipeline_stage": "complete",
+                "pipeline_completed": True,
+                "chat_service_used": False,
                 "user_id": user_id,
-                "processing_time": 0.0,
+                "processing_steps": {
+                    "transcription": True,
+                    "intent_classification": True,
+                    "database_operations": store_in_database,
+                    "tts_generation": generate_audio_response
+                },
                 "errors": []
             }
             
-            logger.info(f"Starting complete AI pipeline for user {user_id}")
-            
-            # Step 1: Audio Validation and Transcription
-            logger.info("Step 1: Transcribing audio with Whisper STT")
-            transcription_result = await self.whisper_stt.transcribe_audio(audio_file_path, language)
-            
-            if not transcription_result.get("success", False):
-                result["errors"].append(f"Transcription failed: {transcription_result.get('error', 'Unknown error')}")
-                return result
-            
-            result["processing_steps"]["audio_validation"] = True
-            result["processing_steps"]["transcription"] = True
-            result["transcription"] = transcription_result["transcription"]
-            result["transcription_confidence"] = transcription_result.get("confidence", 0.0)
-            result["language_detected"] = transcription_result.get("language", language)
-            
-            logger.info(f"Transcription completed: '{result['transcription'][:100]}...'")
-            
-            # Step 2: Intent Classification
-            logger.info("Step 2: Classifying intent with MiniLM")
-            intent_result = await self.minilm_intent.classify_intent(
-                text=transcription_result["transcription"],
-                multi_intent=multi_intent
-            )
-            
-            if not intent_result.get("success", False):
-                result["errors"].append(f"Intent classification failed: {intent_result.get('error', 'Unknown error')}")
-                return result
-            
-            result["processing_steps"]["intent_classification"] = True
-            result["intent_result"] = intent_result
-            
-            if intent_result.get("type") == "multi_intent":
-                logger.info(f"Multi-intent detected: {intent_result.get('intents', [])}")
-            else:
-                logger.info(f"Single intent detected: {intent_result.get('intent')}")
-            
-            # Step 3: Database Processing
-            if store_in_database:
-                logger.info("Step 3: Processing and storing data in database")
-                db_result = await self._process_database_operations(intent_result, user_id)
-                
-                if db_result.get("success", False):
-                    result["processing_steps"]["database_processing"] = True
-                    result["database_result"] = db_result
-                    logger.info("Database processing completed successfully")
-                else:
-                    result["errors"].append(f"Database processing failed: {db_result.get('error', 'Unknown error')}")
-                    # Continue with pipeline even if database fails
-            
-            # Step 4: Generate TTS Response
-            if generate_audio_response:
-                logger.info("Step 4: Generating TTS response with Coqui TTS")
-                tts_result = await self._generate_tts_response(intent_result, result.get("database_result", {}), voice)
-                
-                if tts_result.get("success", False):
-                    result["processing_steps"]["tts_generation"] = True
-                    result["tts_result"] = tts_result
-                    logger.info("TTS response generated successfully")
-                else:
-                    result["errors"].append(f"TTS generation failed: {tts_result.get('error', 'Unknown error')}")
-                    # Continue with pipeline even if TTS fails
-            
-            # Pipeline completion
-            result["success"] = True
-            result["pipeline_completed"] = True
-            
-            # Calculate processing time
-            end_time = time.time()
-            result["processing_time"] = end_time - start_time
-            
-            # Update statistics
-            self.pipeline_stats["successful_requests"] += 1
-            self._update_average_processing_time(result["processing_time"])
-            
-            logger.info(f"Complete AI pipeline finished successfully in {result['processing_time']:.2f}s")
-            return result
-            
         except Exception as e:
-            logger.error(f"AI Pipeline failed: {e}")
-            result["errors"].append(f"Pipeline error: {str(e)}")
             self.pipeline_stats["failed_requests"] += 1
+            logger.error(f"Pipeline processing failed: {e}")
             
-            # Calculate processing time even for failures
-            end_time = time.time()
-            result["processing_time"] = end_time - start_time
-            
-            return result
+            return {
+                "success": False,
+                "error": f"Pipeline processing failed: {str(e)}",
+                "transcription": transcription if 'transcription' in locals() else "",
+                "processing_time": time.time() - start_time,
+                "pipeline_stage": "error",
+                "user_id": user_id
+            }
     
     async def _process_database_operations(self, intent_result: Dict[str, Any], user_id: str) -> Dict[str, Any]:
         """Process database operations based on intent classification results."""
         try:
             # Ensure user exists
-            await self.db_service.create_user_if_not_exists(user_id)
+            await self.database_service.create_user_if_not_exists(user_id)
             
             if intent_result.get("type") == "multi_intent":
                 return await self._process_multi_intent_database(intent_result, user_id)
@@ -212,7 +348,7 @@ class AIPipelineService:
             }
             
             # Store in database
-            storage_result = await self.db_service.store_classification_result(
+            storage_result = await self.database_service.store_classification_result(
                 classification_result=classification_result,
                 user_id=user_id
             )
@@ -257,7 +393,7 @@ class AIPipelineService:
                     }
                     
                     # Store in database
-                    storage_result = await self.db_service.store_classification_result(
+                    storage_result = await self.database_service.store_classification_result(
                         classification_result=classification_result,
                         user_id=user_id
                     )

@@ -243,13 +243,37 @@ class CoquiTTSService:
                 if isinstance(self.fallback_engine, str) and self.fallback_engine == "gtts":
                     return await self._synthesize_with_gtts(text, voice)
                 else:
-                    return await self._synthesize_with_pyttsx3(text, voice, speed)
+                    # Try pyttsx3 first, then fallback to gTTS if it fails
+                    try:
+                        audio_data = await self._synthesize_with_pyttsx3(text, voice, speed)
+                        if audio_data:
+                            return audio_data
+                        else:
+                            logger.warning("pyttsx3 failed, falling back to gTTS")
+                            if GTTS_AVAILABLE:
+                                return await self._synthesize_with_gtts(text, voice)
+                    except Exception as e:
+                        logger.warning(f"pyttsx3 failed with error: {e}, falling back to gTTS")
+                        if GTTS_AVAILABLE:
+                            return await self._synthesize_with_gtts(text, voice)
+            
+            # Final fallback: try gTTS directly if nothing else worked
+            if GTTS_AVAILABLE:
+                logger.info("Using gTTS as final fallback")
+                return await self._synthesize_with_gtts(text, voice)
             
             logger.error("No TTS engine available")
             return None
             
         except Exception as e:
             logger.error(f"TTS synthesis failed: {e}")
+            # Even in case of error, try gTTS as last resort
+            if GTTS_AVAILABLE:
+                try:
+                    logger.info("Attempting gTTS as last resort after error")
+                    return await self._synthesize_with_gtts(text, voice)
+                except Exception as gtts_error:
+                    logger.error(f"Even gTTS fallback failed: {gtts_error}")
             return None
     
     async def _synthesize_with_coqui(self, text: str, voice: str = "default", speed: float = 1.0) -> Optional[bytes]:
@@ -323,27 +347,54 @@ class CoquiTTSService:
         """Synthesize speech using pyttsx3."""
         try:
             import tempfile
+            import asyncio
+            import concurrent.futures
             
             # Create temporary file for audio output
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
                 temp_path = temp_file.name
             
             try:
-                # Set voice if specified
-                if voice != "default":
-                    voices = self.fallback_engine.getProperty('voices')
-                    for v in voices:
-                        if voice in v.id or voice in v.name:
-                            self.fallback_engine.setProperty('voice', v.id)
-                            break
+                def _run_pyttsx3():
+                    """Run pyttsx3 in a separate thread to avoid async issues."""
+                    try:
+                        # Create a new engine instance for thread safety
+                        import pyttsx3
+                        engine = pyttsx3.init()
+                        
+                        # Set voice if specified
+                        if voice != "default":
+                            voices = engine.getProperty('voices')
+                            for v in voices:
+                                if voice in v.id or voice in v.name:
+                                    engine.setProperty('voice', v.id)
+                                    break
+                        
+                        # Set speed
+                        rate = int(180 * speed)  # Base rate is 180 WPM
+                        engine.setProperty('rate', max(50, min(400, rate)))
+                        
+                        # Generate speech
+                        engine.save_to_file(text, temp_path)
+                        engine.runAndWait()
+                        
+                        # Stop the engine properly
+                        engine.stop()
+                        del engine
+                        
+                        return True
+                    except Exception as e:
+                        logger.error(f"pyttsx3 thread execution failed: {e}")
+                        return False
                 
-                # Set speed
-                rate = int(180 * speed)  # Base rate is 180 WPM
-                self.fallback_engine.setProperty('rate', max(50, min(400, rate)))
+                # Run pyttsx3 in executor to avoid async loop conflicts
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    success = await loop.run_in_executor(executor, _run_pyttsx3)
                 
-                # Generate speech
-                self.fallback_engine.save_to_file(text, temp_path)
-                self.fallback_engine.runAndWait()
+                if not success:
+                    logger.error("pyttsx3 execution failed")
+                    return None
                 
                 # Read generated audio
                 if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
@@ -509,4 +560,20 @@ class CoquiTTSService:
             "primary_engine": "coqui_tts" if (COQUI_TTS_AVAILABLE and self.model) else "fallback",
             "fallback_engine": type(self.fallback_engine).__name__ if self.fallback_engine else None,
             "voice_list": self.available_voices
+        }
+    
+    def get_engine_info(self) -> Dict[str, Any]:
+        """Get information about the TTS engine setup."""
+        return {
+            "primary_engine": "coqui_tts" if (COQUI_TTS_AVAILABLE and self.model) else "fallback",
+            "coqui_available": COQUI_TTS_AVAILABLE,
+            "model_loaded": self.model is not None,
+            "fallback_available": self.fallback_engine is not None,
+            "fallback_engine": type(self.fallback_engine).__name__ if self.fallback_engine else None,
+            "pyttsx3_available": PYTTSX3_AVAILABLE,
+            "gtts_available": GTTS_AVAILABLE,
+            "offline_capable": self.model is not None or (hasattr(self, 'fallback_engine') and self.fallback_engine and not isinstance(self.fallback_engine, str)),
+            "online_required": isinstance(self.fallback_engine, str) and self.fallback_engine == "gtts",
+            "ready": self.is_ready(),
+            "model_info": self.get_model_info()
         } 

@@ -263,6 +263,7 @@ models/*.bin
 !models/model_head.pkl
 !models/model.tflite
 !models/coqui.tflite
+!models/Bloom560m.bin
 # Large model files
 !models/whisper-tiny.bin
 # But allow Python files in models directory

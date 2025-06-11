@@ -54,6 +54,7 @@ pytest-asyncio==0.21.1
 torch==2.1.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 transformers==4.35.2
 tokenizers==0.14.1
+peft==0.7.1  # PEFT/LoRA for model fine-tuning
 
 # Additional dependencies for enhanced functionality
 asyncpg==0.29.0
