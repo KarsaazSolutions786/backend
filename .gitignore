@@ -251,16 +251,31 @@ credentials/
 *.p12
 *.pfx
 
-# AI Models (if any) - Allow Python files but ignore large model files
-models/*.tflite
+# AI Models - Exclude large model files but allow small ones and Python files
 models/*.bin
-models/*.onnx
-models/*.h5
-models/*.pkl
-models/*.joblib
-# But allow Python files in models directory
+models/*.pth
+models/*.safetensors
+models/**/pytorch_model.bin
+models/**/model.safetensors
+
+# Allow small model files (under 100MB)
+!models/Mini_LM.bin
+!models/model_head.pkl
+!models/model.tflite
+!models/coqui.tflite
+
+# Keep Python files in models directory
 !models/*.py
 !models/__init__.py
+!models/**/*.py
+!models/**/__init__.py
+
+# Keep config files for models
+!models/**/config.json
+!models/**/tokenizer.json
+!models/**/tokenizer_config.json
+!models/**/special_tokens_map.json
+!models/**/vocab.txt
 
 # Media files
 media/
@@ -293,4 +308,19 @@ yarn-error.log*
 # SSL certificates
 *.crt
 *.cert
-*.ca-bundle 
+*.ca-bundle
+
+# Test files
+test_coqui_tts.py
+test_coqui_output.wav
+
+# Audio processing temp files
+*.wav
+*.mp3
+*.flac
+temp_audio_*
+
+# Environment variables
+.env
+.env.local
+.env.production 
