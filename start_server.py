@@ -75,7 +75,13 @@ def main():
         ("fastapi", "fastapi"),
         ("pydantic", "pydantic"),
         ("sqlalchemy", "sqlalchemy"),
-        ("firebase_admin", "firebase-admin")
+        ("firebase_admin", "firebase-admin"),
+        ("numpy", "numpy"),
+        ("scipy", "scipy"),
+        ("librosa", "librosa"),
+        ("soundfile", "soundfile"),
+        ("pydub", "pydub"),
+        ("speech_recognition", "SpeechRecognition")
     ]
     
     missing_deps = []
@@ -93,7 +99,7 @@ def main():
         try:
             import subprocess
             subprocess.run([sys.executable, "-m", "pip", "install"] + missing_deps, 
-                         check=True, timeout=180)
+                         check=True, timeout=300)  # Increased timeout for audio libs
             print("✅ Emergency dependency installation successful!")
         except Exception as e:
             print(f"❌ Emergency dependency installation failed: {e}")

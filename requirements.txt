@@ -23,6 +23,14 @@ python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 firebase-admin>=6.0.0
 
+# Audio processing dependencies
+numpy>=1.24.0
+scipy>=1.11.0
+librosa>=0.10.0
+soundfile>=0.12.0
+pydub>=0.25.0
+SpeechRecognition>=3.10.0
+
 # HTTP and file handling
 aiofiles>=0.20.0
 python-multipart>=0.0.6

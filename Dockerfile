@@ -31,7 +31,7 @@ RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     echo "Installing core dependencies..." && \
-    pip install --no-cache-dir fastapi uvicorn[standard] pydantic sqlalchemy psycopg2-binary aiofiles python-dotenv PyJWT python-jose[cryptography] passlib[bcrypt] firebase-admin httpx python-multipart requests && \
+    pip install --no-cache-dir fastapi uvicorn[standard] pydantic sqlalchemy psycopg2-binary aiofiles python-dotenv PyJWT python-jose[cryptography] passlib[bcrypt] firebase-admin httpx python-multipart requests numpy scipy librosa soundfile pydub SpeechRecognition && \
     if [ "$MINIMAL_MODE" = "true" ]; then \
         echo "Installing additional minimal dependencies for Railway..."; \
         pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.railway.txt; \
