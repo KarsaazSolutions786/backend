@@ -650,6 +650,74 @@ Eindr: Not much, just here to help you stay organized! What would you like to wo
         if any(greeting in message_lower for greeting in greetings):
             return "Hello! How can I help you today? I can assist with reminders, notes, expenses, and general questions."
         
+        # Date/time calculations
+        if any(word in message_lower for word in ["day after", "days from", "what day", "when is", "date"]):
+            try:
+                import datetime
+                import re
+                
+                # Extract number of days
+                day_match = re.search(r'(\d+)\s*days?\s*from', message_lower)
+                if day_match:
+                    days = int(day_match.group(1))
+                    target_date = datetime.datetime.now() + datetime.timedelta(days=days)
+                    day_name = target_date.strftime("%A")
+                    date_str = target_date.strftime("%B %d, %Y")
+                    return f"The day {days} days from now will be {day_name}, {date_str}. Would you like me to set a reminder for that date?"
+                
+                # Handle "day after X days"
+                after_match = re.search(r'day after (\d+)\s*days?', message_lower)
+                if after_match:
+                    days = int(after_match.group(1)) + 1  # Add 1 for "day after"
+                    target_date = datetime.datetime.now() + datetime.timedelta(days=days)
+                    day_name = target_date.strftime("%A")
+                    date_str = target_date.strftime("%B %d, %Y")
+                    return f"The day after {days-1} days from now will be {day_name}, {date_str}. Would you like me to set a reminder for that date?"
+                
+                # Generic date query
+                return "I can help you with date calculations! Try asking 'what day is X days from now?' or let me set a reminder for a specific date."
+                
+            except Exception as e:
+                return "I can help with date calculations! Try asking 'what day is X days from now?' or let me set a reminder for a specific date."
+        
+        # Time-related questions
+        if any(word in message_lower for word in ["what time", "current time", "time now"]):
+            try:
+                import datetime
+                current_time = datetime.datetime.now().strftime("%I:%M %p on %A, %B %d, %Y")
+                return f"The current time is {current_time}. Would you like me to set any reminders or alarms?"
+            except:
+                return "I can help you with time-related tasks like setting reminders and alarms. What would you like me to help you with?"
+        
+        # Simple math calculations
+        if any(word in message_lower for word in ["calculate", "what is", "plus", "minus", "times", "divided"]) and any(char.isdigit() for char in message):
+            try:
+                import re
+                # Simple arithmetic detection
+                math_pattern = r'(\d+(?:\.\d+)?)\s*([\+\-\*\/])\s*(\d+(?:\.\d+)?)'
+                match = re.search(math_pattern, message_lower)
+                if match:
+                    num1, operator, num2 = float(match.group(1)), match.group(2), float(match.group(3))
+                    if operator == '+':
+                        result = num1 + num2
+                    elif operator == '-':
+                        result = num1 - num2
+                    elif operator == '*':
+                        result = num1 * num2
+                    elif operator == '/':
+                        result = num1 / num2 if num2 != 0 else "undefined (division by zero)"
+                    
+                    if isinstance(result, float) and result.is_integer():
+                        result = int(result)
+                    
+                    return f"The answer is {result}. Would you like me to note this calculation or set up any expense tracking related to this amount?"
+            except:
+                pass
+        
+        # Weather (helpful redirect)
+        if any(word in message_lower for word in ["weather", "temperature", "rain", "sunny", "cloudy"]):
+            return "I can't check the weather directly, but I can help you set reminders about weather-related tasks! For example, 'remind me to check the weather tomorrow' or 'remind me to bring an umbrella'."
+        
         # Reminder-related responses
         if any(word in message_lower for word in ["remind", "reminder", "schedule", "appointment"]):
             return "I'd be happy to help you set up a reminder! Please tell me what you'd like to be reminded about and when."
@@ -659,20 +727,24 @@ Eindr: Not much, just here to help you stay organized! What would you like to wo
             return "I can help you save notes! What would you like me to note down for you?"
         
         # Expense-related responses
-        if any(word in message_lower for word in ["expense", "money", "cost", "spend", "buy", "paid"]):
-            return "I can help you track expenses! Please tell me how much you spent and what it was for."
+        if any(word in message_lower for word in ["expense", "money", "cost", "spend", "buy", "paid", "owe", "debt", "loan"]):
+            return "I can help you track expenses! Please tell me how much you spent and what it was for, or if someone owes you money."
         
-        # Question responses
+        # General knowledge questions (improved response)
         if message_lower.startswith(("what", "how", "when", "where", "why", "who")):
-            return "That's a great question! While I'm running in minimal mode, I can help you with reminders, notes, and expense tracking. For more complex questions, you might want to try when the full AI model is available."
+            # Check if it's a personal productivity question
+            if any(word in message_lower for word in ["organize", "productive", "manage", "plan", "schedule"]):
+                return "I can help you stay organized! I can set reminders, save notes, and track expenses. What specific task would you like help with?"
+            else:
+                return "I can help answer questions related to reminders, notes, expenses, and basic calculations. For general knowledge questions, I'd recommend checking a search engine. Is there something specific I can help you organize or track?"
         
         # Help responses
         if any(word in message_lower for word in ["help", "support", "assist"]):
-            return "I'm here to help! I can assist you with:\n• Setting reminders\n• Taking notes\n• Tracking expenses\n• Basic conversation\n\nWhat would you like to do?"
+            return "I'm here to help! I can assist you with:\n• Setting reminders and alarms\n• Taking and organizing notes\n• Tracking expenses and money owed\n• Basic date/time calculations\n• Simple math\n\nWhat would you like to do?"
         
         # Thank you responses
         if any(word in message_lower for word in ["thank", "thanks"]):
             return "You're welcome! Is there anything else I can help you with?"
         
-        # Default response
-        return "I understand you're trying to communicate with me. While I'm running in minimal mode, I can help you with reminders, notes, and expense tracking. What would you like to do?" 
+        # Default response (more helpful)
+        return "I understand you're trying to communicate with me. I can help you with reminders, notes, expense tracking, date calculations, and basic math. What would you like to do?" 
