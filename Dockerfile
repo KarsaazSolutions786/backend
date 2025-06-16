@@ -30,8 +30,10 @@ COPY requirements.txt requirements.railway.txt ./
 RUN python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    echo "Installing core dependencies..." && \
+    pip install --no-cache-dir fastapi uvicorn[standard] pydantic sqlalchemy psycopg2-binary aiofiles python-dotenv && \
     if [ "$MINIMAL_MODE" = "true" ]; then \
-        echo "Installing minimal dependencies for Railway..."; \
+        echo "Installing additional minimal dependencies for Railway..."; \
         pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.railway.txt; \
     else \
         echo "Installing full dependencies..."; \

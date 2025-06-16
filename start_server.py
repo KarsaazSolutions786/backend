@@ -32,6 +32,42 @@ def main():
     print(f"Port: {port}")
     print(f"Python executable: {sys.executable}")
     
+    # Debug: Check if uvicorn is available
+    print("🔍 Checking uvicorn availability...")
+    try:
+        import uvicorn
+        print(f"✅ uvicorn found: {uvicorn.__version__}")
+    except ImportError as e:
+        print(f"❌ uvicorn import failed: {e}")
+        print("📦 Installed packages:")
+        try:
+            import subprocess
+            result = subprocess.run([sys.executable, "-m", "pip", "list"], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                lines = result.stdout.split('\n')
+                relevant_packages = [line for line in lines if any(pkg in line.lower() 
+                                   for pkg in ['uvicorn', 'fastapi', 'pydantic'])]
+                for pkg in relevant_packages:
+                    print(f"  {pkg}")
+            else:
+                print(f"  Error running pip list: {result.stderr}")
+        except Exception as debug_e:
+            print(f"  Could not list packages: {debug_e}")
+        
+        # Try installing uvicorn as last resort
+        print("🛠️ Attempting emergency uvicorn installation...")
+        try:
+            subprocess.run([sys.executable, "-m", "pip", "install", "uvicorn[standard]"], 
+                         check=True, timeout=60)
+            print("✅ Emergency uvicorn installation successful!")
+            import uvicorn  # Try import again
+            print(f"✅ uvicorn now available: {uvicorn.__version__}")
+        except Exception as install_e:
+            print(f"❌ Emergency installation failed: {install_e}")
+            print("💥 Cannot proceed without uvicorn!")
+            sys.exit(1)
+    
     # Try different uvicorn approaches
     uvicorn_methods = [
         # Method 1: Direct uvicorn import (preferred)
