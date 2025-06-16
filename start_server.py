@@ -67,6 +67,37 @@ def main():
             print(f"❌ Emergency installation failed: {install_e}")
             print("💥 Cannot proceed without uvicorn!")
             sys.exit(1)
+
+    # Debug: Check critical dependencies
+    print("🔍 Checking critical dependencies...")
+    critical_deps = [
+        ("jwt", "PyJWT"),
+        ("fastapi", "fastapi"),
+        ("pydantic", "pydantic"),
+        ("sqlalchemy", "sqlalchemy"),
+        ("firebase_admin", "firebase-admin")
+    ]
+    
+    missing_deps = []
+    for import_name, package_name in critical_deps:
+        try:
+            __import__(import_name)
+            print(f"✅ {import_name} available")
+        except ImportError:
+            print(f"❌ {import_name} missing")
+            missing_deps.append(package_name)
+    
+    # Emergency install missing dependencies
+    if missing_deps:
+        print(f"🛠️ Installing missing dependencies: {', '.join(missing_deps)}")
+        try:
+            import subprocess
+            subprocess.run([sys.executable, "-m", "pip", "install"] + missing_deps, 
+                         check=True, timeout=180)
+            print("✅ Emergency dependency installation successful!")
+        except Exception as e:
+            print(f"❌ Emergency dependency installation failed: {e}")
+            print("⚠️ Continuing anyway, some features may not work...")
     
     # Try different uvicorn approaches
     uvicorn_methods = [
