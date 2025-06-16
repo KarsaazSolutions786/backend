@@ -19,11 +19,14 @@ async def lifespan(app: FastAPI):
     # Check if we're in minimal mode or Railway environment
     is_minimal_mode = os.getenv("MINIMAL_MODE", "false").lower() == "true"
     is_railway_env = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    force_full_mode = os.getenv("FORCE_FULL_MODE", "false").lower() == "true"
     
-    # Force minimal mode in Railway
-    if is_railway_env:
+    # Force minimal mode in Railway unless explicitly overridden
+    if is_railway_env and not force_full_mode:
         is_minimal_mode = True
-        logger.info("Railway environment detected - forcing minimal mode")
+        logger.info("Railway environment detected - forcing minimal mode (set FORCE_FULL_MODE=true to override)")
+    elif is_railway_env and force_full_mode:
+        logger.warning("Railway environment detected but FORCE_FULL_MODE=true - attempting full mode (may cause memory issues)")
     
     logger.info(f"Running in {'minimal' if is_minimal_mode else 'full'} mode")
     
