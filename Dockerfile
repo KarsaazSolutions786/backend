@@ -107,7 +107,7 @@ if [ -n "$RAILWAY_ENVIRONMENT" ]; then\n\
     echo "🚀 Railway deployment detected - using optimized startup"\n\
     export MINIMAL_MODE=true\n\
     echo "🌟 Starting FastAPI server on port ${PORT}..."\n\
-    exec uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers 1\n\
+    exec /opt/venv/bin/uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers 1\n\
 fi\n\
 \n\
 # Function to download models if needed\n\
@@ -125,7 +125,7 @@ download_models() {\n\
 # Function to start main FastAPI server\n\
 start_main_server() {\n\
     echo "🌟 Starting main FastAPI server on port ${PORT}..."\n\
-    exec uvicorn main:app \\\n\
+    exec /opt/venv/bin/uvicorn main:app \\\n\
         --host 0.0.0.0 \\\n\
         --port ${PORT} \\\n\
         --timeout-keep-alive 30 \\\n\
@@ -170,7 +170,10 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD /app/healthcheck.sh
 
 # Use startup script as entrypoint
-CMD ["/app/start_server.sh"]
+CMD ["python", "start_server.py"]
+
+# Alternative bash startup (fallback if Python doesn't work)
+# CMD ["/app/start_server.sh"]
 
 # Alternative Railway-compatible startup (uncomment if needed)
 # CMD ["python", "start_server.py"] 
