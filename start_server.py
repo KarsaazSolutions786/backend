@@ -1,49 +1,62 @@
 #!/usr/bin/env python3
 """
-Startup script for Eindr backend with proper environment setup
+Production server startup script for Eindr Backend
+Handles both Railway deployment and local development
 """
+
 import os
 import sys
+import uvicorn
+from pathlib import Path
 
-# CRITICAL: Set environment variables BEFORE importing any modules
-os.environ["MINIMAL_MODE"] = "false"
-print(f"🤖 MINIMAL_MODE set to: {os.environ.get('MINIMAL_MODE')}")
-
-# Verify Python version and environment
-print(f"🐍 Python version: {sys.version}")
-print(f"📁 Python executable: {sys.executable}")
-
-# Check for PyTorch availability
-try:
-    import torch
-    print(f"✅ PyTorch available: {torch.__version__}")
-except ImportError:
-    print("❌ PyTorch not available!")
-    sys.exit(1)
-
-try:
-    import transformers
-    print(f"✅ Transformers available: {transformers.__version__}")
-except ImportError:
-    print("❌ Transformers not available!")
-    sys.exit(1)
-
-# Now import the main application
-print("🚀 Starting Eindr backend with Bloom-560M...")
+def main():
+    """Main startup function with Railway optimization."""
+    
+    # Configuration
+    port = int(os.getenv("PORT", "8000"))
+    host = os.getenv("HOST", "0.0.0.0")
+    
+    # Check if we're in Railway
+    is_railway = os.getenv("RAILWAY_ENVIRONMENT") is not None
+    is_minimal = os.getenv("MINIMAL_MODE", "false").lower() == "true"
+    
+    # Force minimal mode for Railway
+    if is_railway:
+        is_minimal = True
+        os.environ["MINIMAL_MODE"] = "true"
+        print("🚀 Railway deployment detected - using minimal mode")
+    
+    print(f"🚀 Starting Eindr Backend...")
+    print(f"Environment: {'Railway' if is_railway else 'Local'}")
+    print(f"Mode: {'Minimal' if is_minimal else 'Full'}")
+    print(f"Port: {port}")
+    
+    # Railway-optimized configuration
+    if is_railway:
+        uvicorn.run(
+            "main:app",
+            host=host,
+            port=port,
+            workers=1,
+            timeout_keep_alive=30,
+            server_header=False,
+            proxy_headers=True,
+            forwarded_allow_ips="*"
+        )
+    else:
+        # Local/full mode configuration
+        uvicorn.run(
+            "main:app",
+            host=host,
+            port=port,
+            reload=False,
+            workers=1,
+            timeout_keep_alive=30,
+            limit_concurrency=100,
+            limit_max_requests=1000,
+            server_header=False,
+            proxy_headers=True
+        )
 
 if __name__ == "__main__":
-    import uvicorn
-    from main import app
-    from core.config import settings
-    
-    print(f"🔧 Settings MINIMAL_MODE: {settings.MINIMAL_MODE}")
-    print(f"🔧 Chat model path: {settings.CHAT_MODEL_PATH}")
-    
-    # Start the server
-    uvicorn.run(
-        app,
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=False,  # Disable reload to prevent environment reset
-        log_level="info"
-    ) 
+    main() 
