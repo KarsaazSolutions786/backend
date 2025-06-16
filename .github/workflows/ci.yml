@@ -1,0 +1,57 @@
+name: CI - Quantize and Verify Model
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # Allow manual trigger
+  workflow_dispatch:
+  # Trigger on new tags (for releases/artifacts)
+  create:
+    tags:
+      - 'v*'
+
+jobs:
+  quantize-and-verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install PyTorch (CPU) and dependencies
+        run: |
+          pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      - name: Run quantization script
+        id: quantize
+        run: |
+          python quantize_bloom.py --out_dir bloom-model-ci
+
+      - name: Run verification script
+        id: verify
+        run: |
+          python verify_quantized.py --model_dir bloom-model-ci
+
+      - name: Upload quantized model as artifact (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloom-560m-8bit-quantized-model-${{ github.ref_name }}
+          path: |
+            bloom-model-ci/
+            !bloom-model-ci/checksums.txt # Optional: exclude checksums if desired
+          retention-days: 90 

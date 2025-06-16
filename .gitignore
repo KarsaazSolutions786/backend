@@ -316,4 +316,12 @@ temp_audio_*
 # Environment variables
 .env
 .env.local
-.env.production 
+.env.production # Large model files
+models/*.bin
+models/*.tflite
+models/bloom-560m-8bit/
+models/__pycache__/
+.DS_Store
+venv-pytorch/
+venv/
+.venv*/
