@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 """
-Fine-tune Bloom-560M for chat assistant behavior using PEFT/LoRA.
-
-Usage:
-    python scripts/finetune_bloom.py
-
-Requirements:
-    - Base model weights at Models/bloom560m.bin
-    - Training data at data/chat_pairs.jsonl
-    - At least 2000 training examples
+Fine-tune Bloom-560M-8bit for general chat using LoRA
 """
 
 import os
 import json
 import torch
+import logging
+from pathlib import Path
+from typing import List, Dict, Any
+from datasets import Dataset
 from transformers import (
     AutoTokenizer, 
     AutoModelForCausalLM,
@@ -22,260 +18,232 @@ from transformers import (
     DataCollatorForLanguageModeling
 )
 from peft import LoraConfig, get_peft_model, TaskType
-from datasets import Dataset
-from pathlib import Path
-import logging
-from typing import Dict, List
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('finetune.log'),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger(__name__)
 
-class BloomChatFineTuner:
-    """Fine-tune Bloom-560M for chat assistant behavior."""
+class BloomChatTrainer:
+    """Trainer for fine-tuning Bloom model with LoRA for general chat."""
     
-    def __init__(self):
-        self.base_model_path = "Models/bloom560m.bin"
-        self.training_data_path = "data/chat_pairs.jsonl"
-        self.lora_output_path = "Models/Bloom_560M_lora"
-        self.merged_output_path = "Models/Bloom_560M_chat"
-        
-        # LoRA configuration
+    def __init__(
+        self,
+        base_model_path: str = "Models/bloom-560m-8bit",
+        output_dir: str = "Models/bloom-560m-8bit-finetuned",
+        lora_r: int = 8,
+        lora_alpha: int = 16,
+        lora_dropout: float = 0.1
+    ):
+        self.base_model_path = base_model_path
+        self.output_dir = output_dir
         self.lora_config = LoraConfig(
-            r=8,
-            lora_alpha=16,
+            r=lora_r,
+            lora_alpha=lora_alpha,
             target_modules=["query_key_value"],
-            lora_dropout=0.1,
+            lora_dropout=lora_dropout,
             bias="none",
-            task_type=TaskType.CAUSAL_LM,
+            task_type=TaskType.CAUSAL_LM
         )
         
-        # Training arguments
-        self.training_args = TrainingArguments(
-            output_dir="./training_output",
-            num_train_epochs=2,
-            per_device_train_batch_size=8,
-            gradient_accumulation_steps=1,
-            learning_rate=2e-5,
-            warmup_steps=100,
-            logging_steps=50,
-            save_steps=500,
-            evaluation_strategy="no",
-            save_total_limit=2,
-            remove_unused_columns=False,
-            dataloader_pin_memory=False,
-            fp16=True if torch.cuda.is_available() else False,
-        )
+        # Initialize model and tokenizer
+        self.setup_model_and_tokenizer()
     
-    def load_base_model(self):
-        """Load base Bloom-560M model from binary weights."""
-        logger.info("Loading base Bloom-560M model...")
-    
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained("bigscience/bloom-560m")
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        # Load model
-        self.model = AutoModelForCausalLM.from_pretrained(
-            "bigscience/bloom-560m",
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None,
-        )
-    
-        # Load custom weights if available
-        if os.path.exists(self.base_model_path):
-            logger.info(f"Loading custom weights from {self.base_model_path}")
-            try:
-                custom_weights = torch.load(self.base_model_path, map_location='cpu')
-                self.model.load_state_dict(custom_weights, strict=False)
-                logger.info("Custom weights loaded successfully")
-            except Exception as e:
-                logger.warning(f"Could not load custom weights: {e}, using base model")
-        
-        logger.info("Base model loaded successfully")
-    
-    def load_training_data(self) -> Dataset:
-        """Load and preprocess training data from JSONL file."""
-        logger.info(f"Loading training data from {self.training_data_path}")
-        
-        if not os.path.exists(self.training_data_path):
-            raise FileNotFoundError(f"Training data not found at {self.training_data_path}")
-        
-        # Load JSONL data
-        data = []
-        with open(self.training_data_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    item = json.loads(line.strip())
-                    if all(key in item for key in ['system', 'user', 'assistant']):
-                        data.append(item)
-                except json.JSONDecodeError:
-                    continue
-        
-        if len(data) < 2000:
-            logger.warning(f"Only {len(data)} training examples found, recommended minimum is 2000")
-        
-        logger.info(f"Loaded {len(data)} training examples")
-        
-        # Format for chat training
-        formatted_data = []
-        for item in data:
-            # Create conversation format
-            conversation = f"System: {item['system']}\nUser: {item['user']}\nAssistant: {item['assistant']}"
-            formatted_data.append({"text": conversation})
-    
-        return Dataset.from_list(formatted_data)
+    def setup_model_and_tokenizer(self):
+        """Initialize the model and tokenizer."""
+        try:
+            logger.info(f"Loading base model from {self.base_model_path}")
+            self.tokenizer = AutoTokenizer.from_pretrained(self.base_model_path)
 
-    def tokenize_data(self, dataset: Dataset) -> Dataset:
-        """Tokenize the dataset for training."""
-        logger.info("Tokenizing training data...")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.base_model_path,
+                torch_dtype=torch.float32,
+                device_map=None
+            )
+
+            # Apply LoRA
+            logger.info("Applying LoRA adapter")
+            self.model = get_peft_model(self.model, self.lora_config)
+            self.model.print_trainable_parameters()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize model: {e}")
+            raise
+    
+    def prepare_training_data(self, examples: List[Dict[str, Any]]) -> Dataset:
+        """Prepare training data in the correct format."""
+        formatted_data = []
         
-        def tokenize_function(examples):
-            # Tokenize with truncation and padding
+        for example in examples:
+            # Format the conversation
+            conversation = self._format_conversation(example)
+            
+            # Tokenize the conversation
             tokenized = self.tokenizer(
-                examples["text"],
+                conversation,
                 truncation=True,
-                padding=True,
                 max_length=512,
+                padding="max_length",
                 return_tensors="pt"
             )
             
-            # For causal LM, labels are the same as input_ids
-            tokenized["labels"] = tokenized["input_ids"].clone()
+            # Add labels for the response part
+            input_ids = tokenized["input_ids"][0]
+            attention_mask = tokenized["attention_mask"][0]
             
-            return tokenized
+            formatted_example = {
+                "input_ids": input_ids,
+                "attention_mask": attention_mask,
+                "labels": input_ids.clone()
+            }
+            
+            formatted_data.append(formatted_example)
         
-        tokenized_dataset = dataset.map(
-            tokenize_function,
-            batched=True,
-            remove_columns=dataset.column_names
-        )
-        
-        logger.info("Data tokenization completed")
-        return tokenized_dataset
+        return Dataset.from_list(formatted_data)
     
-    def setup_lora(self):
-        """Apply LoRA configuration to the model."""
-        logger.info("Setting up LoRA configuration...")
-        
-        self.model = get_peft_model(self.model, self.lora_config)
-        self.model.print_trainable_parameters()
-        
-        logger.info("LoRA setup completed")
+    def _format_conversation(self, example: Dict[str, Any]) -> str:
+        """Format a single conversation example.
+
+        Supports both the legacy {{"text", "response"}} format and the new
+        {{"system", "user", "assistant"}} format. This allows a mixed dataset
+        during the transition period.
+        """
+        # Legacy keys
+        if "text" in example and "response" in example:
+            system_msg = "You are a friendly AI assistant who enjoys casual conversations and helping people."
+            user_msg = example["text"]
+            assistant_msg = example["response"]
+        # New recommended keys
+        else:
+            system_msg = example.get("system", "You are a helpful assistant.")
+            user_msg = example.get("user", "")
+            assistant_msg = example.get("assistant", "")
+
+        return f"SYSTEM: {system_msg}\nUSER: {user_msg}\nASSISTANT: {assistant_msg}"
     
-    def train(self, dataset: Dataset):
-        """Train the model with LoRA."""
-        logger.info("Starting fine-tuning...")
-        
-        # Create data collator
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False,  # Causal LM, not masked LM
-        )
-        
-        # Create trainer
-        trainer = Trainer(
-            model=self.model,
-            args=self.training_args,
-            train_dataset=dataset,
-            data_collator=data_collator,
-            tokenizer=self.tokenizer,
-        )
-        
-        # Start training
-        trainer.train()
-        
-        logger.info("Fine-tuning completed")
-        return trainer
-    
-    def save_lora_weights(self):
-        """Save LoRA adapter weights."""
-        logger.info(f"Saving LoRA weights to {self.lora_output_path}")
-        
-        os.makedirs(self.lora_output_path, exist_ok=True)
-        self.model.save_pretrained(self.lora_output_path)
-        self.tokenizer.save_pretrained(self.lora_output_path)
-        
-        logger.info("LoRA weights saved successfully")
-    
-    def merge_and_save(self):
-        """Merge LoRA weights with base model and save as fp16 checkpoint."""
-        logger.info(f"Merging LoRA weights and saving to {self.merged_output_path}")
-        
-        # Merge LoRA weights
-        merged_model = self.model.merge_and_unload()
-        
-        # Convert to fp16 for efficiency
-        if torch.cuda.is_available():
-            merged_model = merged_model.half()
-        
-        # Save merged model
-        os.makedirs(self.merged_output_path, exist_ok=True)
-        merged_model.save_pretrained(
-            self.merged_output_path,
-            torch_dtype=torch.float16,
-            safe_serialization=True
-        )
-        self.tokenizer.save_pretrained(self.merged_output_path)
-        
-        logger.info("Merged model saved successfully")
-    
-    def run_fine_tuning(self):
-        """Execute the complete fine-tuning pipeline."""
+    def train(
+        self,
+        train_dataset: Dataset,
+        epochs: int = 3,
+        batch_size: int = 8,
+        learning_rate: float = 2e-5,
+        max_steps: int = 1000
+    ):
+        """Train the model."""
         try:
-            # Step 1: Load base model
-            self.load_base_model()
-            
-            # Step 2: Load and preprocess training data
-            dataset = self.load_training_data()
-            tokenized_dataset = self.tokenize_data(dataset)
+            logger.info("Starting training")
+            logger.info(f"Training on {len(train_dataset)} examples")
+            logger.info(f"Epochs: {epochs}, Batch size: {batch_size}, Learning rate: {learning_rate}")
         
-            # Step 3: Setup LoRA
-            self.setup_lora()
-            
-            # Step 4: Train
-            trainer = self.train(tokenized_dataset)
+            # Training arguments
+            training_args = TrainingArguments(
+                output_dir=self.output_dir,
+                num_train_epochs=epochs,
+                per_device_train_batch_size=batch_size,
+                gradient_accumulation_steps=4,
+                learning_rate=learning_rate,
+                max_steps=max_steps,
+                logging_steps=10,
+                save_steps=200,
+                warmup_steps=100,
+                weight_decay=0.01,
+                logging_dir=f"{self.output_dir}/logs",
+                use_cpu=True,  # Use CPU instead of GPU
+                remove_unused_columns=False,
+                report_to="none",  # Disable wandb tracking
+                save_total_limit=2  # Keep only the last 2 checkpoints
+            )
         
-            # Step 5: Save LoRA weights
-            self.save_lora_weights()
+            # Initialize trainer
+            trainer = Trainer(
+                model=self.model,
+                args=training_args,
+                train_dataset=train_dataset,
+                data_collator=DataCollatorForLanguageModeling(
+                    tokenizer=self.tokenizer,
+                    mlm=False
+                )
+            )
         
-            # Step 6: Merge and save final model
-            self.merge_and_save()
-            
-            logger.info("Fine-tuning pipeline completed successfully!")
-            logger.info(f"LoRA weights saved to: {self.lora_output_path}")
-            logger.info(f"Merged model saved to: {self.merged_output_path}")
-            
+            # Train
+            logger.info("Training started…")
+            train_result = trainer.train()
+        
+            # Log training results
+            logger.info("Training completed!")
+            logger.info(f"Total training time: {train_result.metrics['train_runtime']:.2f} seconds")
+            logger.info(f"Training loss: {train_result.metrics['train_loss']:.4f}")
+        
+            # Save the model
+            logger.info(f"Saving model to {self.output_dir}")
+            self.model.save_pretrained(self.output_dir)
+            self.tokenizer.save_pretrained(self.output_dir)
+        
         except Exception as e:
-            logger.error(f"Fine-tuning failed: {e}")
+            logger.error(f"Training failed: {e}")
             raise
+    
+    def test_model(self, test_examples: List[Dict[str, Any]]):
+        """Test the fine-tuned model."""
+        logger.info("Testing fine-tuned model")
+        
+        for example in test_examples[:5]:  # Test first 5 examples
+            prompt = self._format_conversation(example)
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+            
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=100,
+                temperature=0.7,
+                do_sample=True,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+            
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            input_display = example.get("text") or example.get("user", "<unknown>")
+            logger.info(f"\nInput: {input_display}\nOutput: {response}\n")
 
 def main():
-    """Main function to run fine-tuning."""
-    print("🚀 Starting Bloom-560M Fine-tuning for Chat Assistant")
-    print("=" * 60)
+    """Main training function."""
+    # Parse arguments
+    import argparse
+    parser = argparse.ArgumentParser(description="Fine-tune Bloom for general chat")
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--learning-rate", type=float, default=2e-5)
+    parser.add_argument("--max-steps", type=int, default=1000)
+    parser.add_argument("--data-file", type=str, default="data/chat_data.jsonl")
+    args = parser.parse_args()
     
-    # Check prerequisites
-    if not os.path.exists("Models/bloom560m.bin"):
-        print("❌ Base model not found at Models/bloom560m.bin")
-        return
+    # Initialize trainer
+    trainer = BloomChatTrainer()
     
-    if not os.path.exists("data/chat_pairs.jsonl"):
-        print("❌ Training data not found at data/chat_pairs.jsonl")
-        print("Please ensure you have at least 2000 chat examples in JSONL format")
-        return
+    # Load training data
+    logger.info(f"Loading training data from {args.data_file}")
+    with open(args.data_file) as f:
+        examples = [json.loads(line) for line in f]
     
-    # Create directories
-    os.makedirs("Models", exist_ok=True)
-    os.makedirs("data", exist_ok=True)
+    # Prepare dataset
+    dataset = trainer.prepare_training_data(examples)
     
-    # Run fine-tuning
-    fine_tuner = BloomChatFineTuner()
-    fine_tuner.run_fine_tuning()
+    # Train
+    trainer.train(
+        train_dataset=dataset,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
+        max_steps=args.max_steps
+    )
     
-    print("✅ Fine-tuning completed successfully!")
-    print("The chat model is now ready for use in services/chat_service.py")
+    # Test
+    logger.info("Testing the fine-tuned model")
+    trainer.test_model(examples[-5:])  # Test on last 5 examples
 
 if __name__ == "__main__":
     main() 

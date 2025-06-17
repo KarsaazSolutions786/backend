@@ -859,7 +859,7 @@ async def get_model_information(
         raise HTTPException(
             status_code=500,
             detail=f"Model info retrieval failed: {str(e)}"
-        )
+        ) 
 
 @router.post("/models/quantize-bloom")
 async def quantize_bloom_model(
