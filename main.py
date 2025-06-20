@@ -134,6 +134,9 @@ app.add_middleware(
 # Import routers after app creation to avoid circular imports
 from api import auth, reminders, notes, ledger, friends, stt, users, embeddings, history, intent_processor, ai_pipeline
 
+# Admin Panel Router Imports
+from routers.admin import dashboard, auth as admin_auth, users as admin_users
+
 # Include ALL routers - Full API functionality
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
@@ -146,6 +149,11 @@ app.include_router(history.router, prefix="/api/v1/history", tags=["History"])
 app.include_router(stt.router, prefix="/api/v1/stt", tags=["Speech-to-Text"])
 app.include_router(intent_processor.router, prefix="/api/v1/intent-processor", tags=["Intent Processing"])
 app.include_router(ai_pipeline.router, prefix="/api/v1/ai-pipeline", tags=["AI Pipeline"])
+
+# Admin Panel Routers
+app.include_router(admin_auth.router, prefix="/api/v1", tags=["Admin"])
+app.include_router(dashboard.router, prefix="/api/v1", tags=["Admin"])
+app.include_router(admin_users.router, prefix="/api/v1", tags=["Admin"])
 
 @app.get("/")
 async def root():
