@@ -13,12 +13,29 @@ import io
 import asyncio
 import subprocess
 import json
+import wave
 from pathlib import Path
 from datetime import datetime
 from firebase_auth import verify_firebase_token
 from services.ai_pipeline_service import AIPipelineService
 from utils.logger import logger
 from api.bloom_response_generator import bloom_generator
+import time
+import numpy as np
+import librosa
+
+# AI Pipeline Service instance
+ai_pipeline = AIPipelineService()
+
+# Check if audio processing libraries are available
+try:
+    import librosa
+    import numpy as np
+    AUDIO_LIBS_AVAILABLE = True
+    logger.info("Audio processing libraries available for validation")
+except ImportError:
+    AUDIO_LIBS_AVAILABLE = False
+    logger.warning("Audio processing libraries not available - basic validation only")
 
 router = APIRouter()
 
@@ -27,6 +44,623 @@ ai_pipeline = AIPipelineService()
 
 # Model management state tracking
 model_operations = {}
+
+async def _validate_audio_file_comprehensive(audio_file: UploadFile) -> Dict[str, Any]:
+    """
+    Comprehensive audio file validation for empty/silent audio detection.
+    
+    Args:
+        audio_file: The uploaded audio file
+        
+    Returns:
+        Dictionary with validation results:
+        {
+            "is_valid": bool,
+            "error_code": str,  # "no_voice_detected", "invalid_format", etc.
+            "message": str,
+            "file_size": int,
+            "duration": float (if available)
+        }
+    """
+    try:
+        logger.info("Starting comprehensive audio validation")
+        
+        # Step 1: Check if file exists and has content
+        if not audio_file or not audio_file.filename:
+            logger.warning("No audio file provided")
+            return {
+                "is_valid": False,
+                "error_code": "no_voice_detected",
+                "message": "No audio file was uploaded. Please try again.",
+                "file_size": 0,
+                "duration": 0.0
+            }
+        
+        logger.info(f"Validating file: {audio_file.filename}")
+        
+        # Step 2: Read file content to check size
+        try:
+            content = await audio_file.read()
+            file_size = len(content)
+            await audio_file.seek(0)  # Reset file pointer for later reading
+            logger.info(f"File size: {file_size} bytes")
+        except Exception as e:
+            logger.error(f"Failed to read audio file: {e}")
+            return {
+                "is_valid": False,
+                "error_code": "validation_error",
+                "message": "Failed to read audio file. Please try again.",
+                "file_size": 0,
+                "duration": 0.0
+            }
+        
+        if file_size == 0:
+            logger.warning("Audio file is empty (0 bytes)")
+            return {
+                "is_valid": False,
+                "error_code": "no_voice_detected",
+                "message": "No voice was detected in the uploaded recording. Please try again.",
+                "file_size": file_size,
+                "duration": 0.0
+            }
+        
+        # Step 3: Basic file size validation (too small likely means no audio)
+        if file_size < 1000:  # Less than 1KB is suspicious for any audio format
+            logger.warning(f"Audio file too small: {file_size} bytes")
+            return {
+                "is_valid": False,
+                "error_code": "no_voice_detected",
+                "message": "No voice was detected in the uploaded recording. Please try again.",
+                "file_size": file_size,
+                "duration": 0.0
+            }
+        
+        # Step 4: Advanced audio content validation (if libraries available)
+        if AUDIO_LIBS_AVAILABLE:
+            logger.info("Performing advanced audio analysis")
+            try:
+                # Save to temporary file for analysis
+                temp_path = f"uploads/temp_validation_{audio_file.filename}"
+                os.makedirs("uploads", exist_ok=True)
+                
+                async with aiofiles.open(temp_path, 'wb') as f:
+                    await f.write(content)
+                
+                logger.info(f"Saved temporary file for analysis: {temp_path}")
+                
+                # Analyze audio content
+                try:
+                    # Load audio using librosa
+                    audio_data, sample_rate = librosa.load(temp_path, sr=None)
+                    logger.info(f"Loaded audio: {len(audio_data)} samples at {sample_rate}Hz")
+                    
+                    # Check duration
+                    duration = len(audio_data) / sample_rate if sample_rate > 0 else 0.0
+                    logger.info(f"Audio duration: {duration:.2f} seconds")
+                    
+                    # Check if audio is too short (less than 0.1 seconds)
+                    if duration < 0.1:
+                        logger.warning(f"Audio too short: {duration:.2f}s")
+                        return {
+                            "is_valid": False,
+                            "error_code": "no_voice_detected",
+                            "message": "No voice was detected in the uploaded recording. Please try again.",
+                            "file_size": file_size,
+                            "duration": duration
+                        }
+                    
+                    # Check if audio is silent (RMS energy too low)
+                    rms_energy = np.sqrt(np.mean(audio_data**2))
+                    max_amplitude = np.max(np.abs(audio_data))
+                    logger.info(f"Audio analysis - RMS: {rms_energy:.6f}, Max amplitude: {max_amplitude:.6f}")
+                    
+                    # Thresholds for silence detection
+                    if rms_energy < 0.001 or max_amplitude < 0.005:
+                        logger.warning(f"Audio appears silent - RMS: {rms_energy:.6f}, Max: {max_amplitude:.6f}")
+                        return {
+                            "is_valid": False,
+                            "error_code": "no_voice_detected",
+                            "message": "No voice was detected in the uploaded recording. Please try again.",
+                            "file_size": file_size,
+                            "duration": duration
+                        }
+                    
+                    # NEW: Enhanced detection for white noise and non-speech patterns
+                    logger.info("Running noise detection analysis")
+                    noise_detection_result = _detect_white_noise_and_non_speech(audio_data, sample_rate)
+                    logger.info(f"Noise detection result: {noise_detection_result}")
+                    
+                    if not noise_detection_result["is_speech_like"]:
+                        logger.warning(f"Non-speech audio detected: {noise_detection_result['reason']}")
+                        return {
+                            "is_valid": False,
+                            "error_code": "no_voice_detected",
+                            "message": "No voice was detected in the uploaded recording. Please try again.",
+                            "file_size": file_size,
+                            "duration": duration,
+                            "detection_details": noise_detection_result
+                        }
+                    
+                    # Clean up temp file
+                    try:
+                        os.remove(temp_path)
+                        logger.info("Cleaned up temporary validation file")
+                    except:
+                        pass
+                    
+                    # Audio appears valid
+                    logger.info("Audio validation passed - appears to contain speech-like content")
+                    return {
+                        "is_valid": True,
+                        "error_code": None,
+                        "message": "Audio validation passed",
+                        "file_size": file_size,
+                        "duration": duration
+                    }
+                    
+                except Exception as audio_error:
+                    # Clean up temp file
+                    try:
+                        os.remove(temp_path)
+                    except:
+                        pass
+                    
+                    logger.warning(f"Advanced audio analysis failed: {audio_error}")
+                    # Fall back to basic validation - if we got this far, file probably has content
+                    if file_size > 10000:  # 10KB threshold for basic validation
+                        logger.info("Using basic validation fallback (10KB+ file)")
+                        return {
+                            "is_valid": True,
+                            "error_code": None,
+                            "message": "Audio validation passed (basic check)",
+                            "file_size": file_size,
+                            "duration": None
+                        }
+                    else:
+                        logger.warning("File too small for basic validation fallback")
+                        return {
+                            "is_valid": False,
+                            "error_code": "no_voice_detected",
+                            "message": "No voice was detected in the uploaded recording. Please try again.",
+                            "file_size": file_size,
+                            "duration": None
+                        }
+            
+            except Exception as e:
+                logger.warning(f"Audio validation error: {e}")
+                # Fall back to basic size-based validation
+                pass
+        else:
+            logger.info("Advanced audio libraries not available, using basic validation")
+        
+        # Step 5: Basic validation fallback (when advanced libs not available)
+        if file_size > 10000:  # 10KB threshold - reasonable minimum for audio with voice
+            logger.info("Basic validation passed (file size > 10KB)")
+            return {
+                "is_valid": True,
+                "error_code": None,
+                "message": "Audio validation passed (basic check)",
+                "file_size": file_size,
+                "duration": None
+            }
+        else:
+            logger.warning("Basic validation failed (file size too small)")
+            return {
+                "is_valid": False,
+                "error_code": "no_voice_detected", 
+                "message": "No voice was detected in the uploaded recording. Please try again.",
+                "file_size": file_size,
+                "duration": None
+            }
+            
+    except Exception as e:
+        logger.error(f"Audio validation failed with error: {e}")
+        return {
+            "is_valid": False,
+            "error_code": "validation_error",
+            "message": f"Audio validation failed: {str(e)}",
+            "file_size": 0,
+            "duration": None
+        }
+
+def _detect_white_noise_and_non_speech(audio_data: np.ndarray, sample_rate: int) -> Dict[str, Any]:
+    """
+    Detect white noise, static, and other non-speech audio patterns.
+    
+    Args:
+        audio_data: Audio signal as numpy array
+        sample_rate: Sample rate of the audio
+        
+    Returns:
+        Dictionary with detection results:
+        {
+            "is_speech_like": bool,
+            "reason": str,
+            "confidence": float,
+            "detected_patterns": List[str]
+        }
+    """
+    try:
+        detected_patterns = []
+        reasons = []
+        
+        # Initialize all scores to safe defaults
+        white_noise_score = 0.0
+        static_score = 0.0
+        randomness_score = 0.0
+        speech_score = 0.5  # Neutral default
+        tone_score = 0.0
+        
+        # Validate input data
+        if audio_data is None or len(audio_data) == 0:
+            logger.warning("Empty audio data provided to noise detection")
+            return {
+                "is_speech_like": False,
+                "reason": "Empty audio data",
+                "confidence": 1.0,
+                "detected_patterns": ["empty_audio"],
+                "scores": {
+                    "white_noise": 0.0,
+                    "static": 0.0,
+                    "randomness": 0.0,
+                    "speech_likelihood": 0.0,
+                    "constant_tone": 0.0
+                }
+            }
+        
+        # 1. Check for white noise characteristics
+        try:
+            white_noise_score = _calculate_white_noise_score(audio_data, sample_rate)
+            if white_noise_score > 0.7:  # High white noise probability
+                detected_patterns.append("white_noise")
+                reasons.append(f"White noise detected (score: {white_noise_score:.2f})")
+        except Exception as e:
+            logger.warning(f"White noise detection failed: {e}")
+            white_noise_score = 0.0
+        
+        # 2. Check for static/hiss patterns
+        try:
+            static_score = _calculate_static_score(audio_data, sample_rate)
+            if static_score > 0.8:  # High static probability
+                detected_patterns.append("static")
+                reasons.append(f"Static/hiss detected (score: {static_score:.2f})")
+        except Exception as e:
+            logger.warning(f"Static detection failed: {e}")
+            static_score = 0.0
+        
+        # 3. Check for uniform random noise
+        try:
+            randomness_score = _calculate_randomness_score(audio_data)
+            if randomness_score > 0.85:  # Very random, likely noise
+                detected_patterns.append("random_noise")
+                reasons.append(f"Random noise detected (score: {randomness_score:.2f})")
+        except Exception as e:
+            logger.warning(f"Randomness detection failed: {e}")
+            randomness_score = 0.0
+        
+        # 4. Check for speech-like characteristics
+        try:
+            speech_score = _calculate_speech_likelihood_score(audio_data, sample_rate)
+            if speech_score < 0.3:  # Low speech probability
+                detected_patterns.append("non_speech")
+                reasons.append(f"Low speech probability (score: {speech_score:.2f})")
+        except Exception as e:
+            logger.warning(f"Speech likelihood detection failed: {e}")
+            speech_score = 0.5  # Neutral score
+        
+        # 5. Check for constant tone/beep
+        try:
+            tone_score = _calculate_tone_score(audio_data, sample_rate)
+            if tone_score > 0.8:  # Likely a constant tone
+                detected_patterns.append("constant_tone")
+                reasons.append(f"Constant tone detected (score: {tone_score:.2f})")
+        except Exception as e:
+            logger.warning(f"Tone detection failed: {e}")
+            tone_score = 0.0
+        
+        # Determine if this is speech-like audio
+        is_speech_like = (
+            white_noise_score < 0.7 and 
+            static_score < 0.8 and 
+            randomness_score < 0.85 and
+            speech_score >= 0.3 and
+            tone_score < 0.8
+        )
+        
+        # Calculate overall confidence
+        confidence = 1.0 - max(white_noise_score, static_score, randomness_score, tone_score)
+        
+        # If no specific patterns detected but speech score is very low, flag as non-speech
+        if not detected_patterns and speech_score < 0.2:
+            detected_patterns.append("low_speech_content")
+            reasons.append(f"Very low speech content (score: {speech_score:.2f})")
+            is_speech_like = False
+        
+        return {
+            "is_speech_like": is_speech_like,
+            "reason": "; ".join(reasons) if reasons else "Audio appears speech-like",
+            "confidence": max(0.0, min(1.0, confidence)),
+            "detected_patterns": detected_patterns,
+            "scores": {
+                "white_noise": white_noise_score,
+                "static": static_score,
+                "randomness": randomness_score,
+                "speech_likelihood": speech_score,
+                "constant_tone": tone_score
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Noise detection failed with error: {e}")
+        # If the entire detection fails, be conservative and assume it might be speech
+        # to avoid false positives (blocking valid speech)
+        return {
+            "is_speech_like": True,
+            "reason": f"Detection failed, assuming speech (safety fallback): {str(e)}",
+            "confidence": 0.1,  # Low confidence
+            "detected_patterns": ["detection_error"],
+            "scores": {
+                "white_noise": 0.0,
+                "static": 0.0,
+                "randomness": 0.0,
+                "speech_likelihood": 0.5,
+                "constant_tone": 0.0
+            }
+        }
+
+def _calculate_white_noise_score(audio_data: np.ndarray, sample_rate: int) -> float:
+    """Calculate likelihood of white noise (0.0 = not white noise, 1.0 = definitely white noise)."""
+    try:
+        # Check if scipy is available
+        try:
+            from scipy import signal as scipy_signal
+        except ImportError:
+            logger.warning("SciPy not available for white noise detection, using fallback")
+            return _fallback_white_noise_detection(audio_data)
+        
+        # Compute power spectral density
+        frequencies, psd = scipy_signal.welch(audio_data, sample_rate, nperseg=min(1024, len(audio_data)//4))
+        
+        # White noise has relatively flat power spectrum
+        # Calculate coefficient of variation (std/mean) of PSD
+        if len(psd) > 1 and np.mean(psd) > 0:
+            psd_normalized = psd / np.mean(psd)
+            cv = np.std(psd_normalized) / np.mean(psd_normalized)
+            
+            # White noise typically has low coefficient of variation
+            # Convert to score (lower CV = higher white noise score)
+            white_noise_score = max(0.0, min(1.0, 1.0 - cv))
+        else:
+            white_noise_score = 0.0
+        
+        return white_noise_score
+        
+    except Exception as e:
+        logger.warning(f"White noise detection failed: {e}, using fallback")
+        return _fallback_white_noise_detection(audio_data)
+
+def _fallback_white_noise_detection(audio_data: np.ndarray) -> float:
+    """Fallback white noise detection using simple statistical analysis."""
+    try:
+        # Check if the audio has very uniform distribution
+        # White noise should have relatively constant amplitude
+        amplitude_std = np.std(audio_data)
+        amplitude_mean = np.abs(np.mean(audio_data))
+        
+        # White noise has high standard deviation but low mean
+        if amplitude_mean < 0.01 and amplitude_std > 0.1:
+            return 0.8  # Likely white noise
+        else:
+            return 0.0
+    except Exception:
+        return 0.0
+
+def _calculate_static_score(audio_data: np.ndarray, sample_rate: int) -> float:
+    """Calculate likelihood of static/hiss (high frequency dominated noise)."""
+    try:
+        # Ensure we have enough data for FFT
+        if len(audio_data) < 64:
+            return 0.0
+            
+        # Compute FFT
+        fft = np.fft.rfft(audio_data)
+        freqs = np.fft.rfftfreq(len(audio_data), 1/sample_rate)
+        magnitude = np.abs(fft)
+        
+        if len(magnitude) < 10:  # Not enough frequency bins
+            return 0.0
+        
+        # Calculate energy in high frequency bands vs low frequency bands
+        high_freq_mask = freqs > sample_rate * 0.25  # Above 1/4 of Nyquist
+        low_freq_mask = freqs < sample_rate * 0.1    # Below 1/10 of Nyquist
+        
+        high_energy = np.mean(magnitude[high_freq_mask]) if np.any(high_freq_mask) else 0
+        low_energy = np.mean(magnitude[low_freq_mask]) if np.any(low_freq_mask) else 0
+        
+        # Static typically has more high frequency energy
+        if low_energy > 0:
+            ratio = high_energy / low_energy
+            static_score = min(1.0, ratio / 3.0)  # Normalize to 0-1
+        else:
+            static_score = 1.0 if high_energy > 0 else 0.0
+        
+        return static_score
+        
+    except Exception as e:
+        logger.warning(f"Static detection failed: {e}")
+        return 0.0
+
+def _calculate_randomness_score(audio_data: np.ndarray) -> float:
+    """Calculate randomness/entropy of the audio signal."""
+    try:
+        if len(audio_data) == 0:
+            return 0.0
+            
+        # Quantize audio to calculate entropy
+        # Use a smaller range to avoid overflow
+        quantized = np.round(audio_data * 100).astype(int)
+        
+        # Limit the range to prevent memory issues
+        quantized = np.clip(quantized, -32768, 32767)
+        
+        # Calculate histogram with appropriate number of bins
+        num_bins = min(256, len(np.unique(quantized)))
+        if num_bins < 2:
+            return 0.0
+            
+        hist, _ = np.histogram(quantized, bins=num_bins, density=True)
+        hist = hist[hist > 0]  # Remove zero bins
+        
+        if len(hist) < 2:
+            return 0.0
+        
+        # Calculate entropy
+        entropy = -np.sum(hist * np.log2(hist))
+        
+        # Normalize entropy (max entropy depends on number of bins)
+        max_entropy = np.log2(len(hist))
+        if max_entropy > 0:
+            normalized_entropy = entropy / max_entropy
+        else:
+            normalized_entropy = 0.0
+        
+        return min(1.0, max(0.0, normalized_entropy))
+        
+    except Exception as e:
+        logger.warning(f"Randomness detection failed: {e}")
+        return 0.0
+
+def _calculate_speech_likelihood_score(audio_data: np.ndarray, sample_rate: int) -> float:
+    """Calculate likelihood that the audio contains speech patterns."""
+    try:
+        if len(audio_data) < 64:  # Too short for meaningful analysis
+            return 0.5
+            
+        # 1. Check for speech-like frequency content (formants around 500Hz, 1500Hz, 2500Hz)
+        fft = np.fft.rfft(audio_data)
+        freqs = np.fft.rfftfreq(len(audio_data), 1/sample_rate)
+        magnitude = np.abs(fft)
+        
+        if len(magnitude) < 10:
+            return 0.5
+        
+        # Look for energy in typical speech formant regions
+        formant_ranges = [
+            (300, 800),    # F1 range
+            (1000, 2000),  # F2 range  
+            (2000, 3500)   # F3 range
+        ]
+        
+        formant_energy = 0.0
+        total_energy = np.sum(magnitude)
+        
+        if total_energy == 0:
+            return 0.0
+        
+        for f_low, f_high in formant_ranges:
+            mask = (freqs >= f_low) & (freqs <= f_high)
+            if np.any(mask):
+                formant_energy += np.sum(magnitude[mask])
+        
+        formant_ratio = formant_energy / total_energy
+        
+        # 2. Check for amplitude modulation (speech has varying amplitude)
+        # Calculate frame-wise RMS energy
+        frame_size = max(1, int(0.025 * sample_rate))  # 25ms frames, minimum 1
+        hop_size = max(1, int(0.010 * sample_rate))    # 10ms hop, minimum 1
+        
+        if frame_size >= len(audio_data):
+            # Audio too short for frame analysis
+            energy_variation = 0.5  # Neutral score
+        else:
+            frames = []
+            for i in range(0, len(audio_data) - frame_size, hop_size):
+                frame = audio_data[i:i + frame_size]
+                rms = np.sqrt(np.mean(frame**2))
+                frames.append(rms)
+            
+            if len(frames) > 1:
+                # Speech should have varying energy levels
+                frame_mean = np.mean(frames)
+                if frame_mean > 0:
+                    energy_variation = np.std(frames) / frame_mean
+                else:
+                    energy_variation = 0.0
+            else:
+                energy_variation = 0.0
+        
+        # Combine formant and modulation scores
+        speech_score = (formant_ratio * 0.7) + (min(1.0, energy_variation) * 0.3)
+        
+        return min(1.0, max(0.0, speech_score))
+        
+    except Exception as e:
+        logger.warning(f"Speech likelihood detection failed: {e}")
+        return 0.5  # Neutral score if analysis fails
+
+def _calculate_tone_score(audio_data: np.ndarray, sample_rate: int) -> float:
+    """Calculate likelihood of constant tone/beep."""
+    try:
+        if len(audio_data) < 64:
+            return 0.0
+            
+        # Compute FFT
+        fft = np.fft.rfft(audio_data)
+        freqs = np.fft.rfftfreq(len(audio_data), 1/sample_rate)
+        magnitude = np.abs(fft)
+        
+        if len(magnitude) < 10:
+            return 0.0
+        
+        # Find the peak frequency
+        peak_idx = np.argmax(magnitude)
+        peak_freq = freqs[peak_idx] if peak_idx < len(freqs) else 0
+        peak_magnitude = magnitude[peak_idx]
+        
+        # Calculate how much energy is concentrated around the peak
+        # Look at ±50Hz around the peak
+        freq_tolerance = 50  # Hz
+        peak_mask = np.abs(freqs - peak_freq) <= freq_tolerance
+        peak_energy = np.sum(magnitude[peak_mask]) if np.any(peak_mask) else 0
+        total_energy = np.sum(magnitude)
+        
+        # High concentration indicates a tone
+        if total_energy > 0:
+            concentration_ratio = peak_energy / total_energy
+        else:
+            concentration_ratio = 0.0
+        
+        # Also check if the amplitude is relatively constant over time
+        frame_size = max(1, int(0.050 * sample_rate))  # 50ms frames, minimum 1
+        
+        if frame_size >= len(audio_data):
+            # Audio too short for frame analysis
+            amplitude_stability = 1.0  # Assume stable for short audio
+        else:
+            frame_rms = []
+            for i in range(0, len(audio_data) - frame_size, frame_size):
+                frame = audio_data[i:i + frame_size]
+                rms = np.sqrt(np.mean(frame**2))
+                frame_rms.append(rms)
+            
+            if len(frame_rms) > 1:
+                frame_mean = np.mean(frame_rms)
+                if frame_mean > 0:
+                    amplitude_stability = 1.0 - (np.std(frame_rms) / frame_mean)
+                    amplitude_stability = max(0.0, min(1.0, amplitude_stability))
+                else:
+                    amplitude_stability = 1.0
+            else:
+                amplitude_stability = 1.0
+        
+        # Combine frequency concentration and amplitude stability
+        tone_score = (concentration_ratio * 0.6) + (amplitude_stability * 0.4)
+        
+        return min(1.0, max(0.0, tone_score))
+        
+    except Exception as e:
+        logger.warning(f"Tone detection failed: {e}")
+        return 0.0
 
 # --- Enhanced AI Pipeline Endpoints with Bloom Integration ---
 
@@ -48,7 +682,7 @@ async def complete_ai_pipeline_with_bloom(
     Enhanced AI Pipeline: Audio → Whisper STT → MiniLM Intent → Database → Bloom Text Generation → Coqui TTS
     
     This endpoint processes audio through the enhanced AI pipeline with Bloom model integration:
-    1. Validates and preprocesses audio file
+    1. Validates and preprocesses audio file (includes empty/silent audio detection)
     2. Transcribes speech using Whisper STT
     3. Classifies intent(s) using MiniLM
     4. Stores results in database
@@ -70,10 +704,69 @@ async def complete_ai_pipeline_with_bloom(
         
     Returns:
         Complete pipeline results including Bloom-generated responses
+        OR graceful error response for empty/silent audio
     """
     try:
         # Get user ID
         user_id = current_user["uid"]
+        
+        # ===== STEP 1: COMPREHENSIVE AUDIO VALIDATION =====
+        logger.info(f"Starting audio validation for user {user_id}, file: {audio_file.filename}")
+        
+        try:
+            validation_result = await _validate_audio_file_comprehensive(audio_file)
+            logger.info(f"Audio validation completed: {validation_result}")
+        except Exception as validation_error:
+            logger.error(f"Audio validation failed with exception: {validation_error}")
+            # Return graceful error even if validation fails
+            return {
+                "success": False,
+                "error": "validation_error",
+                "message": "Audio validation failed. Please try again with a different file.",
+                "file_info": {
+                    "filename": audio_file.filename,
+                    "size_bytes": 0,
+                    "duration_seconds": None
+                },
+                "validation_error": str(validation_error)
+            }
+        
+        if not validation_result["is_valid"]:
+            logger.warning(f"Audio validation failed: {validation_result['message']}")
+            
+            # Convert any numpy types to native Python types for JSON serialization
+            def convert_numpy_types(obj):
+                """Recursively convert numpy types to native Python types."""
+                if isinstance(obj, dict):
+                    return {k: convert_numpy_types(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy_types(item) for item in obj]
+                elif hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                elif hasattr(obj, 'tolist'):  # numpy array
+                    return obj.tolist()
+                else:
+                    return obj
+            
+            # Clean the validation result to ensure JSON serializability
+            clean_validation_result = convert_numpy_types(validation_result)
+            
+            # Return graceful error response for empty/silent audio
+            return {
+                "success": False,
+                "error": clean_validation_result["error_code"],
+                "message": clean_validation_result["message"],
+                "file_info": {
+                    "filename": audio_file.filename,
+                    "size_bytes": clean_validation_result["file_size"],
+                    "duration_seconds": clean_validation_result.get("duration")
+                },
+                "validation_details": clean_validation_result
+            }
+        
+        logger.info(f"Audio validation passed - File: {audio_file.filename}, Size: {validation_result['file_size']} bytes")
+        
+        # ===== STEP 2: CONTINUE WITH EXISTING PIPELINE =====
         
         # Auto-detect available Bloom model if not specified
         if bloom_model_path is None:
@@ -126,10 +819,18 @@ async def complete_ai_pipeline_with_bloom(
                 pass
             
             if not standard_result.get("success", False):
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Standard pipeline processing failed: {'; '.join(standard_result.get('errors', ['Unknown error']))}"
-                )
+                logger.error(f"Standard pipeline processing failed: {standard_result}")
+                return {
+                    "success": False,
+                    "error": "pipeline_error",
+                    "message": f"Pipeline processing failed: {'; '.join(standard_result.get('errors', ['Unknown error']))}",
+                    "details": standard_result,
+                    "file_info": {
+                        "filename": audio_file.filename,
+                        "size_bytes": validation_result["file_size"],
+                        "duration_seconds": validation_result.get("duration")
+                    }
+                }
             
             # Step 4: Enhanced Response Generation with Bloom (if enabled and available)
             bloom_response = None
@@ -193,98 +894,65 @@ async def complete_ai_pipeline_with_bloom(
                         "bloom_enhanced": False
                     }
             
-            # Prepare enhanced response
-            response_data = {
+            # Return complete results
+            return {
                 "success": True,
-                "pipeline_completed": True,
-                "enhanced_with_bloom": bloom_used,
-                "bloom_model_used": bloom_model_path if bloom_used else None,
-                "user_id": user_id,
-                "processing_time": standard_result.get("processing_time", 0.0),
                 "transcription": standard_result.get("transcription", ""),
-                "transcription_confidence": standard_result.get("transcription_confidence", 0.0),
-                "language_detected": standard_result.get("language_detected", language),
                 "intent_result": standard_result.get("intent_result", {}),
                 "database_result": standard_result.get("database_result", {}),
                 "bloom_result": bloom_response,
-                "tts_result": tts_result or {
-                    "success": False,
-                    "error": "TTS not requested",
-                    "response_text": final_response_text,
-                    "audio_size": 0,
-                    "voice_used": voice,
-                    "bloom_enhanced": bloom_used
+                "tts_result": tts_result,
+                "processing_time": standard_result.get("processing_time", 0),
+                "bloom_enhanced": bloom_used,
+                "bloom_model_path": bloom_model_path if bloom_used else None,
+                "file_info": {
+                    "filename": audio_file.filename,
+                    "size_bytes": validation_result["file_size"],
+                    "duration_seconds": validation_result.get("duration")
                 },
-                "processing_steps": {
-                    "transcription": True,
-                    "intent_classification": True,
-                    "database_operations": store_in_database,
-                    "bloom_generation": bloom_used,
-                    "tts_generation": generate_audio_response
-                },
-                "errors": standard_result.get("errors", [])
+                "final_response_text": final_response_text,
+                "timestamp": datetime.utcnow().isoformat()
             }
-            
-            # Add any Bloom errors (but don't fail the whole pipeline)
-            bloom_fallback_used = bloom_response and bloom_response.get("method") in ["contextual_fallback", "basic_fallback"]
-            
-            if bloom_response and not bloom_response.get("success") and not bloom_fallback_used:
-                error_msg = bloom_response.get('error', 'Unknown error')
-                
-                # Provide helpful guidance for dependency issues
-                if bloom_response.get("dependency_issue"):
-                    if "torch" in error_msg.lower():
-                        response_data["errors"].append(f"Bloom generation failed: PyTorch not available. Your Python version (3.13) may not be supported. Try Python 3.8-3.12.")
-                        response_data["bloom_setup_required"] = {
-                            "issue": "python_version_incompatible",
-                            "current_python": "3.13.3",
-                            "supported_python": "3.8-3.12",
-                            "solution": "Use a Python environment with version 3.8-3.12 and install: pip install torch transformers"
-                        }
-                    else:
-                        response_data["errors"].append(f"Bloom generation failed: {error_msg}")
-                        response_data["bloom_setup_required"] = {
-                            "issue": "dependencies_missing",
-                            "solution": bloom_response.get("solution", "Install PyTorch dependencies")
-                        }
-                else:
-                    response_data["errors"].append(f"Bloom generation: {error_msg}")
-            elif bloom_fallback_used:
-                # Intelligent fallback is working - add info but no error
-                response_data["bloom_fallback_info"] = {
-                    "method": bloom_response.get("method"),
-                    "reason": bloom_response.get("fallback_reason", "pytorch_unavailable"),
-                    "message": "Using intelligent contextual responses (PyTorch not available)"
-                }
-            
-            # Add helpful message if Bloom wasn't used and no fallback
-            if use_bloom_generation and not bloom_used and not bloom_fallback_used:
-                if not bloom_model_path:
-                    response_data["errors"].append("Bloom generation requested but no quantized model found. Run quantization first.")
-                    response_data["bloom_setup_required"] = {
-                        "issue": "model_not_found",
-                        "solution": "Quantize a model using: POST /ai-pipeline/models/quantize-bloom"
-                    }
-            
-            logger.info(f"Enhanced AI pipeline completed successfully for user {user_id} (Bloom used: {bloom_used})")
-            return response_data
-            
-        except Exception as e:
-            # Clean up temporary file on error
+        
+        except Exception as pipeline_error:
+            # Clean up temp file if it exists
             try:
-                os.remove(temp_path)
+                if 'temp_path' in locals():
+                    os.remove(temp_path)
             except:
                 pass
-            raise e
             
-    except HTTPException:
-        raise
+            logger.error(f"Pipeline processing error: {pipeline_error}")
+            return {
+                "success": False,
+                "error": "pipeline_processing_error",
+                "message": f"Failed to process audio through pipeline: {str(pipeline_error)}",
+                "file_info": {
+                    "filename": audio_file.filename,
+                    "size_bytes": validation_result.get("file_size", 0),
+                    "duration_seconds": validation_result.get("duration")
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
     except Exception as e:
-        logger.error(f"Enhanced AI pipeline failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Enhanced pipeline processing failed: {str(e)}"
-        )
+        # This is the absolute last resort catch-all
+        logger.error(f"Complete endpoint failure: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        return {
+            "success": False,
+            "error": "internal_server_error",
+            "message": "An unexpected error occurred while processing your request. Please try again.",
+            "file_info": {
+                "filename": getattr(audio_file, 'filename', 'unknown') if audio_file else 'unknown',
+                "size_bytes": 0,
+                "duration_seconds": None
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "debug_error": str(e) if os.getenv("DEBUG", "false").lower() == "true" else None
+        }
 
 @router.post("/generate-bloom-response")
 async def generate_bloom_response_only(
@@ -1423,7 +2091,7 @@ async def get_bloom_model_status(
             issues.append({
                 "type": "pytorch_env_missing",
                 "severity": "high",
-                "message": "PyTorch environment (venv-pytorch) not found",
+                "message": "PyTorch environment not found",
                 "solution": "Create Python 3.11 environment and install PyTorch"
             })
             recommendations.append("❌ PyTorch environment missing. Run: python3.11 -m venv venv-pytorch && source venv-pytorch/bin/activate && pip install torch transformers")
