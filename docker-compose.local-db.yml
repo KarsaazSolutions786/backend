@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  # Single PostgreSQL instance for all microservices
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: eindr_dev
+      POSTGRES_USER: eindr_user
+      POSTGRES_PASSWORD: eindr_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./setup_databases.sql:/docker-entrypoint-initdb.d/setup_databases.sql
+    networks:
+      - eindr-local
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eindr_user -d eindr_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@eindr.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - eindr-local
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  eindr-local:
+    driver: bridge

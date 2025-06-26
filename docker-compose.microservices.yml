@@ -1,0 +1,561 @@
+version: "3.8"
+
+services:
+  # ======================
+  # DATABASES
+  # ======================
+  auth-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5442:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  user-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  reminder-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: reminder_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - reminder_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  note-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: note_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - note_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  ledger-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ledger_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - ledger_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  friend-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: friend_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5437:5432"
+    volumes:
+      - friend_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  history-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: history_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5438:5432"
+    volumes:
+      - history_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  chat-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: chat_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5439:5432"
+    volumes:
+      - chat_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  scheduler-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: scheduler_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5440:5432"
+    volumes:
+      - scheduler_db_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+
+  # ======================
+  # INFRASTRUCTURE
+  # ======================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - eindr-network
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: eindr
+      RABBITMQ_DEFAULT_PASS: eindr123
+    ports:
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - eindr-network
+
+  # ======================
+  # API GATEWAY WITH KONG
+  # ======================
+  kong-database:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kongpass
+    volumes:
+      - kong_data:/var/lib/postgresql/data
+    networks:
+      - eindr-network
+    ports:
+      - "5441:5432"
+    restart: unless-stopped
+
+  kong-migration:
+    image: kong:3.4
+    command: kong migrations bootstrap
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PORT: 5432
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+    networks:
+      - eindr-network
+    depends_on:
+      - kong-database
+    restart: on-failure
+
+  kong:
+    image: kong:3.4
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PORT: 5432
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kongpass
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      KONG_PLUGINS: bundled,jwt,cors,rate-limiting,request-transformer,response-transformer,correlation-id,file-log
+    ports:
+      - "8080:8000" # Main API Gateway port
+      - "8443:8443" # Proxy SSL port
+      - "8101:8001" # Admin API port (changed to avoid conflict with auth-service)
+      - "8444:8444" # Admin API SSL port
+      - "8102:8002" # Admin GUI port (changed to avoid conflict)
+    networks:
+      - eindr-network
+    depends_on:
+      - kong-migration
+      - auth-service
+      - user-service
+      - reminder-service
+      - note-service
+      - ledger-service
+      - friend-service
+      - history-service
+      - stt-service
+      - tts-service
+      - intent-service
+      - chat-service
+      - scheduler-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  konga:
+    image: pantsel/konga:latest
+    environment:
+      NODE_ENV: production
+      KONGA_HOOK_TIMEOUT: 120000
+    ports:
+      - "8103:1337" # Changed to keep Kong-related services in 81xx range
+    networks:
+      - eindr-network
+    depends_on:
+      - kong
+    restart: unless-stopped
+
+  # ======================
+  # MICROSERVICES
+  # ======================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@auth-db:5432/auth_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-jwt-secret-key-change-in-production
+      SERVICE_NAME: auth-service
+      PORT: 8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./services/auth-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - auth-db
+      - redis
+    restart: unless-stopped
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@user-db:5432/user_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: user-service
+      PORT: 8000
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./services/user-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - user-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  reminder-service:
+    build:
+      context: ./services/reminder-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@reminder-db:5432/reminder_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: reminder-service
+      PORT: 8000
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./services/reminder-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - reminder-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  note-service:
+    build:
+      context: ./services/note-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@note-db:5432/note_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: note-service
+      PORT: 8000
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./services/note-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - note-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  ledger-service:
+    build:
+      context: ./services/ledger-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@ledger-db:5432/ledger_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: ledger-service
+      PORT: 8000
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./services/ledger-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - ledger-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  friend-service:
+    build:
+      context: ./services/friend-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@friend-db:5432/friend_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: friend-service
+      PORT: 8000
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./services/friend-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - friend-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  history-service:
+    build:
+      context: ./services/history-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@history-db:5432/history_db
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: history-service
+      PORT: 8000
+    ports:
+      - "8007:8000"
+    volumes:
+      - ./services/history-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - history-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  stt-service:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    environment:
+      MODEL_PATH: /app/models
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: stt-service
+      PORT: 8000
+    ports:
+      - "8008:8000"
+    volumes:
+      - ./services/stt-service:/app
+      - ./models:/app/models:ro
+    networks:
+      - eindr-network
+    depends_on:
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    environment:
+      MODEL_PATH: /app/models
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: tts-service
+      PORT: 8000
+    ports:
+      - "8009:8000"
+    volumes:
+      - ./services/tts-service:/app
+      - ./models:/app/models:ro
+    networks:
+      - eindr-network
+    depends_on:
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  intent-service:
+    build:
+      context: ./services/intent-service
+      dockerfile: Dockerfile
+    environment:
+      MODEL_PATH: /app/models
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: intent-service
+      PORT: 8000
+    ports:
+      - "8010:8000"
+    volumes:
+      - ./services/intent-service:/app
+      - ./models:/app/models:ro
+    networks:
+      - eindr-network
+    depends_on:
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  chat-service:
+    build:
+      context: ./services/chat-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@chat-db:5432/chat_db
+      MODEL_PATH: /app/models
+      AUTH_SERVICE_URL: http://auth-service:8000
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      SERVICE_NAME: chat-service
+      PORT: 8000
+    ports:
+      - "8011:8000"
+    volumes:
+      - ./services/chat-service:/app
+      - ./models:/app/models:ro
+    networks:
+      - eindr-network
+    depends_on:
+      - chat-db
+      - rabbitmq
+      - auth-service
+    restart: unless-stopped
+
+  scheduler-service:
+    build:
+      context: ./services/scheduler-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@scheduler-db:5432/scheduler_db
+      RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
+      REMINDER_SERVICE_URL: http://reminder-service:8000
+      AUTH_SERVICE_URL: http://auth-service:8000
+      SERVICE_NAME: scheduler-service
+      PORT: 8000
+    ports:
+      - "8012:8000"
+    volumes:
+      - ./services/scheduler-service:/app
+    networks:
+      - eindr-network
+    depends_on:
+      - scheduler-db
+      - rabbitmq
+      - reminder-service
+    restart: unless-stopped
+
+  # ======================
+  # MONITORING & OBSERVABILITY
+  # ======================
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    networks:
+      - eindr-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - eindr-network
+    depends_on:
+      - prometheus
+
+volumes:
+  auth_db_data:
+  user_db_data:
+  reminder_db_data:
+  note_db_data:
+  ledger_db_data:
+  friend_db_data:
+  history_db_data:
+  chat_db_data:
+  scheduler_db_data:
+  kong_data:
+  redis_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  eindr-network:
+    driver: bridge
