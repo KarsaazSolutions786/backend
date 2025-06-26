@@ -93,11 +93,11 @@ async def register(
         user = await auth_service.create_user(db, user_data.email, user_data.password)
         
         # Generate tokens
-        access_token = jwt_service.create_access_token({"sub": user.id, "email": user.email})
-        refresh_token = jwt_service.create_refresh_token({"sub": user.id})
+        access_token = jwt_service.create_access_token({"sub": str(user.id), "email": user.email})
+        refresh_token = jwt_service.create_refresh_token({"sub": str(user.id)})
         
         # Store refresh token
-        await auth_service.store_refresh_token(db, user.id, refresh_token)
+        await auth_service.store_refresh_token(db, str(user.id), refresh_token)
         
         logger.info(f"User registered successfully: {user.email}")
         
@@ -142,11 +142,11 @@ async def login(
             )
         
         # Generate tokens
-        access_token = jwt_service.create_access_token({"sub": user.id, "email": user.email})
-        refresh_token = jwt_service.create_refresh_token({"sub": user.id})
+        access_token = jwt_service.create_access_token({"sub": str(user.id), "email": user.email})
+        refresh_token = jwt_service.create_refresh_token({"sub": str(user.id)})
         
         # Store refresh token
-        await auth_service.store_refresh_token(db, user.id, refresh_token)
+        await auth_service.store_refresh_token(db, str(user.id), refresh_token)
         
         # Update last login
         await auth_service.update_last_login(db, user.id)
@@ -201,7 +201,7 @@ async def refresh_token(
         refresh_token_record = db.query(RefreshToken).filter(
             RefreshToken.user_id == user_id,
             RefreshToken.token_hash == auth_service.hash_token(token_data.refresh_token),
-            RefreshToken.revoked_at.is_(None)
+            RefreshToken.is_revoked == False
         ).first()
         
         if not refresh_token_record:
@@ -219,14 +219,14 @@ async def refresh_token(
             )
         
         # Generate new tokens
-        access_token = jwt_service.create_access_token({"sub": user.id, "email": user.email})
-        new_refresh_token = jwt_service.create_refresh_token({"sub": user.id})
+        access_token = jwt_service.create_access_token({"sub": str(user.id), "email": user.email})
+        new_refresh_token = jwt_service.create_refresh_token({"sub": str(user.id)})
         
         # Revoke old refresh token
-        refresh_token_record.revoked_at = datetime.utcnow()
+        refresh_token_record.is_revoked = True
         
         # Store new refresh token
-        await auth_service.store_refresh_token(db, user.id, new_refresh_token)
+        await auth_service.store_refresh_token(db, str(user.id), new_refresh_token)
         
         db.commit()
         
@@ -298,11 +298,11 @@ async def logout(
         # Find and revoke refresh token
         refresh_token_record = db.query(RefreshToken).filter(
             RefreshToken.token_hash == auth_service.hash_token(token_data.refresh_token),
-            RefreshToken.revoked_at.is_(None)
+            RefreshToken.is_revoked == False
         ).first()
         
         if refresh_token_record:
-            refresh_token_record.revoked_at = datetime.utcnow()
+            refresh_token_record.is_revoked = True
             db.commit()
         
         return {"message": "Logged out successfully"}

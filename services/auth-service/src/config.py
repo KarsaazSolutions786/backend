@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", "8000"))
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@auth-db:5432/auth_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr_user:eindr_pass@localhost:5432/auth_db")
     
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")

@@ -22,17 +22,13 @@ class User(Base):
     locked_until = Column(TIMESTAMP, nullable=True)
     password_reset_token = Column(String, nullable=True)
     password_reset_expires = Column(TIMESTAMP, nullable=True)
-    email_verification_token = Column(String, nullable=True)
-    email_verification_expires = Column(TIMESTAMP, nullable=True)
-    
-    # Device/session tracking
-    last_login_ip = Column(String, nullable=True)
-    last_user_agent = Column(String, nullable=True)
+    verification_token = Column(String, nullable=True)
+    verification_expires = Column(TIMESTAMP, nullable=True)
     
     __table_args__ = (
         Index('idx_users_email_active', 'email', 'is_active'),
         Index('idx_users_created_at', 'created_at'),
-        Index('idx_users_verification_token', 'email_verification_token'),
+        Index('idx_users_verification_token', 'verification_token'),
         Index('idx_users_reset_token', 'password_reset_token'),
     )
 
@@ -45,8 +41,7 @@ class RefreshToken(Base):
     token_hash = Column(String, nullable=False, unique=True)
     expires_at = Column(TIMESTAMP, nullable=False)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    revoked_at = Column(TIMESTAMP, nullable=True)
-    device_info = Column(String, nullable=True)  # User agent or device identifier
+    is_revoked = Column(Boolean, default=False)
     
     __table_args__ = (
         Index('idx_refresh_tokens_user', 'user_id'),

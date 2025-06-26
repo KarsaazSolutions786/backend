@@ -74,7 +74,7 @@ class AuthService:
             logger.error(f"Error authenticating user: {e}")
             return None
     
-    async def store_refresh_token(self, db: Session, user_id: str, token: str, device_info: str = None):
+    async def store_refresh_token(self, db: Session, user_id: str, token: str):
         """Store a refresh token in the database"""
         try:
             token_hash = self.hash_token(token)
@@ -83,8 +83,7 @@ class AuthService:
             refresh_token = RefreshToken(
                 user_id=user_id,
                 token_hash=token_hash,
-                expires_at=expires_at,
-                device_info=device_info
+                expires_at=expires_at
             )
             
             db.add(refresh_token)
@@ -101,10 +100,6 @@ class AuthService:
             user = db.query(User).filter(User.id == user_id).first()
             if user:
                 user.last_login = datetime.utcnow()
-                if ip_address:
-                    user.last_login_ip = ip_address
-                if user_agent:
-                    user.last_user_agent = user_agent
                 
                 db.commit()
         
@@ -192,8 +187,8 @@ class AuthService:
             # Revoke all refresh tokens for security
             db.query(RefreshToken).filter(
                 RefreshToken.user_id == user.id,
-                RefreshToken.revoked_at.is_(None)
-            ).update({"revoked_at": datetime.utcnow()})
+                RefreshToken.is_revoked == False
+            ).update({"is_revoked": True})
             
             db.commit()
             
@@ -217,8 +212,8 @@ class AuthService:
             # Revoke all refresh tokens for security
             db.query(RefreshToken).filter(
                 RefreshToken.user_id == user_id,
-                RefreshToken.revoked_at.is_(None)
-            ).update({"revoked_at": datetime.utcnow()})
+                RefreshToken.is_revoked == False
+            ).update({"is_revoked": True})
             
             db.commit()
             
@@ -239,8 +234,8 @@ class AuthService:
                 # Revoke all refresh tokens
                 db.query(RefreshToken).filter(
                     RefreshToken.user_id == user_id,
-                    RefreshToken.revoked_at.is_(None)
-                ).update({"revoked_at": datetime.utcnow()})
+                    RefreshToken.is_revoked == False
+                ).update({"is_revoked": True})
                 
                 db.commit()
                 
@@ -272,14 +267,13 @@ class AuthService:
         try:
             sessions = db.query(RefreshToken).filter(
                 RefreshToken.user_id == user_id,
-                RefreshToken.revoked_at.is_(None),
+                RefreshToken.is_revoked == False,
                 RefreshToken.expires_at > datetime.utcnow()
             ).all()
             
             return [
                 {
                     "id": session.id,
-                    "device_info": session.device_info,
                     "created_at": session.created_at,
                     "expires_at": session.expires_at
                 }
@@ -296,11 +290,11 @@ class AuthService:
             session = db.query(RefreshToken).filter(
                 RefreshToken.id == session_id,
                 RefreshToken.user_id == user_id,
-                RefreshToken.revoked_at.is_(None)
+                RefreshToken.is_revoked == False
             ).first()
             
             if session:
-                session.revoked_at = datetime.utcnow()
+                session.is_revoked = True
                 db.commit()
                 
                 logger.info(f"Session revoked for user: {user_id}")

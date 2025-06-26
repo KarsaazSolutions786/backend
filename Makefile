@@ -88,6 +88,25 @@ reset-local-db: stop-local-db ## Reset local database (destroys all data)
 	docker-compose -f docker-compose.local-db.yml down -v
 	docker-compose -f docker-compose.local-db.yml up -d postgres
 
+setup-local-env: ## Set up environment variables for local development
+	@echo "🔧 To set up your local environment, run:"
+	@echo "   source setup_local_env.sh"
+	@echo ""
+	@echo "💡 This will configure all DATABASE_URLs to point to your local PostgreSQL"
+
+dev-ready: start-local-db setup-local-env ## Get everything ready for local development
+	@echo ""
+	@echo "🎯 Local development environment is ready!"
+	@echo "📋 Quick summary:"
+	@echo "   1. PostgreSQL: localhost:5432 (eindr_user/eindr_pass)"
+	@echo "   2. All 10 databases created and ready"
+	@echo "   3. PgAdmin: http://localhost:5050 (admin@eindr.dev/admin123)"
+	@echo ""
+	@echo "▶️  Next steps:"
+	@echo "   • Run: source setup_local_env.sh"
+	@echo "   • Start your microservices individually"
+	@echo "   • Or use: make up (for full Docker deployment)"
+
 migrate-all: migrate-auth migrate-user migrate-reminder migrate-note migrate-ledger migrate-friend migrate-history migrate-chat migrate-scheduler ## Run all migrations
 
 migrate-auth: ## Run migrations for auth service
