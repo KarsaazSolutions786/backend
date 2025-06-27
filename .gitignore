@@ -251,24 +251,40 @@ credentials/
 *.p12
 *.pfx
 
-# AI Models - Allow our specific required model files but ignore others
+# AI/ML Models Configuration
+# General pattern: ignore large model files by default
+models/*.bin
 models/*.tflite
 models/*.onnx
 models/*.h5
 models/*.joblib
-models/*.bin
+models/*/pytorch_model.bin
 
-# Allow our specific model files
-!models/pytorch_model.bin
-!models/model_head.pkl
-!models/model.tflite
-!models/coqui.tflite
-!models/Bloom560m.bin
-# Large model files
+# But allow our specific required model files
 !models/whisper-tiny.bin
-# But allow Python files in models directory
-!models/*.py
+!models/coqui.tflite
+!models/Mini_LM.bin
+!models/models.py
+!models/admin_models.py
 !models/__init__.py
+
+# Allow model directories but ignore their large files
+!models/bloom-560m-8bit/
+models/bloom-560m-8bit/*.bin
+models/bloom-560m-8bit/*.safetensors
+models/bloom-560m-8bit/pytorch_model.bin
+!models/bloom-560m-8bit/*.json
+!models/bloom-560m-8bit/tokenizer.json
+
+!models/bloom-560m-8bit-finetuned/
+models/bloom-560m-8bit-finetuned/*.bin
+models/bloom-560m-8bit-finetuned/*.safetensors
+models/bloom-560m-8bit-finetuned/pytorch_model.bin
+
+!models/Bloom_560M_finetuned/
+models/Bloom_560M_finetuned/*.bin
+models/Bloom_560M_finetuned/*.safetensors
+models/Bloom_560M_finetuned/pytorch_model.bin
 
 # Media files
 media/
@@ -316,12 +332,4 @@ temp_audio_*
 # Environment variables
 .env
 .env.local
-.env.production # Large model files
-models/*.bin
-models/*.tflite
-models/bloom-560m-8bit/
-models/__pycache__/
-.DS_Store
-venv-pytorch/
-venv/
-.venv*/
+.env.production
