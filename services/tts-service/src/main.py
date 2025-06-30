@@ -21,7 +21,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Text-to-Speech service...")
     
     try:
-        # No database needed
+        # Initialize TTS service
+        from .services.tts_service import initialize_tts_service
+        tts_service = initialize_tts_service()
+        await tts_service.load_model()
+        
         logger.info("Service initialized successfully")
         
     except Exception as e:
@@ -35,7 +39,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="TTS Service",
-    description="Text-to-Speech service",
+    description="Text-to-Speech service with Coqui TTS",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -58,10 +62,10 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-# Exception handler
+# Error handling
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception: {exc}", exc_info=True)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"}
@@ -73,10 +77,16 @@ app.include_router(synthesize.router, prefix="/tts", tags=["text-to-speech"])
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    from .services.tts_service import get_tts_service
+    tts_service = get_tts_service()
+    
+    engine_status = "available" if tts_service and tts_service.is_available() else "unavailable"
+    
     return {
         "status": "healthy",
         "service": "tts-service",
         "version": "1.0.0",
+        "tts_engines": engine_status,
         "timestamp": time.time()
     }
 
@@ -85,7 +95,17 @@ async def root():
     """Root endpoint"""
     return {
         "service": "tts-service",
-        "message": "Text-to-Speech service is running",
+        "message": "Text-to-Speech service with Coqui TTS is running",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "tts-service",
+        "message": "Text-to-Speech service with Coqui TTS is running",
         "version": "1.0.0",
         "docs": "/docs"
     }

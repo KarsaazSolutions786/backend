@@ -1,25 +1,29 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 import os
 
 class Settings(BaseSettings):
-    # App settings
-    SERVICE_NAME: str = "stt-service"
-    VERSION: str = "1.0.0"
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    # Database settings
+    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/stt_db")
     
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
+    # Service settings
+    service_name: str = os.getenv("SERVICE_NAME", "stt-service")
+    port: int = int(os.getenv("PORT", "8000"))
+    host: str = os.getenv("HOST", "0.0.0.0")
     
-    # RabbitMQ
-    RABBITMQ_URL: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+    # External services
+    auth_service_url: str = os.getenv("AUTH_SERVICE_URL", "http://localhost:8001")
+    rabbitmq_url: str = os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+    redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
     
-    # Auth service
-    AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
+    # Model settings
+    model_path: str = os.getenv("MODEL_PATH", "/app/models")
+    
+    # Logging
+    log_level: str = os.getenv("LOG_LEVEL", "INFO")
     
     class Config:
         env_file = ".env"
-        case_sensitive = True
+
+settings = Settings()
 
 settings = Settings()

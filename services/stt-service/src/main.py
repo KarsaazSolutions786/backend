@@ -21,7 +21,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Speech-to-Text service...")
     
     try:
-        # No database needed
+        # Initialize Whisper service
+        from .services.whisper_service import initialize_whisper_service
+        whisper_service = initialize_whisper_service()
+        await whisper_service.load_model()
+        
         logger.info("Service initialized successfully")
         
     except Exception as e:
@@ -35,7 +39,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app
 app = FastAPI(
     title="STT Service",
-    description="Speech-to-Text service",
+    description="Speech-to-Text service with Whisper",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -58,10 +62,10 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-# Exception handler
+# Error handling
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception: {exc}", exc_info=True)
+async def general_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"}
@@ -73,10 +77,16 @@ app.include_router(transcribe.router, prefix="/stt", tags=["speech-to-text"])
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    from .services.whisper_service import get_whisper_service
+    whisper_service = get_whisper_service()
+    
+    model_status = "available" if whisper_service and whisper_service.is_available() else "unavailable"
+    
     return {
         "status": "healthy",
         "service": "stt-service",
         "version": "1.0.0",
+        "whisper_model": model_status,
         "timestamp": time.time()
     }
 
@@ -85,7 +95,17 @@ async def root():
     """Root endpoint"""
     return {
         "service": "stt-service",
-        "message": "Speech-to-Text service is running",
+        "message": "Speech-to-Text service with Whisper is running",
+        "version": "1.0.0",
+        "docs": "/docs"
+    }
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "service": "stt-service",
+        "message": "Speech-to-Text service with Whisper is running",
         "version": "1.0.0",
         "docs": "/docs"
     }

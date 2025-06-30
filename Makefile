@@ -185,4 +185,8 @@ health-check: ## Check health of all services
 	@curl -f http://localhost:8080/reminders/health || echo "❌ Reminder service down"
 	@echo "✅ Health check complete"
 
+reset: clean build up migrate-all kong-setup ## Reset entire environment
+
+seed-db:
+	python3 scripts/seed_dummy_data.py 
 reset: clean build up migrate-all kong-setup ## Reset entire environment 
