@@ -5,304 +5,283 @@ import hashlib
 import secrets
 import uuid
 import logging
+from fastapi import HTTPException, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+import bcrypt
+from typing import Dict, Optional
 
-from ..models import User, RefreshToken, LoginAttempt
+from ..models import Customer, CustomerSession, LoginAttempt
 from ..config import settings
+from ..database import get_db
 
 logger = logging.getLogger(__name__)
 
+security = HTTPBearer()
+
 class AuthService:
-    def __init__(self):
+    def __init__(self, db: Session):
+        self.db = db
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
     
     def hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
-        return self.pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+    def verify_password(self, password: str, hashed_password: str) -> bool:
         """Verify a password against its hash"""
-        return self.pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     
     def hash_token(self, token: str) -> str:
         """Hash a token for storage"""
         return hashlib.sha256(token.encode()).hexdigest()
     
-    async def create_user(self, db: Session, email: str, password: str) -> User:
-        """Create a new user"""
-        try:
-            user_id = str(uuid.uuid4())
-            hashed_password = self.hash_password(password)
-            
-            user = User(
-                id=user_id,
-                email=email,
-                password_hash=hashed_password,
-                is_active=True,
-                is_verified=False,
-                created_at=datetime.utcnow()
+    def create_customer(self, email: str, password: str) -> Customer:
+        """Create a new customer"""
+        # Check if customer already exists
+        existing_customer = self.db.query(Customer).filter(Customer.email == email).first()
+        if existing_customer:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Customer with this email already exists"
             )
-            
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-            
-            logger.info(f"User created: {email}")
-            return user
         
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error creating user: {e}")
-            raise
+        # Hash password and create customer
+        password_hash = self.hash_password(password)
+        customer = Customer(
+            email=email,
+            password_hash=password_hash,
+            is_verified=False,
+            is_active=True
+        )
+        
+        self.db.add(customer)
+        self.db.commit()
+        self.db.refresh(customer)
+        
+        return customer
     
-    async def authenticate_user(self, db: Session, email: str, password: str) -> User:
-        """Authenticate a user by email and password"""
-        try:
-            user = db.query(User).filter(User.email == email).first()
-            
-            if not user:
-                return None
-            
-            if not user.is_active:
-                return None
-            
-            if not self.verify_password(password, user.password_hash):
-                return None
-            
-            return user
+    def authenticate_customer(self, email: str, password: str) -> Optional[Customer]:
+        """Authenticate a customer"""
+        customer = self.db.query(Customer).filter(Customer.email == email).first()
         
-        except Exception as e:
-            logger.error(f"Error authenticating user: {e}")
+        if not customer:
             return None
-    
-    async def store_refresh_token(self, db: Session, user_id: str, token: str):
-        """Store a refresh token in the database"""
-        try:
-            token_hash = self.hash_token(token)
-            expires_at = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-            
-            refresh_token = RefreshToken(
-                user_id=user_id,
-                token_hash=token_hash,
-                expires_at=expires_at
-            )
-            
-            db.add(refresh_token)
-            db.commit()
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error storing refresh token: {e}")
-            raise
-    
-    async def update_last_login(self, db: Session, user_id: str, ip_address: str = None, user_agent: str = None):
-        """Update user's last login timestamp"""
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                user.last_login = datetime.utcnow()
-                
-                db.commit()
         
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error updating last login: {e}")
+        if not customer.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated"
+            )
+        
+        # Check if account is locked
+        if customer.locked_until and customer.locked_until > datetime.utcnow():
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail=f"Account locked until {customer.locked_until}"
+            )
+        
+        # Verify password
+        if not self.verify_password(password, customer.password_hash):
+            # Increment failed attempts
+            customer.login_attempts += 1
+            
+            # Lock account after 5 failed attempts
+            if customer.login_attempts >= 5:
+                customer.locked_until = datetime.utcnow() + timedelta(minutes=30)
+            
+            self.db.commit()
+            return None
+            
+        # Reset failed attempts on successful login
+        customer.login_attempts = 0
+        customer.locked_until = None
+        customer.last_login = datetime.utcnow()
+        self.db.commit()
+        
+        return customer
     
-    async def log_login_attempt(self, db: Session, email: str, success: bool, failure_reason: str = None, ip_address: str = None, user_agent: str = None):
+    def create_session(self, customer_id: int, ip_address: str = None, user_agent: str = None, remember_me: bool = False) -> CustomerSession:
+        """Create a new customer session"""
+        session_token = secrets.token_urlsafe(32)
+        expires_at = datetime.utcnow() + timedelta(days=30 if remember_me else 1)
+        
+        session = CustomerSession(
+            customer_id=customer_id,
+            session_token=session_token,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            expires_at=expires_at
+        )
+            
+        self.db.add(session)
+        self.db.commit()
+        self.db.refresh(session)
+        
+        return session
+    
+    def log_login_attempt(self, customer_id: int, email: str, success: bool, ip_address: str = None, user_agent: str = None, failure_reason: str = None):
         """Log a login attempt"""
+        attempt = LoginAttempt(
+            customer_id=customer_id,
+            email=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            is_success=success,
+            failure_reason=failure_reason
+        )
+        
+        self.db.add(attempt)
+        self.db.commit()
+    
+    def get_customer_by_id(self, customer_id: int) -> Optional[Customer]:
+        """Get customer by ID"""
+        return self.db.query(Customer).filter(Customer.id == customer_id).first()
+    
+    def invalidate_sessions(self, customer_id: int):
+        """Invalidate all sessions for a customer"""
+        self.db.query(CustomerSession).filter(CustomerSession.customer_id == customer_id).delete()
+        self.db.commit()
+
+class JWTService:
+    def __init__(self):
+        self.secret_key = settings.SECRET_KEY
+        self.algorithm = settings.ALGORITHM
+        self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
+    
+    def create_access_token(self, data: dict) -> str:
+        """Create an access token"""
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
+        to_encode.update({"exp": expire, "type": "access"})
+        
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+    
+    def create_refresh_token(self, data: dict) -> str:
+        """Create a refresh token"""
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
+        to_encode.update({"exp": expire, "type": "refresh"})
+        
+        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
+    
+    def verify_token(self, token: str) -> dict:
+        """Verify and decode a token"""
         try:
-            login_attempt = LoginAttempt(
-                email=email,
-                ip_address=ip_address or "unknown",
-                user_agent=user_agent,
-                success=success,
-                failure_reason=failure_reason,
-                attempted_at=datetime.utcnow()
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired"
             )
-            
-            db.add(login_attempt)
-            db.commit()
-            
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error logging login attempt: {e}")
+        except jwt.JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
     
-    async def is_account_locked(self, db: Session, email: str) -> bool:
-        """Check if an account is locked due to too many failed attempts"""
-        try:
-            # Check recent failed attempts
-            cutoff_time = datetime.utcnow() - timedelta(minutes=settings.LOCKOUT_DURATION_MINUTES)
-            
-            failed_attempts = db.query(LoginAttempt).filter(
-                LoginAttempt.email == email,
-                LoginAttempt.success == False,
-                LoginAttempt.attempted_at > cutoff_time
-            ).count()
-            
-            return failed_attempts >= settings.MAX_LOGIN_ATTEMPTS
+    def get_customer_id_from_token(self, token: str) -> int:
+        """Extract customer ID from token"""
+        payload = self.verify_token(token)
+        customer_id = payload.get("sub")
         
-        except Exception as e:
-            logger.error(f"Error checking account lock status: {e}")
-            return False
+        if not customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload"
+            )
+        
+        return int(customer_id)
+
+# Dependency functions for FastAPI
+async def get_current_customer(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> Dict:
+    """Get current authenticated customer"""
+    jwt_service = JWTService()
     
-    async def generate_password_reset_token(self, db: Session, user_id: str) -> str:
-        """Generate and store a password reset token"""
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
-                return None
-            
-            # Generate secure token
-            reset_token = secrets.token_urlsafe(32)
-            expires_at = datetime.utcnow() + timedelta(hours=1)  # 1 hour expiry
-            
-            # Store token
-            user.password_reset_token = reset_token
-            user.password_reset_expires = expires_at
-            
-            db.commit()
-            
-            return reset_token
+    try:
+        # Verify token
+        payload = jwt_service.verify_token(credentials.credentials)
+        customer_id = payload.get("sub")
         
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error generating password reset token: {e}")
-            raise
+        if not customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        
+        # Get customer from database
+        auth_service = AuthService(db)
+        customer = auth_service.get_customer_by_id(int(customer_id))
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Customer not found"
+            )
+        
+        if not customer.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated"
+            )
+        
+        # Return customer data as dict for easy access
+        return {
+            "customer_id": customer.id,
+            "email": customer.email,
+            "is_verified": customer.is_verified,
+            "is_active": customer.is_active
+        }
+        
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+
+async def get_optional_current_customer(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> Optional[Dict]:
+    """Get current customer if token is provided, otherwise return None"""
+    if not credentials:
+        return None
     
-    async def reset_password_with_token(self, db: Session, token: str, new_password: str) -> bool:
-        """Reset password using a reset token"""
-        try:
-            user = db.query(User).filter(
-                User.password_reset_token == token,
-                User.password_reset_expires > datetime.utcnow()
-            ).first()
-            
-            if not user:
-                return False
-            
-            # Update password
-            user.password_hash = self.hash_password(new_password)
-            user.password_reset_token = None
-            user.password_reset_expires = None
-            
-            # Revoke all refresh tokens for security
-            db.query(RefreshToken).filter(
-                RefreshToken.user_id == user.id,
-                RefreshToken.is_revoked == False
-            ).update({"is_revoked": True})
-            
-            db.commit()
-            
-            logger.info(f"Password reset for user: {user.email}")
-            return True
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error resetting password: {e}")
-            return False
-    
-    async def update_password(self, db: Session, user_id: str, new_password: str):
-        """Update user password"""
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
-                raise ValueError("User not found")
-            
-            user.password_hash = self.hash_password(new_password)
-            
-            # Revoke all refresh tokens for security
-            db.query(RefreshToken).filter(
-                RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False
-            ).update({"is_revoked": True})
-            
-            db.commit()
-            
-            logger.info(f"Password updated for user: {user.email}")
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error updating password: {e}")
-            raise
-    
-    async def deactivate_user(self, db: Session, user_id: str):
-        """Deactivate a user account"""
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if user:
-                user.is_active = False
-                
-                # Revoke all refresh tokens
-                db.query(RefreshToken).filter(
-                    RefreshToken.user_id == user_id,
-                    RefreshToken.is_revoked == False
-                ).update({"is_revoked": True})
-                
-                db.commit()
-                
-                logger.info(f"User deactivated: {user.email}")
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error deactivating user: {e}")
-            raise
-    
-    async def cleanup_expired_tokens(self, db: Session):
-        """Clean up expired refresh tokens"""
-        try:
-            expired_count = db.query(RefreshToken).filter(
-                RefreshToken.expires_at < datetime.utcnow()
-            ).delete()
-            
-            db.commit()
-            
-            if expired_count > 0:
-                logger.info(f"Cleaned up {expired_count} expired refresh tokens")
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error cleaning up expired tokens: {e}")
-    
-    async def get_user_sessions(self, db: Session, user_id: str):
-        """Get active sessions for a user"""
-        try:
-            sessions = db.query(RefreshToken).filter(
-                RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False,
-                RefreshToken.expires_at > datetime.utcnow()
-            ).all()
-            
-            return [
-                {
-                    "id": session.id,
-                    "created_at": session.created_at,
-                    "expires_at": session.expires_at
-                }
-                for session in sessions
-            ]
-        
-        except Exception as e:
-            logger.error(f"Error getting user sessions: {e}")
-            return []
-    
-    async def revoke_session(self, db: Session, user_id: str, session_id: str):
-        """Revoke a specific user session"""
-        try:
-            session = db.query(RefreshToken).filter(
-                RefreshToken.id == session_id,
-                RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False
-            ).first()
-            
-            if session:
-                session.is_revoked = True
-                db.commit()
-                
-                logger.info(f"Session revoked for user: {user_id}")
-                return True
-            
-            return False
-        
-        except Exception as e:
-            db.rollback()
-            logger.error(f"Error revoking session: {e}")
-            return False 
+    try:
+        return await get_current_customer(credentials, db)
+    except HTTPException:
+        return None
+
+def require_admin(current_customer: Dict = Depends(get_current_customer)):
+    """Require admin access"""
+    if not current_customer.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_customer
+
+def require_verified(current_customer: Dict = Depends(get_current_customer)):
+    """Require verified account"""
+    if not current_customer.get("is_verified"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account verification required"
+        )
+    return current_customer
+
+def create_service_auth_header(customer_id: int) -> dict:
+    """Create auth header for internal service-to-service communication"""
+    jwt_service = JWTService()
+    token = jwt_service.create_access_token({"sub": str(customer_id)})
+    return {"Authorization": f"Bearer {token}"}
+
+def verify_service_token(token: str) -> int:
+    """Verify token from internal service-to-service communication"""
+    jwt_service = JWTService()
+    return jwt_service.get_customer_id_from_token(token) 

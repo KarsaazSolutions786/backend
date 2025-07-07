@@ -11,16 +11,20 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", "8000"))
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr_user:eindr_pass@localhost:5432/auth_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db")
     
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
     
     # JWT Settings
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "your-jwt-secret-key-change-in-production")
-    JWT_ALGORITHM: str = "HS256"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "eindr-super-secret-key-change-in-production-123456789")
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    
+    # Legacy JWT settings for compatibility
+    JWT_SECRET: str = os.getenv("JWT_SECRET", SECRET_KEY)
+    JWT_ALGORITHM: str = ALGORITHM
     
     # Security
     PASSWORD_MIN_LENGTH: int = 8
@@ -36,5 +40,8 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+
+def get_settings():
+    return Settings()
 
 settings = Settings() 

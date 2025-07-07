@@ -1,404 +1,609 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import and_, or_, desc, func, text
+from typing import List, Optional
 from datetime import datetime
 import logging
-import uuid
 
-router = APIRouter()
+from ..database import get_db
+from ..models import Note, NoteShare, Customer  
+from ..schemas import (
+    NoteCreate, NoteUpdate, NoteResponse, NoteWithShares,
+    NoteShareCreate, NoteShareUpdate, NoteShareResponse,
+    NotesListResponse, NoteFilters, NoteBulkUpdate, NoteBulkDelete,
+    NoteStats, ErrorResponse
+)
+from ..services.auth_service import get_current_customer
+
+router = APIRouter(prefix="/notes", tags=["Notes"])
+security = HTTPBearer()
+
 logger = logging.getLogger(__name__)
 
-# Pydantic models
-class NoteCreate(BaseModel):
-    title: str = Field(..., min_length=1, max_length=200)
-    content: str = Field(..., min_length=1)
-    folder_id: Optional[str] = None
-    tags: Optional[List[str]] = []
-    category: Optional[str] = None
-    is_shared: bool = False
-    is_favorite: bool = False
-
-class NoteUpdate(BaseModel):
-    title: Optional[str] = Field(None, max_length=200)
-    content: Optional[str] = None
-    folder_id: Optional[str] = None
-    tags: Optional[List[str]] = None
-    category: Optional[str] = None
-    is_shared: Optional[bool] = None
-    is_favorite: Optional[bool] = None
-
-class NoteResponse(BaseModel):
-    id: str
-    user_id: str
-    title: str
-    content: str
-    folder_id: Optional[str]
-    tags: List[str]
-    category: Optional[str]
-    is_shared: bool
-    is_favorite: bool
-    word_count: int
-    created_at: datetime
-    updated_at: datetime
-
-class FolderCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-    color: Optional[str] = "#1f77b4"
-
-class FolderResponse(BaseModel):
-    id: str
-    name: str
-    description: Optional[str]
-    color: str
-    note_count: int
-    created_at: datetime
-
-class SearchRequest(BaseModel):
-    query: str = Field(..., min_length=1)
-    tags: Optional[List[str]] = None
-    category: Optional[str] = None
-    folder_id: Optional[str] = None
-
-# Mock data storage (in production, use database)
-notes_storage = {}
-folders_storage = {}
-
-def get_current_user_id() -> str:
-    """Mock function to get current user ID"""
-    return "user-123"
-
 @router.post("/", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
-async def create_note(note_data: NoteCreate):
-    """Create a new note"""
-    try:
-        note_id = str(uuid.uuid4())
-        user_id = get_current_user_id()
-        
-        # Calculate word count
-        word_count = len(note_data.content.split()) if note_data.content else 0
-        
-        note = {
-            "id": note_id,
-            "user_id": user_id,
-            "title": note_data.title,
-            "content": note_data.content,
-            "folder_id": note_data.folder_id,
-            "tags": note_data.tags or [],
-            "category": note_data.category,
-            "is_shared": note_data.is_shared,
-            "is_favorite": note_data.is_favorite,
-            "word_count": word_count,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
-        }
-        
-        notes_storage[note_id] = note
-        
-        logger.info(f"Created note: {note_id} for user: {user_id}")
-        
-        return NoteResponse(**note)
-        
-    except Exception as e:
-        logger.error(f"Error creating note: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create note"
-        )
-
-@router.get("/", response_model=List[NoteResponse])
-async def get_notes(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    category: Optional[str] = Query(None),
-    folder_id: Optional[str] = Query(None),
-    tags: Optional[str] = Query(None),  # Comma-separated tags
-    is_favorite: Optional[bool] = Query(None),
-    search: Optional[str] = Query(None)
+async def create_note(
+    note_data: NoteCreate,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
 ):
-    """Get user's notes with filtering options"""
-    try:
-        user_id = get_current_user_id()
-        
-        # Filter notes by user
-        user_notes = [note for note in notes_storage.values() if note["user_id"] == user_id]
+    """Create a new note"""
+    new_note = Note(
+        customer_id=current_customer["id"],
+        title=note_data.title,
+        description=note_data.description,
+        content_type=note_data.content_type.value if note_data.content_type else "text",
+        is_favorite=note_data.is_favorite,
+        is_pinned=note_data.is_pinned
+    )
+    
+    db.add(new_note)
+    db.commit()
+    db.refresh(new_note)
+    
+    # Load customer relationship
+    note = db.query(Note).options(joinedload(Note.customer)).filter(Note.id == new_note.id).first()
+    
+    return NoteResponse.from_orm(note)
+
+@router.get("/", response_model=NotesListResponse)
+async def get_notes(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    is_favorite: Optional[bool] = Query(None),
+    is_pinned: Optional[bool] = Query(None),
+    is_shared: Optional[bool] = Query(None),
+    content_type: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    shared_with_me: Optional[bool] = Query(None),
+    sort_by: str = Query("created_at", regex="^(created_at|updated_at|title|last_accessed)$"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Get notes with filtering, pagination, and sorting"""
+    customer_id = current_customer["id"]
+    offset = (page - 1) * limit
+    
+    if shared_with_me:
+        # Get notes shared with this customer
+        query = db.query(Note).join(
+            NoteShare, Note.id == NoteShare.note_id
+        ).options(joinedload(Note.customer)).filter(
+            and_(
+                NoteShare.shared_with_id == customer_id,
+                NoteShare.is_active == True,
+                or_(
+                    NoteShare.expires_at.is_(None),
+                    NoteShare.expires_at > datetime.utcnow()
+                )
+            )
+        )
+    else:
+        # Get customer's own notes
+        query = db.query(Note).options(joinedload(Note.customer)).filter(
+            Note.customer_id == customer_id
+        )
         
         # Apply filters
-        if category:
-            user_notes = [note for note in user_notes if note.get("category") == category]
+    if is_favorite is not None:
+        query = query.filter(Note.is_favorite == is_favorite)
         
-        if folder_id:
-            user_notes = [note for note in user_notes if note.get("folder_id") == folder_id]
-        
-        if is_favorite is not None:
-            user_notes = [note for note in user_notes if note.get("is_favorite") == is_favorite]
-        
-        if tags:
-            tag_list = [tag.strip() for tag in tags.split(",")]
-            user_notes = [note for note in user_notes 
-                         if any(tag in note.get("tags", []) for tag in tag_list)]
+    if is_pinned is not None:
+        query = query.filter(Note.is_pinned == is_pinned)
+    
+    if is_shared is not None:
+        query = query.filter(Note.is_shared == is_shared)
+    
+    if content_type:
+        query = query.filter(Note.content_type == content_type)
         
         if search:
-            search_lower = search.lower()
-            user_notes = [note for note in user_notes 
-                         if search_lower in note["title"].lower() or 
-                            search_lower in note["content"].lower()]
-        
-        # Sort by updated_at (newest first)
-        user_notes.sort(key=lambda x: x["updated_at"], reverse=True)
+            search_filter = or_(
+                Note.title.ilike(f"%{search}%"),
+                Note.description.ilike(f"%{search}%")
+            )
+            query = query.filter(search_filter)
+    
+    # Apply sorting
+    if sort_order == "desc":
+        query = query.order_by(desc(getattr(Note, sort_by)))
+    else:
+        query = query.order_by(getattr(Note, sort_by))
+    
+    # Get total count
+    total = query.count()
         
         # Apply pagination
-        paginated_notes = user_notes[skip:skip + limit]
-        
-        return [NoteResponse(**note) for note in paginated_notes]
-        
-    except Exception as e:
-        logger.error(f"Error getting notes: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get notes"
+    notes = query.offset(offset).limit(limit).all()
+    
+    return NotesListResponse(
+        notes=[NoteResponse.from_orm(note) for note in notes],
+        total=total,
+        page=page,
+        limit=limit,
+        has_next=(page * limit) < total,
+        has_prev=page > 1
         )
 
-@router.get("/{note_id}", response_model=NoteResponse)
-async def get_note(note_id: str):
-    """Get a specific note"""
-    try:
-        note = notes_storage.get(note_id)
+@router.get("/{note_id}", response_model=NoteWithShares)
+async def get_note(
+    note_id: int,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Get a specific note with sharing information"""
+    note = db.query(Note).options(
+        joinedload(Note.customer),
+        joinedload(Note.shares).joinedload(NoteShare.shared_by),
+        joinedload(Note.shares).joinedload(NoteShare.shared_with)
+    ).filter(Note.id == note_id).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
         
-        if not note:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Note not found"
-            )
-        
-        # Check if user owns the note or it's shared
-        user_id = get_current_user_id()
-        if note["user_id"] != user_id and not note.get("is_shared", False):
+    # Check if customer has access to this note
+    has_access = (
+        note.customer_id == current_customer["id"] or
+        any(
+            share.shared_with_id == current_customer["id"] and 
+            share.is_active and 
+            (share.expires_at is None or share.expires_at > datetime.utcnow())
+            for share in note.shares
+        )
+    )
+    
+    if not has_access:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
             )
         
-        return NoteResponse(**note)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting note: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get note"
-        )
+    # Update last_accessed if it's the note owner
+    if note.customer_id == current_customer["id"]:
+        note.last_accessed = datetime.utcnow()
+        db.commit()
+    
+    return NoteWithShares.from_orm(note)
 
 @router.put("/{note_id}", response_model=NoteResponse)
-async def update_note(note_id: str, note_data: NoteUpdate):
+async def update_note(
+    note_id: int,
+    note_data: NoteUpdate,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
     """Update a note"""
-    try:
-        note = notes_storage.get(note_id)
-        
-        if not note:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Note not found"
-            )
-        
-        # Check ownership
-        user_id = get_current_user_id()
-        if note["user_id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access denied"
-            )
-        
-        # Update fields
-        update_data = note_data.dict(exclude_unset=True)
-        for field, value in update_data.items():
-            note[field] = value
-        
-        # Update word count if content changed
-        if "content" in update_data:
-            note["word_count"] = len(note["content"].split()) if note["content"] else 0
-        
-        note["updated_at"] = datetime.utcnow()
-        
-        logger.info(f"Updated note: {note_id}")
-        
-        return NoteResponse(**note)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating note: {e}")
+    note = db.query(Note).filter(Note.id == note_id).first()
+    
+    if not note:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update note"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
         )
+    
+    # Check if customer can edit this note
+    can_edit = note.customer_id == current_customer["id"]
+    
+    if not can_edit:
+        # Check if shared with edit permission
+        share = db.query(NoteShare).filter(
+            and_(
+                NoteShare.note_id == note_id,
+                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.can_edit == True,
+                NoteShare.is_active == True,
+                or_(
+                    NoteShare.expires_at.is_(None),
+                    NoteShare.expires_at > datetime.utcnow()
+                )
+            )
+        ).first()
+        can_edit = share is not None
+    
+    if not can_edit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to edit this note"
+        )
+    
+    # Update fields
+    update_data = note_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "content_type" and value:
+            setattr(note, field, value.value)
+        else:
+            setattr(note, field, value)
+    
+    note.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(note)
+    
+    # Load customer relationship
+    note = db.query(Note).options(joinedload(Note.customer)).filter(Note.id == note_id).first()
+    
+    return NoteResponse.from_orm(note)
 
 @router.delete("/{note_id}")
-async def delete_note(note_id: str):
+async def delete_note(
+    note_id: int,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
     """Delete a note"""
-    try:
-        note = notes_storage.get(note_id)
-        
-        if not note:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Note not found"
+    note = db.query(Note).filter(Note.id == note_id).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    # Check if customer can delete this note
+    can_delete = note.customer_id == current_customer["id"]
+    
+    if not can_delete:
+        # Check if shared with delete permission
+        share = db.query(NoteShare).filter(
+            and_(
+                NoteShare.note_id == note_id,
+                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.can_delete == True,
+                NoteShare.is_active == True,
+                or_(
+                    NoteShare.expires_at.is_(None),
+                    NoteShare.expires_at > datetime.utcnow()
+                )
             )
+        ).first()
+        can_delete = share is not None
+    
+    if not can_delete:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to delete this note"
+        )
+    
+    db.delete(note)
+    db.commit()
+    
+    return {"message": "Note deleted successfully"}
+
+@router.post("/{note_id}/share", response_model=NoteShareResponse, status_code=status.HTTP_201_CREATED)
+async def share_note(
+    note_id: int,
+    share_data: NoteShareCreate,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Share a note with another customer"""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    # Check if customer owns this note or can reshare
+    can_share = note.customer_id == current_customer["id"]
+    
+    if not can_share:
+        share = db.query(NoteShare).filter(
+            and_(
+                NoteShare.note_id == note_id,
+                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.can_reshare == True,
+                NoteShare.is_active == True,
+                or_(
+                    NoteShare.expires_at.is_(None),
+                    NoteShare.expires_at > datetime.utcnow()
+                )
+            )
+        ).first()
+        can_share = share is not None
+    
+    if not can_share:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to share this note"
+        )
+    
+    # Check if customer exists
+    shared_with_customer = db.query(Customer).filter(Customer.id == share_data.shared_with_id).first()
+    if not shared_with_customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer to share with not found"
+        )
+    
+    # Check if already shared
+    existing_share = db.query(NoteShare).filter(
+        and_(
+            NoteShare.note_id == note_id,
+            NoteShare.shared_with_id == share_data.shared_with_id,
+            NoteShare.is_active == True
+        )
+    ).first()
+    
+    if existing_share:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Note is already shared with this customer"
+        )
+    
+    new_share = NoteShare(
+        note_id=note_id,
+        shared_by_id=current_customer["id"],
+        shared_with_id=share_data.shared_with_id,
+        permission_level=share_data.permission_level.value,
+        can_edit=share_data.can_edit,
+        can_delete=share_data.can_delete,
+        can_reshare=share_data.can_reshare,
+        expires_at=share_data.expires_at
+    )
+    
+    db.add(new_share)
+    
+    # Update note's is_shared flag
+    note.is_shared = True
+    
+    db.commit()
+    db.refresh(new_share)
+    
+    # Load relationships
+    share = db.query(NoteShare).options(
+        joinedload(NoteShare.shared_by),
+        joinedload(NoteShare.shared_with)
+    ).filter(NoteShare.id == new_share.id).first()
+    
+    return NoteShareResponse.from_orm(share)
+
+@router.get("/{note_id}/shares", response_model=List[NoteShareResponse])
+async def get_note_shares(
+    note_id: int,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Get all shares for a note"""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
         
-        # Check ownership
-        user_id = get_current_user_id()
-        if note["user_id"] != user_id:
+    # Check if customer has access to this note
+    has_access = (
+        note.customer_id == current_customer["id"] or
+        db.query(NoteShare).filter(
+            and_(
+                NoteShare.note_id == note_id,
+                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.is_active == True,
+                or_(
+                    NoteShare.expires_at.is_(None),
+                    NoteShare.expires_at > datetime.utcnow()
+                )
+            )
+        ).first() is not None
+    )
+    
+    if not has_access:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
             )
         
-        del notes_storage[note_id]
+    shares = db.query(NoteShare).options(
+        joinedload(NoteShare.shared_by),
+        joinedload(NoteShare.shared_with)
+    ).filter(
+        and_(
+            NoteShare.note_id == note_id,
+            NoteShare.is_active == True
+        )
+    ).all()
         
-        logger.info(f"Deleted note: {note_id}")
-        
-        return {"message": "Note deleted successfully"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting note: {e}")
+    return [NoteShareResponse.from_orm(share) for share in shares]
+
+@router.put("/shares/{share_id}", response_model=NoteShareResponse)
+async def update_note_share(
+    share_id: int,
+    share_data: NoteShareUpdate,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Update note sharing permissions"""
+    share = db.query(NoteShare).options(
+        joinedload(NoteShare.note),
+        joinedload(NoteShare.shared_by),
+        joinedload(NoteShare.shared_with)
+    ).filter(NoteShare.id == share_id).first()
+    
+    if not share:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete note"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found"
         )
 
-@router.post("/search")
-async def search_notes(search_data: SearchRequest):
-    """Advanced note search"""
-    try:
-        user_id = get_current_user_id()
-        user_notes = [note for note in notes_storage.values() if note["user_id"] == user_id]
-        
-        # Search in title and content
-        query_lower = search_data.query.lower()
-        matching_notes = []
-        
-        for note in user_notes:
-            score = 0
-            
-            # Title match (higher weight)
-            if query_lower in note["title"].lower():
-                score += 10
-            
-            # Content match
-            if query_lower in note["content"].lower():
-                score += 5
-            
-            # Tag match
-            if any(query_lower in tag.lower() for tag in note.get("tags", [])):
-                score += 3
-            
-            if score > 0:
-                matching_notes.append({"note": note, "score": score})
-        
-        # Sort by relevance score
-        matching_notes.sort(key=lambda x: x["score"], reverse=True)
-        
-        return {
-            "query": search_data.query,
-            "results": [NoteResponse(**item["note"]) for item in matching_notes[:50]],
-            "total_found": len(matching_notes)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error searching notes: {e}")
+    # Only note owner or share creator can update
+    if share.note.customer_id != current_customer["id"] and share.shared_by_id != current_customer["id"]:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to search notes"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to update this share"
+        )
+    
+    # Update fields
+    update_data = share_data.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "permission_level" and value:
+            setattr(share, field, value.value)
+        else:
+            setattr(share, field, value)
+    
+    db.commit()
+    db.refresh(share)
+    
+    return NoteShareResponse.from_orm(share)
+
+@router.delete("/shares/{share_id}")
+async def revoke_note_share(
+    share_id: int,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Revoke note sharing"""
+    share = db.query(NoteShare).options(joinedload(NoteShare.note)).filter(NoteShare.id == share_id).first()
+    
+    if not share:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share not found"
+        )
+    
+    # Note owner, share creator, or recipient can revoke
+    can_revoke = (
+        share.note.customer_id == current_customer["id"] or
+        share.shared_by_id == current_customer["id"] or
+        share.shared_with_id == current_customer["id"]
+    )
+    
+    if not can_revoke:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to revoke this share"
         )
 
-@router.post("/folders", response_model=FolderResponse)
-async def create_folder(folder_data: FolderCreate):
-    """Create a new folder"""
-    try:
-        folder_id = str(uuid.uuid4())
-        user_id = get_current_user_id()
-        
-        folder = {
-            "id": folder_id,
-            "user_id": user_id,
-            "name": folder_data.name,
-            "description": folder_data.description,
-            "color": folder_data.color,
-            "created_at": datetime.utcnow()
-        }
-        
-        folders_storage[folder_id] = folder
-        
-        # Count notes in this folder
-        note_count = sum(1 for note in notes_storage.values() 
-                        if note.get("folder_id") == folder_id)
-        
-        return FolderResponse(**folder, note_count=note_count)
-        
-    except Exception as e:
-        logger.error(f"Error creating folder: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create folder"
+    db.delete(share)
+    
+    # Update note's is_shared flag if no more active shares
+    remaining_shares = db.query(NoteShare).filter(
+        and_(
+            NoteShare.note_id == share.note_id,
+            NoteShare.is_active == True,
+            NoteShare.id != share_id
         )
+    ).count()
+    
+    if remaining_shares == 0:
+        share.note.is_shared = False
+    
+    db.commit()
+    
+    return {"message": "Share revoked successfully"}
 
-@router.get("/folders", response_model=List[FolderResponse])
-async def get_folders():
-    """Get user's folders"""
-    try:
-        user_id = get_current_user_id()
-        user_folders = [folder for folder in folders_storage.values() 
-                       if folder["user_id"] == user_id]
-        
-        # Add note count for each folder
-        result = []
-        for folder in user_folders:
-            note_count = sum(1 for note in notes_storage.values() 
-                           if note.get("folder_id") == folder["id"])
-            result.append(FolderResponse(**folder, note_count=note_count))
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"Error getting folders: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get folders"
+@router.post("/bulk-update")
+async def bulk_update_notes(
+    bulk_data: NoteBulkUpdate,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Bulk update notes (favorite, pinned status)"""
+    # Verify all notes belong to current customer
+    notes = db.query(Note).filter(
+        and_(
+            Note.id.in_(bulk_data.note_ids),
+            Note.customer_id == current_customer["id"]
         )
-
-@router.get("/stats")
-async def get_note_stats():
-    """Get note statistics for the user"""
-    try:
-        user_id = get_current_user_id()
-        user_notes = [note for note in notes_storage.values() if note["user_id"] == user_id]
-        
-        total_notes = len(user_notes)
-        total_words = sum(note.get("word_count", 0) for note in user_notes)
-        favorite_notes = sum(1 for note in user_notes if note.get("is_favorite", False))
-        shared_notes = sum(1 for note in user_notes if note.get("is_shared", False))
-        
-        # Get all unique tags
-        all_tags = set()
-        for note in user_notes:
-            all_tags.update(note.get("tags", []))
-        
-        return {
-            "total_notes": total_notes,
-            "total_words": total_words,
-            "favorite_notes": favorite_notes,
-            "shared_notes": shared_notes,
-            "unique_tags": len(all_tags),
-            "tags": list(all_tags)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting note stats: {e}")
+    ).all()
+    
+    if len(notes) != len(bulk_data.note_ids):
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get note statistics"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Some notes not found or access denied"
+        )
+    
+    # Update notes
+    update_data = bulk_data.dict(exclude_unset=True, exclude={"note_ids"})
+    if update_data:
+        for note in notes:
+            for field, value in update_data.items():
+                setattr(note, field, value)
+            note.updated_at = datetime.utcnow()
+        
+        db.commit()
+    
+    return {"message": f"Successfully updated {len(notes)} notes"}
+
+@router.delete("/bulk-delete")
+async def bulk_delete_notes(
+    bulk_data: NoteBulkDelete,
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Bulk delete notes"""
+    # Verify all notes belong to current customer
+    notes = db.query(Note).filter(
+        and_(
+            Note.id.in_(bulk_data.note_ids),
+            Note.customer_id == current_customer["id"]
+        )
+    ).all()
+    
+    if len(notes) != len(bulk_data.note_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Some notes not found or access denied"
+        )
+    
+    # Delete notes
+    for note in notes:
+        db.delete(note)
+    
+    db.commit()
+    
+    return {"message": f"Successfully deleted {len(notes)} notes"}
+
+@router.get("/stats", response_model=NoteStats)
+async def get_note_stats(
+    current_customer: dict = Depends(get_current_customer),
+    db: Session = Depends(get_db)
+):
+    """Get note statistics for current customer"""
+    customer_id = current_customer["id"]
+    
+    # Basic counts
+    total_notes = db.query(Note).filter(Note.customer_id == customer_id).count()
+    favorite_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_favorite == True)
+    ).count()
+    pinned_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_pinned == True)
+    ).count()
+    shared_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_shared == True)
+    ).count()
+    
+    # Notes shared with me
+    notes_shared_with_me = db.query(NoteShare).filter(
+        and_(
+            NoteShare.shared_with_id == customer_id,
+            NoteShare.is_active == True,
+            or_(
+                NoteShare.expires_at.is_(None),
+                NoteShare.expires_at > datetime.utcnow()
+            )
+        )
+    ).count()
+        
+    # Notes by content type
+    content_type_stats = db.query(
+        Note.content_type,
+        func.count(Note.id).label('count')
+    ).filter(Note.customer_id == customer_id).group_by(Note.content_type).all()
+    
+    notes_by_content_type = {stat.content_type: stat.count for stat in content_type_stats}
+    
+    return NoteStats(
+        total_notes=total_notes,
+        favorite_notes=favorite_notes,
+        pinned_notes=pinned_notes,
+        shared_notes=shared_notes,
+        notes_shared_with_me=notes_shared_with_me,
+        notes_by_content_type=notes_by_content_type
         )

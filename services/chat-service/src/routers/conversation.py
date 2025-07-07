@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Pydantic models
 class ChatMessage(BaseModel):
-    role: str = Field(..., regex="^(user|assistant|system)$")
+    role: str = Field(..., pattern="^(user|assistant|system)$")
     content: str = Field(..., min_length=1)
     timestamp: Optional[datetime] = None
 

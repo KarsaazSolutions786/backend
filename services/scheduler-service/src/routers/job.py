@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 class JobCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
-    job_type: str = Field(..., regex="^(reminder|recurring_task|notification|cleanup)$")
+    job_type: str = Field(..., pattern="^(reminder|recurring_task|notification|cleanup)$")
     schedule_time: datetime
     recurring: bool = False
     recurring_pattern: Optional[str] = None  # 'daily', 'weekly', 'monthly'
     payload: Dict[str, Any] = {}
-    priority: str = Field(default="medium", regex="^(low|medium|high|urgent)$")
+    priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
 
 class JobResponse(BaseModel):
     id: str

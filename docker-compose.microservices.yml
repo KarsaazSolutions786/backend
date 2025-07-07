@@ -2,128 +2,45 @@ version: "3.8"
 
 services:
   # ======================
-  # DATABASES
+  # INFRASTRUCTURE
   # ======================
-  auth-db:
+   
+  new-postgres-server:
     image: postgres:15
     environment:
-      POSTGRES_DB: auth_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5442:5432"
-    volumes:
-      - auth_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  user-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: user_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: eindr_db
+      POSTGRES_USER: eindr
+      POSTGRES_PASSWORD: eindr_pass
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "5433:5432"
     volumes:
-      - user_db_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - eindr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eindr -d eindr_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  reminder-db:
-    image: postgres:15
+  pgadmin:
+    image: dpage/pgadmin4:latest
     environment:
-      POSTGRES_DB: reminder_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "5434:5432"
+      - "5050:80"
     volumes:
-      - reminder_db_data:/var/lib/postgresql/data
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - eindr-network
+    depends_on:
+      - new-postgres-server
+    restart: unless-stopped
 
-  note-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: note_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5435:5432"
-    volumes:
-      - note_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  ledger-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: ledger_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5436:5432"
-    volumes:
-      - ledger_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  friend-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: friend_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5437:5432"
-    volumes:
-      - friend_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  history-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: history_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5438:5432"
-    volumes:
-      - history_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  chat-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: chat_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5439:5432"
-    volumes:
-      - chat_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  scheduler-db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: scheduler_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5440:5432"
-    volumes:
-      - scheduler_db_data:/var/lib/postgresql/data
-    networks:
-      - eindr-network
-
-  # ======================
-  # INFRASTRUCTURE
-  # ======================
   redis:
     image: redis:7-alpine
     ports:
@@ -207,7 +124,7 @@ services:
     depends_on:
       - kong-migration
       - auth-service
-      - user-service
+      - customer-service
       - reminder-service
       - note-service
       - ledger-service
@@ -246,9 +163,9 @@ services:
       context: ./services/auth-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@auth-db:5432/auth_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: your-jwt-secret-key-change-in-production
+      JWT_SECRET: eindr-super-secret-key-change-in-production-123456789
       SERVICE_NAME: auth-service
       PORT: 8000
     ports:
@@ -258,38 +175,46 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - auth-db
       - redis
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
 
-  user-service:
+  customer-service:
     build:
-      context: ./services/user-service
+      context: ./services/customer-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@user-db:5432/user_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
-      SERVICE_NAME: user-service
+      SERVICE_NAME: customer-service
       PORT: 8000
     ports:
       - "8002:8000"
     volumes:
-      - ./services/user-service:/app
+      - ./services/customer-service:/app
     networks:
       - eindr-network
     depends_on:
-      - user-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
 
   reminder-service:
     build:
       context: ./services/reminder-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@reminder-db:5432/reminder_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: reminder-service
@@ -301,17 +226,21 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - reminder-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   note-service:
     build:
       context: ./services/note-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@note-db:5432/note_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: note-service
@@ -323,17 +252,21 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - note-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   ledger-service:
     build:
       context: ./services/ledger-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@ledger-db:5432/ledger_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: ledger-service
@@ -345,17 +278,21 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - ledger-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   friend-service:
     build:
       context: ./services/friend-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@friend-db:5432/friend_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: friend-service
@@ -367,17 +304,21 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - friend-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   history-service:
     build:
       context: ./services/history-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@history-db:5432/history_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: history-service
@@ -389,10 +330,14 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - history-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   stt-service:
     build:
@@ -415,6 +360,11 @@ services:
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   tts-service:
     build:
@@ -437,6 +387,11 @@ services:
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   intent-service:
     build:
@@ -459,13 +414,18 @@ services:
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   chat-service:
     build:
       context: ./services/chat-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@chat-db:5432/chat_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       MODEL_PATH: /app/models
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
@@ -479,17 +439,21 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - chat-db
       - rabbitmq
       - auth-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   scheduler-service:
     build:
       context: ./services/scheduler-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@scheduler-db:5432/scheduler_db
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       REMINDER_SERVICE_URL: http://reminder-service:8000
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -502,10 +466,40 @@ services:
     networks:
       - eindr-network
     depends_on:
-      - scheduler-db
       - rabbitmq
       - reminder-service
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  ai-pipeline-service:
+    build:
+      context: ./services/ai-pipeline-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      SERVICE_NAME: ai-pipeline-service
+      PORT: 8000
+      STT_SERVICE_URL: http://localhost:8008
+      INTENT_SERVICE_URL: http://localhost:8010
+      CHAT_SERVICE_URL: http://localhost:8011
+      TTS_SERVICE_URL: http://localhost:8009
+      AI_HTTP_TIMEOUT: '30'
+    ports:
+      - "8081:8000"
+    volumes:
+      - ./services/ai-pipeline-service:/app
+    networks:
+      - eindr-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # ======================
   # MONITORING & OBSERVABILITY
@@ -541,20 +535,14 @@ services:
       - prometheus
 
 volumes:
-  auth_db_data:
-  user_db_data:
-  reminder_db_data:
-  note_db_data:
-  ledger_db_data:
-  friend_db_data:
-  history_db_data:
-  chat_db_data:
-  scheduler_db_data:
+  eindr_shared_db:
   kong_data:
   redis_data:
   rabbitmq_data:
   prometheus_data:
   grafana_data:
+  postgres_data:
+  pgadmin_data:
 
 networks:
   eindr-network:

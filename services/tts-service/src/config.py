@@ -3,7 +3,7 @@ import os
 
 class Settings(BaseSettings):
     # Database settings
-    database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/tts_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db")
     
     # Service settings
     service_name: str = os.getenv("SERVICE_NAME", "tts-service")

@@ -1,4 +1,5 @@
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError as JWTError
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import logging
@@ -9,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class JWTService:
     def __init__(self):
-        self.secret_key = settings.JWT_SECRET
-        self.algorithm = settings.JWT_ALGORITHM
+        self.secret_key = settings.SECRET_KEY
+        self.algorithm = settings.ALGORITHM
         self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
         self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
     

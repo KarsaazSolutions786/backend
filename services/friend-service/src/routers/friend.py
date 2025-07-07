@@ -9,7 +9,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 class FriendRequest(BaseModel):
-    friend_email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
+    friend_email: str = Field(..., pattern=r'^[^@]+@[^@]+\.[^@]+$')
     message: Optional[str] = Field(None, max_length=500)
 
 class FriendResponse(BaseModel):

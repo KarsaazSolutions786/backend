@@ -12,7 +12,7 @@ This repository contains the complete microservices implementation of the Eindr 
 | --------------------- | ---- | ------------ | ------------------------------------- | ------------------ |
 | **API Gateway**       | 8080 | -            | Entry point, routing, auth validation | All routes         |
 | **Auth Service**      | 8001 | auth_db      | User authentication & JWT management  | `/auth/*`          |
-| **User Service**      | 8002 | user_db      | User profiles & preferences           | `/users/*`         |
+| **User Service**      | 8002 | user_db      | User profiles & preferences           | `/customers/*`         |
 | **Reminder Service**  | 8003 | reminder_db  | Reminder management & scheduling      | `/reminders/*`     |
 | **Note Service**      | 8004 | note_db      | Note & document management            | `/notes/*`         |
 | **Ledger Service**    | 8005 | ledger_db    | Expense tracking & budgets            | `/expenses/*`      |
@@ -62,7 +62,7 @@ POST /auth/change-password  - Change password
 POST /auth/validate-token   - Validate token (for services)
 ```
 
-### 2. User Service (`user-service`)
+### 2. User Service (`customers-service`)
 
 **Purpose**: User profile management and preferences
 
@@ -78,15 +78,15 @@ POST /auth/validate-token   - Validate token (for services)
 **API Endpoints**:
 
 ```
-POST /users/profile        - Create user profile
-GET  /users/profile        - Get user profile
-PUT  /users/profile        - Update user profile
-POST /users/avatar         - Upload avatar
-GET  /users/preferences    - Get user preferences
-PUT  /users/preferences    - Update preferences
-POST /users/devices        - Register device
-GET  /users/devices        - Get registered devices
-DELETE /users/devices/{id} - Unregister device
+POST /customers/profile        - Create user profile
+GET  /customers/profile        - Get user profile
+PUT  /customers/profile        - Update user profile
+POST /customers/avatar         - Upload avatar
+GET  /customers/preferences    - Get user preferences
+PUT  /customers/preferences    - Update preferences
+POST /customers/devices        - Register device
+GET  /customers/devices        - Get registered devices
+DELETE /customers/devices/{id} - Unregister device
 ```
 
 ### 3. Reminder Service (`reminder-service`)
@@ -97,7 +97,7 @@ DELETE /users/devices/{id} - Unregister device
 
 - Create, read, update, delete reminders
 - Recurring reminder patterns
-- Reminder sharing between users
+- Reminder sharing between customers
 - Snooze functionality
 - Priority and categorization
 - Location-based reminders
@@ -384,7 +384,7 @@ All internal API calls include:
 
 ```nginx
 /auth/*         -> auth-service:8001
-/users/*        -> user-service:8002
+/customers/*        -> user-service:8002
 /reminders/*    -> reminder-service:8003
 /notes/*        -> note-service:8004
 /expenses/*     -> ledger-service:8005
@@ -397,35 +397,6 @@ All internal API calls include:
 /jobs/*         -> scheduler-service:8012
 ```
 
-## 📊 Database Schema
-
-Each service has its own database with specific schemas:
-
-### Auth Database (`auth_db`)
-
-- `users` - User authentication data
-- `refresh_tokens` - JWT refresh tokens
-- `login_attempts` - Security logging
-
-### User Database (`user_db`)
-
-- `users` - User profile information
-- `user_preferences` - User settings
-- `user_devices` - Device registrations
-
-### Reminder Database (`reminder_db`)
-
-- `reminders` - Reminder data
-- `reminder_notifications` - Notification tracking
-- `reminder_shares` - Sharing permissions
-
-### Note Database (`note_db`)
-
-- `notes` - Note content and metadata
-- `folders` - Note organization
-- `tags` - Categorization
-
-### And so on for each service...
 
 ## 🔧 Development
 

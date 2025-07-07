@@ -7,7 +7,7 @@ import time
 
 from .config import settings
 from .database import init_db
-from .routers import users
+from .routers import customers
 
 # Configure logging
 logging.basicConfig(
@@ -19,26 +19,26 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    logger.info("Starting User profile and preferences management...")
+    logger.info("Starting Customer management service...")
     
     try:
         # Initialize database
         init_db()
         logger.info("Database initialized successfully")
-        logger.info("Service initialized successfully")
+        logger.info("Customer service initialized successfully")
         
     except Exception as e:
-        logger.error(f"Failed to initialize service: {e}")
+        logger.error(f"Failed to initialize customer service: {e}")
         raise
     
     yield
     
-    logger.info("Service shut down successfully")
+    logger.info("Customer service shut down successfully")
 
 # Create FastAPI app
 app = FastAPI(
-    title="User Service",
-    description="User profile and preferences management",
+    title="Customer Service",
+    description="Customer profile and preferences management for Eindr",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -70,15 +70,15 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
-# Include routers
-app.include_router(users.router, prefix="/users", tags=["users"])
+# Include routers with customers endpoints
+app.include_router(customers.router, prefix="/customers", tags=["customers"])
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "user-service",
+        "service": "customer-service",
         "version": "1.0.0",
         "timestamp": time.time()
     }
@@ -87,8 +87,13 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "service": "user-service",
-        "message": "User profile and preferences management is running",
+        "service": "customer-service",
+        "message": "Customer profile and preferences management for Eindr is running",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
+        "endpoints": {
+            "customers": "/customers",
+            "health": "/health",
+            "docs": "/docs"
+        }
     }

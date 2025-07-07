@@ -7,7 +7,7 @@ import time
 
 from .config import settings
 from .database import init_db
-from .routers import expense
+from .routers import ledger_entry
 
 # Configure logging
 logging.basicConfig(
@@ -71,7 +71,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-app.include_router(expense.router, prefix="/expenses", tags=["expenses"])
+# Removed expense routes; using ledger entries only
+app.include_router(ledger_entry.router, tags=["ledger_entries"])
 
 @app.get("/health")
 async def health_check():

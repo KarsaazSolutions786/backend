@@ -71,7 +71,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-app.include_router(notes.router, prefix="/notes", tags=["notes"])
+app.include_router(notes.router, tags=["notes"])
 
 @app.get("/health")
 async def health_check():

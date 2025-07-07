@@ -1,4 +1,4 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 import os
 
 class Settings(BaseSettings):
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", "8000"))
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr_user:eindr_pass@localhost:5432/friend_db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db")
 
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")

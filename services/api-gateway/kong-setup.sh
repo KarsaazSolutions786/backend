@@ -87,11 +87,11 @@ create_service "auth-service" "http://auth-service:8000" "/auth"
 add_cors_plugin "auth-service"
 add_rate_limiting "auth-service" 60 600
 
-# User Service
-create_service "user-service" "http://user-service:8000" "/users"
-add_jwt_plugin "user-service"
-add_cors_plugin "user-service"
-add_rate_limiting "user-service" 100 1000
+# Customer Service
+create_service "customer-service" "http://customer-service:8000" "/customers"
+add_jwt_plugin "customer-service"
+add_cors_plugin "customer-service"
+add_rate_limiting "customer-service" 100 1000
 
 # Reminder Service
 create_service "reminder-service" "http://reminder-service:8000" "/reminders"
@@ -192,7 +192,7 @@ echo "🖥️  Konga UI: http://localhost:8103"
 echo ""
 echo "📚 Service endpoints via gateway:"
 echo "🔐 Auth: http://localhost:8080/auth/*"
-echo "👤 Users: http://localhost:8080/users/*"
+echo "👤 Customers: http://localhost:8080/customers/*"
 echo "⏰ Reminders: http://localhost:8080/reminders/*"
 echo "📝 Notes: http://localhost:8080/notes/*"
 echo "💰 Expenses: http://localhost:8080/expenses/*"

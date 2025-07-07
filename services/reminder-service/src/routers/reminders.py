@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -13,6 +14,9 @@ from ..services.event_publisher import EventPublisher
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Security scheme for JWT Bearer authentication
+security = HTTPBearer()
 
 # Pydantic models
 class ReminderCreate(BaseModel):
@@ -78,16 +82,13 @@ class ReminderShareResponse(BaseModel):
 reminder_service = ReminderService()
 auth_service = AuthService()
 
-async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user from auth token"""
-    authorization = request.headers.get("Authorization")
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authorization header"
-        )
-    
-    token = authorization.split(" ")[1]
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Validate JWT (or stub) and return user info"""
+
+    token = credentials.credentials
     user_info = await auth_service.validate_token(token)
     
     if not user_info:
@@ -97,6 +98,56 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
         )
     
     return user_info
+
+def reminder_to_response(reminder) -> ReminderResponse:
+    """Convert a Reminder model to ReminderResponse"""
+    # Convert priority_id to priority string
+    priority_str = "medium"  # default
+    if reminder.priority and reminder.priority.label:
+        priority_mapping = {
+            "Low": "low",
+            "Medium": "medium", 
+            "High": "high"
+        }
+        priority_str = priority_mapping.get(reminder.priority.label, "medium")
+    
+    # Convert timezone_id to timezone string
+    timezone_str = "UTC"  # default
+    if reminder.timezone and reminder.timezone.name:
+        timezone_str = reminder.timezone.name
+    
+    # Convert repeat_pattern_id to repeat_pattern string
+    repeat_pattern_str = "none"  # default
+    if reminder.repeat_pattern_id is not None:
+        repeat_mapping = {
+            0: "none",
+            1: "daily",
+            2: "weekly", 
+            3: "monthly",
+            4: "yearly"
+        }
+        repeat_pattern_str = repeat_mapping.get(reminder.repeat_pattern_id, "none")
+    
+    return ReminderResponse(
+        id=str(reminder.id),
+        user_id=str(reminder.customer_id),  # Convert customer_id back to user_id for API
+        title=reminder.title or "",
+        description=reminder.description,
+        time=reminder.time,
+        repeat_pattern=repeat_pattern_str,
+        timezone=timezone_str,
+        priority=priority_str,
+        category="",  # Not implemented yet
+        tags=[],  # Not implemented yet
+        is_completed=reminder.is_completed,
+        completed_at=reminder.completed_at,
+        is_active=reminder.is_active,
+        created_at=reminder.created_at,
+        updated_at=reminder.updated_at,
+        next_occurrence=reminder.next_occurrence,
+        occurrence_count=str(reminder.occurrence_count),
+        max_occurrences=str(reminder.max_occurrence) if reminder.max_occurrence else None
+    )
 
 @router.post("/", response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
 async def create_reminder(
@@ -113,41 +164,13 @@ async def create_reminder(
             reminder_data=reminder_data.dict()
         )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.created",
-            {
-                "reminder_id": str(reminder.id),
-                "user_id": reminder.user_id,
-                "title": reminder.title,
-                "scheduled_time": reminder.time.isoformat(),
-                "priority": reminder.priority
-            }
-        )
+        # Publish event (stub for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder created: {reminder.id} for user: {current_user['user_id']}")
         
-        return ReminderResponse(
-            id=str(reminder.id),
-            user_id=reminder.user_id,
-            title=reminder.title,
-            description=reminder.description,
-            time=reminder.time,
-            repeat_pattern=reminder.repeat_pattern,
-            timezone=reminder.timezone,
-            priority=reminder.priority,
-            category=reminder.category,
-            tags=reminder.tags,
-            is_completed=reminder.is_completed,
-            completed_at=reminder.completed_at,
-            is_active=reminder.is_active,
-            created_at=reminder.created_at,
-            updated_at=reminder.updated_at,
-            next_occurrence=reminder.next_occurrence,
-            occurrence_count=reminder.occurrence_count,
-            max_occurrences=reminder.max_occurrences
-        )
+        return reminder_to_response(reminder)
     
     except Exception as e:
         logger.error(f"Error creating reminder: {e}")
@@ -186,29 +209,7 @@ async def get_reminders(
             filters=filters
         )
         
-        return [
-            ReminderResponse(
-                id=str(reminder.id),
-                user_id=reminder.user_id,
-                title=reminder.title,
-                description=reminder.description,
-                time=reminder.time,
-                repeat_pattern=reminder.repeat_pattern,
-                timezone=reminder.timezone,
-                priority=reminder.priority,
-                category=reminder.category,
-                tags=reminder.tags,
-                is_completed=reminder.is_completed,
-                completed_at=reminder.completed_at,
-                is_active=reminder.is_active,
-                created_at=reminder.created_at,
-                updated_at=reminder.updated_at,
-                next_occurrence=reminder.next_occurrence,
-                occurrence_count=reminder.occurrence_count,
-                max_occurrences=reminder.max_occurrences
-            )
-            for reminder in reminders
-        ]
+        return [reminder_to_response(reminder) for reminder in reminders]
     
     except Exception as e:
         logger.error(f"Error getting reminders: {e}")
@@ -237,26 +238,7 @@ async def get_reminder(
                 detail="Reminder not found"
             )
         
-        return ReminderResponse(
-            id=str(reminder.id),
-            user_id=reminder.user_id,
-            title=reminder.title,
-            description=reminder.description,
-            time=reminder.time,
-            repeat_pattern=reminder.repeat_pattern,
-            timezone=reminder.timezone,
-            priority=reminder.priority,
-            category=reminder.category,
-            tags=reminder.tags,
-            is_completed=reminder.is_completed,
-            completed_at=reminder.completed_at,
-            is_active=reminder.is_active,
-            created_at=reminder.created_at,
-            updated_at=reminder.updated_at,
-            next_occurrence=reminder.next_occurrence,
-            occurrence_count=reminder.occurrence_count,
-            max_occurrences=reminder.max_occurrences
-        )
+        return reminder_to_response(reminder)
     
     except HTTPException:
         raise
@@ -298,39 +280,13 @@ async def update_reminder(
             update_data=reminder_data.dict(exclude_unset=True)
         )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.updated",
-            {
-                "reminder_id": str(updated_reminder.id),
-                "user_id": updated_reminder.user_id,
-                "changes": reminder_data.dict(exclude_unset=True)
-            }
-        )
+        # Publish event (commented out for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder updated: {reminder_id} by user: {current_user['user_id']}")
         
-        return ReminderResponse(
-            id=str(updated_reminder.id),
-            user_id=updated_reminder.user_id,
-            title=updated_reminder.title,
-            description=updated_reminder.description,
-            time=updated_reminder.time,
-            repeat_pattern=updated_reminder.repeat_pattern,
-            timezone=updated_reminder.timezone,
-            priority=updated_reminder.priority,
-            category=updated_reminder.category,
-            tags=updated_reminder.tags,
-            is_completed=updated_reminder.is_completed,
-            completed_at=updated_reminder.completed_at,
-            is_active=updated_reminder.is_active,
-            created_at=updated_reminder.created_at,
-            updated_at=updated_reminder.updated_at,
-            next_occurrence=updated_reminder.next_occurrence,
-            occurrence_count=updated_reminder.occurrence_count,
-            max_occurrences=updated_reminder.max_occurrences
-        )
+        return reminder_to_response(updated_reminder)
     
     except HTTPException:
         raise
@@ -362,15 +318,9 @@ async def delete_reminder(
                 detail="Reminder not found"
             )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.deleted",
-            {
-                "reminder_id": reminder_id,
-                "user_id": current_user["user_id"]
-            }
-        )
+        # Publish event (commented out for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder deleted: {reminder_id} by user: {current_user['user_id']}")
         
@@ -406,16 +356,9 @@ async def complete_reminder(
                 detail="Reminder not found"
             )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.completed",
-            {
-                "reminder_id": str(reminder.id),
-                "user_id": reminder.user_id,
-                "completed_at": reminder.completed_at.isoformat() if reminder.completed_at else None
-            }
-        )
+        # Publish event (commented out for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder completed: {reminder_id} by user: {current_user['user_id']}")
         
@@ -433,8 +376,8 @@ async def complete_reminder(
 @router.post("/{reminder_id}/snooze")
 async def snooze_reminder(
     reminder_id: str,
-    snooze_minutes: int = Query(..., ge=1, le=10080),  # Max 1 week
     request: Request,
+    snooze_minutes: int = Query(..., ge=1, le=10080),  # Max 1 week
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -453,17 +396,9 @@ async def snooze_reminder(
                 detail="Reminder not found"
             )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.snoozed",
-            {
-                "reminder_id": str(reminder.id),
-                "user_id": reminder.user_id,
-                "snoozed_until": reminder.time.isoformat(),
-                "snooze_minutes": snooze_minutes
-            }
-        )
+        # Publish event (commented out for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder snoozed: {reminder_id} for {snooze_minutes} minutes by user: {current_user['user_id']}")
         
@@ -517,17 +452,9 @@ async def share_reminder(
             }
         )
         
-        # Publish event
-        event_publisher = request.app.state.event_publisher
-        await event_publisher.publish_event(
-            "reminder.shared",
-            {
-                "reminder_id": reminder_id,
-                "owner_user_id": current_user["user_id"],
-                "shared_with_user_id": share_data.shared_with_user_id,
-                "share_id": str(share.id)
-            }
-        )
+        # Publish event (commented out for now)
+        # event_publisher = request.app.state.event_publisher
+        # await event_publisher.publish_event(...)
         
         logger.info(f"Reminder shared: {reminder_id} with user: {share_data.shared_with_user_id}")
         
@@ -569,29 +496,7 @@ async def get_shared_reminders(
             limit=limit
         )
         
-        return [
-            ReminderResponse(
-                id=str(reminder.id),
-                user_id=reminder.user_id,
-                title=reminder.title,
-                description=reminder.description,
-                time=reminder.time,
-                repeat_pattern=reminder.repeat_pattern,
-                timezone=reminder.timezone,
-                priority=reminder.priority,
-                category=reminder.category,
-                tags=reminder.tags,
-                is_completed=reminder.is_completed,
-                completed_at=reminder.completed_at,
-                is_active=reminder.is_active,
-                created_at=reminder.created_at,
-                updated_at=reminder.updated_at,
-                next_occurrence=reminder.next_occurrence,
-                occurrence_count=reminder.occurrence_count,
-                max_occurrences=reminder.max_occurrences
-            )
-            for reminder in reminders
-        ]
+        return [reminder_to_response(reminder) for reminder in reminders]
     
     except Exception as e:
         logger.error(f"Error getting shared reminders: {e}")

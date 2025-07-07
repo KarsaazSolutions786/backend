@@ -19,9 +19,9 @@ scrape_configs:
     metrics_path: "/metrics"
     scrape_interval: 30s
 
-  - job_name: "user-service"
+  - job_name: "customer-service"
     static_configs:
-      - targets: ["user-service:8000"]
+      - targets: ["customer-service:8000"]
     metrics_path: "/metrics"
     scrape_interval: 30s
 
@@ -130,9 +130,9 @@ scrape_configs:
     metrics_path: "/metrics"
     scrape_interval: 30s
 
-  - job_name: "user-service"
+  - job_name: "customer-service"
     static_configs:
-      - targets: ["user-service:8000"]
+      - targets: ["customer-service:8000"]
     metrics_path: "/metrics"
     scrape_interval: 30s
 

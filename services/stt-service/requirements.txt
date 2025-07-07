@@ -14,14 +14,8 @@ openai-whisper==20231117
 torch==2.1.0
 torchaudio==2.1.0
 transformers==4.35.0
-numpy==1.24.3librosa==0.10.1
-soundfile==0.12.1
-aiofiles==23.2.0
-psycopg2-binary==2.9.9
-alembic==1.12.1
-sqlalchemy==2.0.23
-transformers==4.35.0
-numpy==1.24.3librosa==0.10.1
+numpy==1.24.3
+librosa==0.10.1
 soundfile==0.12.1
 aiofiles==23.2.0
 psycopg2-binary==2.9.9

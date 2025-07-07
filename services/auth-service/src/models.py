@@ -1,67 +1,71 @@
-from sqlalchemy import Column, String, Boolean, TIMESTAMP, Index
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, DECIMAL
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from datetime import datetime
-from .database import Base
-import uuid
 
-class User(Base):
-    """User authentication model - contains only auth-related data"""
-    __tablename__ = "users"
+Base = declarative_base()
 
-    id = Column(String, primary_key=True)
-    email = Column(String, unique=True, nullable=False, index=True)
-    password_hash = Column(String, nullable=True)  # Optional for Firebase users
-    is_active = Column(Boolean, default=True)
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
     is_verified = Column(Boolean, default=False)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_login = Column(TIMESTAMP, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    last_login = Column(DateTime)
+    login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime)
+    subscription_plan_id = Column(Integer, ForeignKey("subscription_plans.id"))
     
-    # Authentication metadata
-    login_attempts = Column(String, default="0")
-    locked_until = Column(TIMESTAMP, nullable=True)
-    password_reset_token = Column(String, nullable=True)
-    password_reset_expires = Column(TIMESTAMP, nullable=True)
-    verification_token = Column(String, nullable=True)
-    verification_expires = Column(TIMESTAMP, nullable=True)
-    
-    __table_args__ = (
-        Index('idx_users_email_active', 'email', 'is_active'),
-        Index('idx_users_created_at', 'created_at'),
-        Index('idx_users_verification_token', 'verification_token'),
-        Index('idx_users_reset_token', 'password_reset_token'),
-    )
+    # Relationships
+    sessions = relationship("CustomerSession", back_populates="customer", cascade="all, delete-orphan")
+    login_attempt_logs = relationship("LoginAttempt", back_populates="customer", cascade="all, delete-orphan")
+    subscription_plan = relationship("SubscriptionPlan", back_populates="customers")
 
-class RefreshToken(Base):
-    """Refresh token storage for JWT authentication"""
-    __tablename__ = "refresh_tokens"
+class CustomerSession(Base):
+    __tablename__ = "customer_sessions"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, nullable=False, index=True)
-    token_hash = Column(String, nullable=False, unique=True)
-    expires_at = Column(TIMESTAMP, nullable=False)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    is_revoked = Column(Boolean, default=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    session_token = Column(String(255), nullable=False)
+    ip_address = Column(String(45))  # INET type maps to String in SQLAlchemy
+    user_agent = Column(Text)
+    expires_at = Column(DateTime)
+    created_at = Column(DateTime, default=func.current_timestamp())
     
-    __table_args__ = (
-        Index('idx_refresh_tokens_user', 'user_id'),
-        Index('idx_refresh_tokens_expires', 'expires_at'),
-        Index('idx_refresh_tokens_hash', 'token_hash'),
-    )
+    # Relationships
+    customer = relationship("Customer", back_populates="sessions")
 
 class LoginAttempt(Base):
-    """Track login attempts for security monitoring"""
     __tablename__ = "login_attempts"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email = Column(String, nullable=False, index=True)
-    ip_address = Column(String, nullable=False)
-    user_agent = Column(String, nullable=True)
-    success = Column(Boolean, nullable=False)
-    failure_reason = Column(String, nullable=True)  # 'invalid_password', 'user_not_found', etc.
-    attempted_at = Column(TIMESTAMP, default=datetime.utcnow)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"))
+    email = Column(String(255), nullable=False)
+    ip_address = Column(String(45))  # INET type maps to String in SQLAlchemy
+    user_agent = Column(String(255))
+    is_success = Column(Boolean, default=False)  # Updated to match database schema
+    failure_reason = Column(String(255))
+    attempted_at = Column(DateTime, default=func.current_timestamp())
     
-    __table_args__ = (
-        Index('idx_login_attempts_email_time', 'email', 'attempted_at'),
-        Index('idx_login_attempts_ip_time', 'ip_address', 'attempted_at'),
-    ) 
+    # Relationships
+    customer = relationship("Customer", back_populates="login_attempt_logs")
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    plan_name = Column(String(255), nullable=False)
+    price = Column(DECIMAL(10, 2))
+    billing_interval = Column(String(50))
+    max_seats = Column(Integer)
+    description = Column(Text)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    
+    # Relationships
+    customers = relationship("Customer", back_populates="subscription_plan") 

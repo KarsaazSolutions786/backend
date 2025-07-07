@@ -1,102 +1,108 @@
-from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, Index
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
-from sqlalchemy.sql import func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, func, ForeignKey, Interval
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 from datetime import datetime
-from .database import Base
-import uuid
 
-class Reminder(Base):
-    """Reminder model - stores all reminder data"""
-    __tablename__ = "reminders"
+Base = declarative_base()
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(String, nullable=False, index=True)  # Reference to auth service user
-    title = Column(Text)
-    description = Column(Text)
-    time = Column(TIMESTAMP)
-    repeat_pattern = Column(String)  # 'none', 'daily', 'weekly', 'monthly', 'yearly'
-    timezone = Column(String)
-    is_shared = Column(Boolean, default=False)
-    created_by = Column(String)  # Reference to auth service user who created (for shared reminders)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Reminder state
-    is_completed = Column(Boolean, default=False)
-    completed_at = Column(TIMESTAMP, nullable=True)
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
     
-    # Recurrence tracking
-    next_occurrence = Column(TIMESTAMP, nullable=True)
-    occurrence_count = Column(String, default="0")
-    max_occurrences = Column(String, nullable=True)
-    
-    # Metadata
-    priority = Column(String, default="medium")  # 'low', 'medium', 'high', 'urgent'
-    category = Column(String, nullable=True)
-    tags = Column(ARRAY(String), nullable=True)
-    
-    __table_args__ = (
-        Index('idx_reminders_user_time', 'user_id', 'time'),
-        Index('idx_reminders_user_active', 'user_id', 'is_active'),
-        Index('idx_reminders_next_occurrence', 'next_occurrence'),
-        Index('idx_reminders_shared', 'is_shared', 'user_id'),
-        Index('idx_reminders_created_by', 'created_by'),
-        Index('idx_reminders_priority', 'priority', 'user_id'),
-    )
+    # Relationships
+    reminders = relationship("Reminder", back_populates="customer", cascade="all, delete-orphan")
+    shared_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.shared_with_id", back_populates="shared_with")
+    shared_by_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.shared_by_id", back_populates="shared_by")
+    reminder_notifications = relationship("ReminderNotification", back_populates="customer", cascade="all, delete-orphan")
 
-class ReminderNotification(Base):
-    """Track reminder notification delivery"""
-    __tablename__ = "reminder_notifications"
+class PriorityLevel(Base):
+    __tablename__ = "priority_levels"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    reminder_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id = Column(String, nullable=False, index=True)
+    id = Column(Integer, primary_key=True, index=True)
+    label = Column(String(255), nullable=True)  # Matches actual schema: 'High', 'Medium', 'Low'
+    rank = Column(Integer, nullable=True)  # 1, 2, 3
     
-    # Notification details
-    notification_type = Column(String, nullable=False)  # 'push', 'email', 'sms'
-    status = Column(String, nullable=False)  # 'pending', 'sent', 'delivered', 'failed'
-    scheduled_at = Column(TIMESTAMP, nullable=False)
-    sent_at = Column(TIMESTAMP, nullable=True)
-    delivered_at = Column(TIMESTAMP, nullable=True)
+    # Relationships
+    reminders = relationship("Reminder", back_populates="priority")
+
+class Timezone(Base):
+    __tablename__ = "timezones"
     
-    # Delivery tracking
-    delivery_attempts = Column(String, default="0")
-    last_attempt_at = Column(TIMESTAMP, nullable=True)
-    failure_reason = Column(Text, nullable=True)
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=True)  # 'UTC', etc.
+    gmt_offset = Column(Interval, nullable=True)  # PostgreSQL interval type
+    created_at = Column(DateTime, default=func.current_timestamp())
     
-    # Metadata
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    # Relationships
+    reminders = relationship("Reminder", back_populates="timezone")
+
+class Reminder(Base):
+    __tablename__ = "reminders"
     
-    __table_args__ = (
-        Index('idx_reminder_notifications_reminder', 'reminder_id'),
-        Index('idx_reminder_notifications_user_status', 'user_id', 'status'),
-        Index('idx_reminder_notifications_scheduled', 'scheduled_at'),
-        Index('idx_reminder_notifications_pending', 'status', 'scheduled_at'),
-    )
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    title = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    time = Column(DateTime, nullable=True)
+    repeat_pattern_id = Column(Integer, nullable=True)  # No FK constraint since table doesn't exist
+    timezone_id = Column(Integer, ForeignKey("timezones.id"), nullable=True)
+    is_shared = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    next_occurrence = Column(DateTime, nullable=True)
+    occurrence_count = Column(Integer, default=0)
+    max_occurrence = Column(Integer, nullable=True)  # Max times to repeat
+    priority_id = Column(Integer, ForeignKey("priority_levels.id"), nullable=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Relationships
+    customer = relationship("Customer", back_populates="reminders")
+    priority = relationship("PriorityLevel", back_populates="reminders")
+    timezone = relationship("Timezone", back_populates="reminders")
+    shares = relationship("ReminderShare", back_populates="reminder", cascade="all, delete-orphan")
+    notifications = relationship("ReminderNotification", back_populates="reminder", cascade="all, delete-orphan")
 
 class ReminderShare(Base):
-    """Track reminder sharing between users"""
     __tablename__ = "reminder_shares"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    reminder_id = Column(UUID(as_uuid=True), nullable=False, index=True)
-    owner_user_id = Column(String, nullable=False)  # Original reminder owner
-    shared_with_user_id = Column(String, nullable=False)  # User reminder is shared with
-    
-    # Share permissions
+    id = Column(Integer, primary_key=True, index=True)
+    reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=False)
+    shared_by_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    shared_with_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    permission_level = Column(String, default="read")  # 'read', 'write', 'admin'
     can_edit = Column(Boolean, default=False)
-    can_complete = Column(Boolean, default=True)
-    can_reschedule = Column(Boolean, default=False)
+    can_delete = Column(Boolean, default=False)
+    can_mark_complete = Column(Boolean, default=False)
+    can_reshare = Column(Boolean, default=False)
+    shared_at = Column(DateTime, default=func.current_timestamp())
+    expires_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
     
-    # Share status
-    status = Column(String, default="pending")  # 'pending', 'accepted', 'declined'
-    shared_at = Column(TIMESTAMP, default=datetime.utcnow)
-    responded_at = Column(TIMESTAMP, nullable=True)
+    # Relationships
+    reminder = relationship("Reminder", back_populates="shares")
+    shared_by = relationship("Customer", foreign_keys=[shared_by_id], back_populates="shared_by_reminders")
+    shared_with = relationship("Customer", foreign_keys=[shared_with_id], back_populates="shared_reminders")
+
+class ReminderNotification(Base):
+    __tablename__ = "reminder_notifications"
     
-    __table_args__ = (
-        Index('idx_reminder_shares_reminder', 'reminder_id'),
-        Index('idx_reminder_shares_owner', 'owner_user_id'),
-        Index('idx_reminder_shares_shared_with', 'shared_with_user_id'),
-        Index('idx_reminder_shares_status', 'status'),
-    ) 
+    id = Column(Integer, primary_key=True, index=True)
+    reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=False)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    notification_type = Column(String, nullable=False)  # 'email', 'push', 'sms'
+    scheduled_at = Column(DateTime, nullable=False)
+    sent_at = Column(DateTime, nullable=True)
+    delivery_status = Column(String, default="pending")  # 'pending', 'sent', 'delivered', 'failed'
+    failure_reason = Column(String, nullable=True)
+    notification_content = Column(Text, nullable=True)  # JSON string with title, body, etc.
+    retry_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    
+    # Relationships
+    reminder = relationship("Reminder", back_populates="notifications")
+    customer = relationship("Customer", back_populates="reminder_notifications") 

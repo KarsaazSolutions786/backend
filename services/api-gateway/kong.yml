@@ -44,16 +44,16 @@ services:
           hour: 600
           policy: local
 
-  - name: user-service
-    url: http://user-service:8000
+    - name: customer-service
+      url: http://customer-service:8000
     retries: 3
     connect_timeout: 60000
     write_timeout: 60000
     read_timeout: 60000
     routes:
-      - name: user-route
+        - name: customer-route
         paths:
-          - /users
+            - /customers
         strip_path: false
         preserve_host: false
     plugins:
