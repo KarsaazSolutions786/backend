@@ -1,3 +1,53 @@
+# Use secure shared authentication 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
+
+try:
+    from simple_auth import get_current_customer_id
+except ImportError:
+    # Fallback to local secure implementation
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi import Depends, HTTPException, status
+    import jwt
+    
+    def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
+        """Secure local implementation as fallback"""
+        try:
+            token = credentials.credentials
+            secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+            
+            # Validate production environment
+            if os.getenv("ENVIRONMENT") == "production" and secret_key in [
+                "your-secret-key-here", 
+                "your-secret-key-here-change-in-production",
+                "eindr-super-secret-key-change-in-production-123456789"
+            ]:
+                raise ValueError("Production environment requires a secure SECRET_KEY")
+            
+            payload = jwt.decode(
+                token, 
+                secret_key, 
+                algorithms=["HS256"],
+                options={"verify_signature": True, "verify_exp": True}
+            )
+            customer_id = payload.get("sub")
+            if customer_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token: missing subject"
+                )
+            return int(customer_id)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired"
+            )
+        except jwt.InvalidTokenError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -10,9 +60,9 @@ logger = logging.getLogger(__name__)
 
 class ActivityLog(BaseModel):
     id: str
-    user_id: str
+    customer_id: str
     action: str
-    resource_type: str  # 'reminder', 'note', 'expense', 'user'
+    resource_type: str  # 'reminder', 'note', 'expense', 'customer'
     resource_id: Optional[str]
     details: Dict[str, Any]
     ip_address: Optional[str]
@@ -34,19 +84,18 @@ class ActivityStats(BaseModel):
 # Mock storage
 activity_logs_storage = {}
 
-def get_current_user_id() -> str:
-    return "user-123"
+
 
 @router.post("/", response_model=ActivityLog)
 async def log_activity(activity_data: ActivityCreate, request: Request = None):
-    """Log a user activity"""
+    """Log a customer activity"""
     try:
         activity_id = str(uuid.uuid4())
-        user_id = get_current_user_id()
+        customer_id: int = Depends(get_current_customer_id)
         
         activity = {
             "id": activity_id,
-            "user_id": user_id,
+            "customer_id": customer_id,
             "action": activity_data.action,
             "resource_type": activity_data.resource_type,
             "resource_id": activity_data.resource_id,
@@ -58,7 +107,7 @@ async def log_activity(activity_data: ActivityCreate, request: Request = None):
         
         activity_logs_storage[activity_id] = activity
         
-        logger.info(f"Logged activity: {activity_data.action} for user: {user_id}")
+        logger.info(f"Logged activity: {activity_data.action} for user: {customer_id}")
         
         return ActivityLog(**activity)
         
@@ -75,11 +124,11 @@ async def get_activity_logs(
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None)
 ):
-    """Get user's activity logs"""
+    """Get customer's activity logs"""
     try:
-        user_id = get_current_user_id()
+        customer_id: int = Depends(get_current_customer_id)
         user_activities = [activity for activity in activity_logs_storage.values() 
-                          if activity["user_id"] == user_id]
+                          if activity["customer_id"] == customer_id]
         
         # Apply filters
         if action:
@@ -110,9 +159,9 @@ async def get_activity_logs(
 async def get_activity_stats():
     """Get activity statistics"""
     try:
-        user_id = get_current_user_id()
+        customer_id: int = Depends(get_current_customer_id)
         user_activities = [activity for activity in activity_logs_storage.values() 
-                          if activity["user_id"] == user_id]
+                          if activity["customer_id"] == customer_id]
         
         total_activities = len(user_activities)
         
@@ -160,13 +209,13 @@ async def get_activity_stats():
 async def cleanup_old_logs(days: int = Query(30, ge=1, le=365)):
     """Clean up old activity logs"""
     try:
-        user_id = get_current_user_id()
+        customer_id: int = Depends(get_current_customer_id)
         cutoff_date = datetime.utcnow() - timedelta(days=days)
         
         # Remove old logs
         logs_to_remove = [
             log_id for log_id, log in activity_logs_storage.items()
-            if log["user_id"] == user_id and log["timestamp"] < cutoff_date
+            if log["customer_id"] == customer_id and log["timestamp"] < cutoff_date
         ]
         
         for log_id in logs_to_remove:

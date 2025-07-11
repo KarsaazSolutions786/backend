@@ -13,4 +13,14 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 sqlalchemy==2.0.23
 alembic==1.12.1
-psycopg2-binary==2.9.7
+psycopg2-binary==2.9.9
+slowapi==0.1.9
+
+# Security dependencies added by migration
+PyJWT>=2.8.0
+bcrypt>=4.0.0
+cryptography>=41.0.0
+zxcvbn>=4.4.24
+sqlparse>=0.4.4
+fastapi-limiter>=0.1.5
+passlib[bcrypt]>=1.7.4

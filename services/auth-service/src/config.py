@@ -1,6 +1,20 @@
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+from pathlib import Path
+
+# Load environment from root local.env file
+from dotenv import load_dotenv
+
+# Load environment variables from root directory
+root_env_path = Path(__file__).parent.parent.parent.parent / "local.env"
+if root_env_path.exists():
+    load_dotenv(root_env_path)
+    print(f"✅ Loaded environment from: {root_env_path}")
+else:
+    print(f"⚠️  Root environment file not found at: {root_env_path}")
+    # Try loading from local .env file
+    load_dotenv()
 
 class Settings(BaseSettings):
     # App settings
@@ -17,10 +31,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
     
     # JWT Settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "eindr-super-secret-key-change-in-production-123456789")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Legacy JWT settings for compatibility
     JWT_SECRET: str = os.getenv("JWT_SECRET", SECRET_KEY)

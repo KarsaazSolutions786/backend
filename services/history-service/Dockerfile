@@ -5,16 +5,18 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY ./services/history-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
-COPY src/ ./src/
-COPY migrations/ ./migrations/
-COPY alembic.ini .
+COPY ./services/history-service/src/ ./src/
+COPY ./shared/ ./shared/
+COPY ./services/history-service/migrations/ ./migrations/
+COPY ./services/history-service/alembic.ini .
 
 # Set environment variables
 ENV PYTHONPATH=/app/src

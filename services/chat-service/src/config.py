@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Auth service
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
     
+    # BLOOM Model settings
+    BLOOM_MODEL_PATH: str = os.getenv("BLOOM_MODEL_PATH", "/app/models/bloom-560m")
+    MODEL_PATH: str = os.getenv("MODEL_PATH", "/app/models")
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

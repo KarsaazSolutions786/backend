@@ -4,9 +4,12 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import time
+import os
 
 from .config import settings
-from .routers import classify
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Configure logging
 logging.basicConfig(
@@ -14,6 +17,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://yourdomain.com").split(",")
+
+# Initialize limiter before app creation
+limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -44,13 +52,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Set limiter on app state
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,  # No wildcards!
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"]
 )
 
 # Request timing middleware
@@ -71,7 +86,8 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
-# Include routers
+# Import and include routers after app creation
+from .routers import classify
 app.include_router(classify.router, prefix="/intent", tags=["intent-classification"])
 
 @app.get("/health")
@@ -88,16 +104,6 @@ async def health_check():
         "version": "1.0.0",
         "model": model_status,
         "timestamp": time.time()
-    }
-
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "service": "intent-service",
-        "message": "Intent classification service with MiniLM is running",
-        "version": "1.0.0",
-        "docs": "/docs"
     }
 
 @app.get("/")

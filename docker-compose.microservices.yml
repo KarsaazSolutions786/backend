@@ -159,13 +159,11 @@ services:
   # MICROSERVICES
   # ======================
   auth-service:
-    build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+    image: backend-auth-service:latest
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       REDIS_URL: redis://redis:6379
-      JWT_SECRET: eindr-super-secret-key-change-in-production-123456789
+      JWT_SECRET: eindr-super-secure-jwt-secret-key-for-production-2024-v1
       SERVICE_NAME: auth-service
       PORT: 8000
     ports:
@@ -185,8 +183,8 @@ services:
 
   customer-service:
     build:
-      context: ./services/customer-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/customer-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -211,8 +209,8 @@ services:
 
   reminder-service:
     build:
-      context: ./services/reminder-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/reminder-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -237,8 +235,8 @@ services:
 
   note-service:
     build:
-      context: ./services/note-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/note-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -263,8 +261,8 @@ services:
 
   ledger-service:
     build:
-      context: ./services/ledger-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/ledger-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -289,8 +287,8 @@ services:
 
   friend-service:
     build:
-      context: ./services/friend-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/friend-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -315,8 +313,8 @@ services:
 
   history-service:
     build:
-      context: ./services/history-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/history-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -341,8 +339,8 @@ services:
 
   stt-service:
     build:
-      context: ./services/stt-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/stt-service/Dockerfile
     environment:
       MODEL_PATH: /app/models
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -368,10 +366,11 @@ services:
 
   tts-service:
     build:
-      context: ./services/tts-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/tts-service/Dockerfile
     environment:
       MODEL_PATH: /app/models
+      COQUI_TOS_AGREED: "1"
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: tts-service
@@ -395,8 +394,8 @@ services:
 
   intent-service:
     build:
-      context: ./services/intent-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/intent-service/Dockerfile
     environment:
       MODEL_PATH: /app/models
       AUTH_SERVICE_URL: http://auth-service:8000
@@ -422,8 +421,8 @@ services:
 
   chat-service:
     build:
-      context: ./services/chat-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/chat-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       MODEL_PATH: /app/models
@@ -450,8 +449,8 @@ services:
 
   scheduler-service:
     build:
-      context: ./services/scheduler-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/scheduler-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
@@ -477,16 +476,16 @@ services:
 
   ai-pipeline-service:
     build:
-      context: ./services/ai-pipeline-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./services/ai-pipeline-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       SERVICE_NAME: ai-pipeline-service
       PORT: 8000
-      STT_SERVICE_URL: http://localhost:8008
-      INTENT_SERVICE_URL: http://localhost:8010
-      CHAT_SERVICE_URL: http://localhost:8011
-      TTS_SERVICE_URL: http://localhost:8009
+      STT_SERVICE_URL: http://stt-service:8000
+      INTENT_SERVICE_URL: http://intent-service:8000
+      CHAT_SERVICE_URL: http://chat-service:8000
+      TTS_SERVICE_URL: http://tts-service:8000
       AI_HTTP_TIMEOUT: '30'
     ports:
       - "8081:8000"
@@ -523,7 +522,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:

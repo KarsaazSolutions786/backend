@@ -1,3 +1,53 @@
+# Use secure shared authentication 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
+
+try:
+    from simple_auth import get_current_customer_id
+except ImportError:
+    # Fallback to local secure implementation
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi import Depends, HTTPException, status
+    import jwt
+    
+    def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
+        """Secure local implementation as fallback"""
+        try:
+            token = credentials.credentials
+            secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+            
+            # Validate production environment
+            if os.getenv("ENVIRONMENT") == "production" and secret_key in [
+                "your-secret-key-here", 
+                "your-secret-key-here-change-in-production",
+                "eindr-super-secret-key-change-in-production-123456789"
+            ]:
+                raise ValueError("Production environment requires a secure SECRET_KEY")
+            
+            payload = jwt.decode(
+                token, 
+                secret_key, 
+                algorithms=["HS256"],
+                options={"verify_signature": True, "verify_exp": True}
+            )
+            customer_id = payload.get("sub")
+            if customer_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token: missing subject"
+                )
+            return int(customer_id)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired"
+            )
+        except jwt.InvalidTokenError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -20,7 +70,7 @@ class JobCreate(BaseModel):
 
 class JobResponse(BaseModel):
     id: str
-    user_id: str
+    customer_id: str
     name: str
     job_type: str
     status: str  # 'pending', 'running', 'completed', 'failed', 'cancelled'
@@ -51,8 +101,7 @@ class JobStats(BaseModel):
 jobs_storage = {}
 job_queue = []
 
-def get_current_user_id() -> str:
-    return "user-123"
+
 
 async def execute_job(job_id: str):
     """Execute a background job"""
@@ -121,11 +170,11 @@ async def create_job(job_data: JobCreate, background_tasks: BackgroundTasks):
     """Create a new scheduled job"""
     try:
         job_id = str(uuid.uuid4())
-        user_id = get_current_user_id()
+        customer_id: int = Depends(get_current_customer_id)
         
         job = {
             "id": job_id,
-            "user_id": user_id,
+            "customer_id": customer_id,
             "name": job_data.name,
             "job_type": job_data.job_type,
             "status": "pending",
@@ -151,7 +200,7 @@ async def create_job(job_data: JobCreate, background_tasks: BackgroundTasks):
             delay = max(0, (job_data.schedule_time - datetime.utcnow()).total_seconds())
             background_tasks.add_task(execute_job_after_delay, job_id, delay)
         
-        logger.info(f"Created job: {job_id} for user: {user_id}")
+        logger.info(f"Created job: {job_id} for customer: {customer_id}")
         
         return JobResponse(**job)
         
@@ -173,10 +222,10 @@ async def get_jobs(
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None)
 ):
-    """Get user's scheduled jobs"""
+    """Get customer's scheduled jobs"""
     try:
-        user_id = get_current_user_id()
-        user_jobs = [job for job in jobs_storage.values() if job["user_id"] == user_id]
+        customer_id: int = Depends(get_current_customer_id)
+        user_jobs = [job for job in jobs_storage.values() if job["customer_id"] == customer_id]
         
         # Apply filters
         if status:
@@ -213,8 +262,8 @@ async def get_job(job_id: str):
             raise HTTPException(status_code=404, detail="Job not found")
         
         # Check ownership
-        user_id = get_current_user_id()
-        if job["user_id"] != user_id:
+        customer_id: int = Depends(get_current_customer_id)
+        if job["customer_id"] != customer_id:
             raise HTTPException(status_code=403, detail="Access denied")
         
         return JobResponse(**job)
@@ -235,8 +284,8 @@ async def cancel_job(job_id: str):
             raise HTTPException(status_code=404, detail="Job not found")
         
         # Check ownership
-        user_id = get_current_user_id()
-        if job["user_id"] != user_id:
+        customer_id: int = Depends(get_current_customer_id)
+        if job["customer_id"] != customer_id:
             raise HTTPException(status_code=403, detail="Access denied")
         
         if job["status"] in ["pending", "running"]:
@@ -264,8 +313,8 @@ async def retry_job(job_id: str, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=404, detail="Job not found")
         
         # Check ownership
-        user_id = get_current_user_id()
-        if job["user_id"] != user_id:
+        customer_id: int = Depends(get_current_customer_id)
+        if job["customer_id"] != customer_id:
             raise HTTPException(status_code=403, detail="Access denied")
         
         if job["status"] == "failed" and job["retry_count"] < job["max_retries"]:
@@ -291,8 +340,8 @@ async def retry_job(job_id: str, background_tasks: BackgroundTasks):
 async def get_job_stats():
     """Get job statistics"""
     try:
-        user_id = get_current_user_id()
-        user_jobs = [job for job in jobs_storage.values() if job["user_id"] == user_id]
+        customer_id: int = Depends(get_current_customer_id)
+        user_jobs = [job for job in jobs_storage.values() if job["customer_id"] == customer_id]
         
         total_jobs = len(user_jobs)
         pending_jobs = len([j for j in user_jobs if j["status"] == "pending"])

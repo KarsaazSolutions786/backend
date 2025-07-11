@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc, func, text
@@ -14,7 +14,34 @@ from ..schemas import (
     NotesListResponse, NoteFilters, NoteBulkUpdate, NoteBulkDelete,
     NoteStats, ErrorResponse
 )
-from ..services.auth_service import get_current_customer
+# from shared.simple_auth import get_current_customer_id  # Temporarily disabled
+
+# Temporary local implementation
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status
+import jwt
+import os
+
+def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
+    """Temporary local implementation of get_current_customer_id"""
+    try:
+        token = credentials.credentials
+        secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        customer_id = payload.get("sub")
+        if customer_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return int(customer_id)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from fastapi.responses import JSONResponse
+
+# Create local limiter instance
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/notes", tags=["Notes"])
 security = HTTPBearer()
@@ -22,14 +49,16 @@ security = HTTPBearer()
 logger = logging.getLogger(__name__)
 
 @router.post("/", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_note(
+    request: Request,
     note_data: NoteCreate,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Create a new note"""
     new_note = Note(
-        customer_id=current_customer["id"],
+        customer_id=current_customer_id,
         title=note_data.title,
         description=note_data.description,
         content_type=note_data.content_type.value if note_data.content_type else "text",
@@ -58,11 +87,11 @@ async def get_notes(
     shared_with_me: Optional[bool] = Query(None),
     sort_by: str = Query("created_at", regex="^(created_at|updated_at|title|last_accessed)$"),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Get notes with filtering, pagination, and sorting"""
-    customer_id = current_customer["id"]
+    customer_id = current_customer_id
     offset = (page - 1) * limit
     
     if shared_with_me:
@@ -129,7 +158,7 @@ async def get_notes(
 @router.get("/{note_id}", response_model=NoteWithShares)
 async def get_note(
     note_id: int,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Get a specific note with sharing information"""
@@ -147,9 +176,9 @@ async def get_note(
         
     # Check if customer has access to this note
     has_access = (
-        note.customer_id == current_customer["id"] or
+        note.customer_id == current_customer_id or
         any(
-            share.shared_with_id == current_customer["id"] and 
+            share.shared_with_id == current_customer_id and 
             share.is_active and 
             (share.expires_at is None or share.expires_at > datetime.utcnow())
             for share in note.shares
@@ -163,7 +192,7 @@ async def get_note(
             )
         
     # Update last_accessed if it's the note owner
-    if note.customer_id == current_customer["id"]:
+    if note.customer_id == current_customer_id:
         note.last_accessed = datetime.utcnow()
         db.commit()
     
@@ -173,7 +202,7 @@ async def get_note(
 async def update_note(
     note_id: int,
     note_data: NoteUpdate,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Update a note"""
@@ -186,14 +215,14 @@ async def update_note(
         )
     
     # Check if customer can edit this note
-    can_edit = note.customer_id == current_customer["id"]
+    can_edit = note.customer_id == current_customer_id
     
     if not can_edit:
         # Check if shared with edit permission
         share = db.query(NoteShare).filter(
             and_(
                 NoteShare.note_id == note_id,
-                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.shared_with_id == current_customer_id,
                 NoteShare.can_edit == True,
                 NoteShare.is_active == True,
                 or_(
@@ -230,7 +259,7 @@ async def update_note(
 @router.delete("/{note_id}")
 async def delete_note(
     note_id: int,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Delete a note"""
@@ -243,14 +272,14 @@ async def delete_note(
         )
     
     # Check if customer can delete this note
-    can_delete = note.customer_id == current_customer["id"]
+    can_delete = note.customer_id == current_customer_id
     
     if not can_delete:
         # Check if shared with delete permission
         share = db.query(NoteShare).filter(
             and_(
                 NoteShare.note_id == note_id,
-                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.shared_with_id == current_customer_id,
                 NoteShare.can_delete == True,
                 NoteShare.is_active == True,
                 or_(
@@ -276,7 +305,7 @@ async def delete_note(
 async def share_note(
     note_id: int,
     share_data: NoteShareCreate,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Share a note with another customer"""
@@ -289,13 +318,13 @@ async def share_note(
         )
     
     # Check if customer owns this note or can reshare
-    can_share = note.customer_id == current_customer["id"]
+    can_share = note.customer_id == current_customer_id
     
     if not can_share:
         share = db.query(NoteShare).filter(
             and_(
                 NoteShare.note_id == note_id,
-                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.shared_with_id == current_customer_id,
                 NoteShare.can_reshare == True,
                 NoteShare.is_active == True,
                 or_(
@@ -337,7 +366,7 @@ async def share_note(
     
     new_share = NoteShare(
         note_id=note_id,
-        shared_by_id=current_customer["id"],
+        shared_by_id=current_customer_id,
         shared_with_id=share_data.shared_with_id,
         permission_level=share_data.permission_level.value,
         can_edit=share_data.can_edit,
@@ -365,7 +394,7 @@ async def share_note(
 @router.get("/{note_id}/shares", response_model=List[NoteShareResponse])
 async def get_note_shares(
     note_id: int,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Get all shares for a note"""
@@ -379,11 +408,11 @@ async def get_note_shares(
         
     # Check if customer has access to this note
     has_access = (
-        note.customer_id == current_customer["id"] or
+        note.customer_id == current_customer_id or
         db.query(NoteShare).filter(
             and_(
                 NoteShare.note_id == note_id,
-                NoteShare.shared_with_id == current_customer["id"],
+                NoteShare.shared_with_id == current_customer_id,
                 NoteShare.is_active == True,
                 or_(
                     NoteShare.expires_at.is_(None),
@@ -415,7 +444,7 @@ async def get_note_shares(
 async def update_note_share(
     share_id: int,
     share_data: NoteShareUpdate,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Update note sharing permissions"""
@@ -432,7 +461,7 @@ async def update_note_share(
         )
 
     # Only note owner or share creator can update
-    if share.note.customer_id != current_customer["id"] and share.shared_by_id != current_customer["id"]:
+    if share.note.customer_id != current_customer_id and share.shared_by_id != current_customer_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this share"
@@ -454,7 +483,7 @@ async def update_note_share(
 @router.delete("/shares/{share_id}")
 async def revoke_note_share(
     share_id: int,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Revoke note sharing"""
@@ -468,9 +497,9 @@ async def revoke_note_share(
     
     # Note owner, share creator, or recipient can revoke
     can_revoke = (
-        share.note.customer_id == current_customer["id"] or
-        share.shared_by_id == current_customer["id"] or
-        share.shared_with_id == current_customer["id"]
+        share.note.customer_id == current_customer_id or
+        share.shared_by_id == current_customer_id or
+        share.shared_with_id == current_customer_id
     )
     
     if not can_revoke:
@@ -500,7 +529,7 @@ async def revoke_note_share(
 @router.post("/bulk-update")
 async def bulk_update_notes(
     bulk_data: NoteBulkUpdate,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Bulk update notes (favorite, pinned status)"""
@@ -508,7 +537,7 @@ async def bulk_update_notes(
     notes = db.query(Note).filter(
         and_(
             Note.id.in_(bulk_data.note_ids),
-            Note.customer_id == current_customer["id"]
+            Note.customer_id == current_customer_id
         )
     ).all()
     
@@ -533,7 +562,7 @@ async def bulk_update_notes(
 @router.delete("/bulk-delete")
 async def bulk_delete_notes(
     bulk_data: NoteBulkDelete,
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Bulk delete notes"""
@@ -541,7 +570,7 @@ async def bulk_delete_notes(
     notes = db.query(Note).filter(
         and_(
             Note.id.in_(bulk_data.note_ids),
-            Note.customer_id == current_customer["id"]
+            Note.customer_id == current_customer_id
         )
     ).all()
     
@@ -561,11 +590,11 @@ async def bulk_delete_notes(
 
 @router.get("/stats", response_model=NoteStats)
 async def get_note_stats(
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Get note statistics for current customer"""
-    customer_id = current_customer["id"]
+    customer_id = current_customer_id
     
     # Basic counts
     total_notes = db.query(Note).filter(Note.customer_id == customer_id).count()

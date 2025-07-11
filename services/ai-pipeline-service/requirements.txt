@@ -1,4 +1,18 @@
-fastapi
-uvicorn 
-httpx
-pydantic 
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+httpx==0.25.2
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-multipart==0.0.6
+python-json-logger==2.0.7
+PyJWT==2.8.0
+slowapi==0.1.9
+
+# Security dependencies added by migration
+bcrypt>=4.0.0
+redis>=4.5.0
+cryptography>=41.0.0
+zxcvbn>=4.4.24
+sqlparse>=0.4.4
+fastapi-limiter>=0.1.5
+passlib[bcrypt]>=1.7.4

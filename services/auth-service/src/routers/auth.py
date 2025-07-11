@@ -8,6 +8,11 @@ import bcrypt
 import jwt
 import secrets
 import logging
+import sys
+import os
+
+# Add shared modules to path
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 from ..database import get_db
 from ..models import Customer, CustomerSession, LoginAttempt
@@ -17,8 +22,38 @@ from ..schemas import (
     PasswordChange, PasswordResetRequest, PasswordReset, ErrorResponse,
     CustomerSessionResponse, TokenRefresh
 )
-from ..services.auth_service import AuthService, JWTService, get_current_customer
 from ..config import settings
+from ..services.auth_service import AuthService
+from ..services.jwt_service import JWTService
+# from shared.simple_auth import get_current_customer_id  # Temporarily disabled
+
+# Temporary local implementation
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status
+import jwt
+from ..config import settings
+
+def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
+    """Temporary local implementation of get_current_customer_id"""
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        customer_id = payload.get("sub")
+        if customer_id is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return int(customer_id)
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Import enhanced security modules
+try:
+    from rate_limiting import brute_force_protection, record_auth_failure
+    from input_validation import SecureUserRegistration, SecureUserLogin, InputSanitizer, SecurityError
+    from security_config import SensitiveDataFilter
+    HAS_ENHANCED_SECURITY = True
+except ImportError:
+    print("Warning: Enhanced security modules not available, using basic security")
+    HAS_ENHANCED_SECURITY = False
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -30,9 +65,30 @@ security = HTTPBearer()
 # Initialize JWT service
 jwt_service = JWTService()
 
+# Token blacklist for logout/revocation (in production, use Redis)
+REVOKED_TOKENS = set()
+
 def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     """Get AuthService instance with database dependency"""
     return AuthService(db)
+
+def check_token_revoked(token: str) -> bool:
+    """Check if token has been revoked"""
+    return token in REVOKED_TOKENS
+
+def revoke_token(token: str):
+    """Add token to revocation list"""
+    REVOKED_TOKENS.add(token)
+    # In production, also store in Redis with TTL equal to token expiration
+
+def validate_request_security(request: Request, endpoint: str):
+    """Validate request for security (rate limiting, etc.)"""
+    if HAS_ENHANCED_SECURITY:
+        try:
+            brute_force_protection.check_rate_limit(request, endpoint)
+        except HTTPException as e:
+            logger.warning(f"Rate limit exceeded for {endpoint}: {e.detail}")
+            raise
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register_customer(
@@ -42,15 +98,43 @@ async def register_customer(
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Register a new customer"""
+    """Register a new customer with enhanced security"""
+    
+    # Apply rate limiting and security checks
+    validate_request_security(request, "auth.register")
+    
     try:
-        # Create customer using auth service
-        customer = auth_service.create_customer(customer_data.email, customer_data.password)
+        # Enhanced input validation
+        if HAS_ENHANCED_SECURITY:
+            # Use secure validation model
+            try:
+                secure_data = SecureUserRegistration(
+                    email=customer_data.email,
+                    password=customer_data.password
+                )
+                validated_email = secure_data.email
+                validated_password = secure_data.password
+            except (ValueError, SecurityError) as e:
+                logger.warning(f"Invalid registration data: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid registration data. Please check your input."
+                )
+        else:
+            validated_email = customer_data.email
+            validated_password = customer_data.password
         
-        # Log successful registration attempt
+        # Create customer using auth service
+        customer = auth_service.create_customer(validated_email, validated_password)
+        
+        # Log successful registration attempt (with sanitized data)
+        log_data = {"email": validated_email, "success": True}
+        if HAS_ENHANCED_SECURITY:
+            log_data = SensitiveDataFilter.filter_sensitive_data(log_data)
+        
         auth_service.log_login_attempt(
             customer_id=customer.id,
-            email=customer_data.email,
+            email=validated_email,
             ip_address=request.client.host,
             user_agent=request.headers.get("user-agent"),
             success=True
@@ -64,11 +148,18 @@ async def register_customer(
             remember_me=False
         )
         
-        # Generate JWT tokens
-        access_token = jwt_service.create_access_token(data={"sub": str(customer.id)})
-        refresh_token = jwt_service.create_refresh_token(data={"sub": str(customer.id)})
+        # Generate JWT tokens with enhanced security
+        token_data = {
+            "sub": str(customer.id),
+            "email": validated_email,
+            "iat": datetime.utcnow(),
+            "permissions": ["user"]  # Basic customer permissions
+        }
         
-        logger.info(f"Customer registered successfully: {customer_data.email}")
+        access_token = jwt_service.create_access_token(data=token_data)
+        refresh_token = jwt_service.create_refresh_token(data=token_data)
+        
+        logger.info(f"Customer registered successfully: {validated_email}")
         
         return TokenResponse(
             access_token=access_token,
@@ -80,10 +171,10 @@ async def register_customer(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Registration error: {e}")
+        logger.error(f"Registration error: {type(e).__name__}")  # Don't log sensitive details
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed"
+            detail="Registration temporarily unavailable. Please try again later."
         )
 
 @router.post("/login", response_model=TokenResponse)
@@ -93,21 +184,55 @@ async def login_customer(
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Authenticate customer and return tokens"""
+    """Authenticate customer with enhanced security"""
+    
+    # Apply rate limiting and security checks
+    validate_request_security(request, "auth.login")
+    
     try:
+        # Enhanced input validation
+        if HAS_ENHANCED_SECURITY:
+            try:
+                secure_data = SecureUserLogin(
+                    email=login_data.email,
+                    password=login_data.password,
+                    remember_me=getattr(login_data, 'remember_me', False)
+                )
+                validated_email = secure_data.email
+                validated_password = secure_data.password
+                remember_me = secure_data.remember_me
+            except (ValueError, SecurityError) as e:
+                logger.warning(f"Invalid login data: {e}")
+                # Record failed attempt for brute force protection
+                if HAS_ENHANCED_SECURITY:
+                    record_auth_failure(request, "auth.login")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid login data"
+                )
+        else:
+            validated_email = login_data.email
+            validated_password = login_data.password
+            remember_me = getattr(login_data, 'remember_me', False)
+        
         # Authenticate customer
-        customer = auth_service.authenticate_customer(login_data.email, login_data.password)
+        customer = auth_service.authenticate_customer(validated_email, validated_password)
         
         if not customer:
             # Log failed attempt
             auth_service.log_login_attempt(
                 customer_id=None,
-                email=login_data.email,
+                email=validated_email,
                 ip_address=request.client.host,
                 user_agent=request.headers.get("user-agent"),
                 success=False,
                 failure_reason="invalid_credentials"
             )
+            
+            # Record failed attempt for brute force protection
+            if HAS_ENHANCED_SECURITY:
+                record_auth_failure(request, "auth.login")
+            
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
@@ -116,7 +241,7 @@ async def login_customer(
         # Log successful login
         auth_service.log_login_attempt(
             customer_id=customer.id,
-            email=login_data.email,
+            email=validated_email,
             ip_address=request.client.host,
             user_agent=request.headers.get("user-agent"),
             success=True
@@ -127,14 +252,22 @@ async def login_customer(
             customer_id=customer.id,
             ip_address=request.client.host,
             user_agent=request.headers.get("user-agent"),
-            remember_me=getattr(login_data, 'remember_me', False)
+            remember_me=remember_me
         )
         
-        # Generate JWT tokens
-        access_token = jwt_service.create_access_token(data={"sub": str(customer.id)})
-        refresh_token = jwt_service.create_refresh_token(data={"sub": str(customer.id)})
+        # Generate JWT tokens with enhanced security
+        token_data = {
+            "sub": str(customer.id),
+            "email": validated_email,
+            "iat": datetime.utcnow(),
+            "permissions": ["user"],  # Basic customer permissions
+            "session_id": session.id  # Link to session for revocation
+        }
         
-        logger.info(f"Customer logged in successfully: {login_data.email}")
+        access_token = jwt_service.create_access_token(data=token_data)
+        refresh_token = jwt_service.create_refresh_token(data=token_data)
+        
+        logger.info(f"Customer logged in successfully: {validated_email}")
         
         return TokenResponse(
             access_token=access_token,
@@ -146,20 +279,32 @@ async def login_customer(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Login error: {e}")
+        logger.error(f"Login error: {type(e).__name__}")  # Don't log sensitive details
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed"
+            detail="Login temporarily unavailable. Please try again later."
         )
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     token_data: TokenRefresh,
+    request: Request,
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Refresh access token using refresh token"""
+    """Refresh access token with enhanced security"""
+    
+    # Apply rate limiting
+    validate_request_security(request, "auth.token_refresh")
+    
     try:
+        # Check if refresh token is revoked
+        if check_token_revoked(token_data.refresh_token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked"
+            )
+        
         # Verify refresh token
         payload = jwt_service.verify_token(token_data.refresh_token)
         
@@ -184,9 +329,34 @@ async def refresh_token(
                 detail="Customer not found or inactive"
             )
         
+        # Validate session if present
+        session_id = payload.get("session_id")
+        if session_id:
+            session = db.query(CustomerSession).filter(
+                CustomerSession.id == session_id,
+                CustomerSession.customer_id == customer.id
+            ).first()
+            
+            if not session or session.expires_at < datetime.utcnow():
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Session expired"
+                )
+        
+        # Revoke old refresh token
+        revoke_token(token_data.refresh_token)
+        
         # Generate new tokens
-        access_token = jwt_service.create_access_token(data={"sub": str(customer.id)})
-        new_refresh_token = jwt_service.create_refresh_token(data={"sub": str(customer.id)})
+        new_token_data = {
+            "sub": str(customer.id),
+            "email": customer.email,
+            "iat": datetime.utcnow(),
+            "permissions": ["user"],
+            "session_id": session_id if session_id else None
+        }
+        
+        access_token = jwt_service.create_access_token(data=new_token_data)
+        new_refresh_token = jwt_service.create_refresh_token(data=new_token_data)
         
         return TokenResponse(
             access_token=access_token,
@@ -203,7 +373,7 @@ async def refresh_token(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Token refresh error: {e}")
+        logger.error(f"Token refresh error: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token refresh failed"
@@ -211,12 +381,12 @@ async def refresh_token(
 
 @router.get("/me", response_model=CustomerWithSessions)
 async def get_current_customer_info(
-    current_customer: dict = Depends(get_current_customer),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
     """Get current customer information with sessions"""
     try:
-        customer_id = current_customer["customer_id"]
+        customer_id = current_customer_id
         
         # Get customer with sessions
         customer = db.query(Customer).filter(Customer.id == customer_id).first()
@@ -254,25 +424,115 @@ async def get_current_customer_info(
 
 @router.post("/logout")
 async def logout_customer(
-    current_customer: dict = Depends(get_current_customer),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Logout customer and invalidate all sessions"""
+    """Logout customer and revoke tokens"""
     try:
-        customer_id = current_customer["customer_id"]
-        auth_service.invalidate_sessions(customer_id)
+        # Revoke the current access token
+        if credentials and credentials.credentials:
+            revoke_token(credentials.credentials)
+        
+        # Invalidate all sessions for the customer
+        customer_id = current_customer.get("id")
+        if customer_id:
+            auth_service.invalidate_sessions(customer_id)
+        
+        logger.info(f"Customer logged out: {customer_id}")
+        
         return {"message": "Successfully logged out"}
+    
     except Exception as e:
-        logger.error(f"Logout error: {e}")
+        logger.error(f"Logout error: {type(e).__name__}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Logout failed"
         )
 
+@router.post("/revoke-token")
+async def revoke_token_endpoint(
+    token_data: TokenRefresh,
+    current_customer_id: int = Depends(get_current_customer_id)
+):
+    """Revoke a specific token"""
+    try:
+        # Verify the token belongs to the current customer
+        payload = jwt_service.verify_token(token_data.refresh_token)
+        token_customer_id = payload.get("sub")
+        
+        if str(current_customer.get("id")) != token_customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot revoke token belonging to another user"
+            )
+        
+        # Revoke the token
+        revoke_token(token_data.refresh_token)
+        
+        return {"message": "Token revoked successfully"}
+    
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Token revocation error: {type(e).__name__}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token revocation failed"
+        )
+
 @router.post("/validate-token")
 async def validate_token(
-    current_customer: dict = Depends(get_current_customer)
+    credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
     """Validate token and return customer info"""
-    return current_customer 
+    try:
+        if not credentials:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="No token provided"
+            )
+        
+        token = credentials.credentials
+        
+        # Check if token is revoked
+        if check_token_revoked(token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked"
+            )
+        
+        # Verify token
+        payload = jwt_service.verify_token(token)
+        
+        return {
+            "valid": True,
+            "customer_id": payload.get("sub"),
+            "email": payload.get("email"),
+            "permissions": payload.get("permissions", []),
+            "expires_at": payload.get("exp")
+        }
+    
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
+    except Exception as e:
+        logger.error(f"Token validation error: {type(e).__name__}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Token validation failed"
+        ) 

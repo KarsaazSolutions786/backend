@@ -3,7 +3,7 @@ import os
 
 class Settings(BaseSettings):
     # App settings
-    SERVICE_NAME: str = "user-service"
+    SERVICE_NAME: str = "customer-service"
     VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     HOST: str = os.getenv("HOST", "0.0.0.0")

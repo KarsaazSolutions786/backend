@@ -35,39 +35,39 @@ class ReminderService:
             "High": "high"
         }
     
-    async def ensure_customer_exists(self, db: Session, user_id: str) -> Customer:
-        """Ensure customer record exists for the user_id"""
+    async def ensure_customer_exists(self, db: Session, customer_id: str) -> Customer:
+        """Ensure customer record exists for the customer_id"""
         try:
-            # Convert user_id to integer (auth service returns string, we need int for DB)
-            customer_id = int(user_id)
+            # Convert customer_id to integer (auth service returns string, we need int for DB)
+            customer_id_int = int(customer_id)
             
-            customer = db.query(Customer).filter(Customer.id == customer_id).first()
+            customer = db.query(Customer).filter(Customer.id == customer_id_int).first()
             if not customer:
                 # Create a minimal customer record
                 customer = Customer(
-                    id=customer_id,
-                    email=f"user{customer_id}@eindr.com",  # Placeholder email
+                    id=customer_id_int,
+                    email=f"user{customer_id_int}@eindr.com",  # Placeholder email
                     is_active=True
                 )
                 db.add(customer)
                 db.commit()
-                logger.info(f"Created customer record for user_id: {user_id}")
+                logger.info(f"Created customer record for customer_id: {customer_id}")
                 
             return customer
             
         except ValueError:
-            logger.error(f"Invalid user_id format: {user_id}")
-            raise ValueError(f"Invalid user_id format: {user_id}")
+            logger.error(f"Invalid customer_id format: {customer_id}")
+            raise ValueError(f"Invalid customer_id format: {customer_id}")
         except Exception as e:
             db.rollback()
             logger.error(f"Error ensuring customer exists: {e}")
             raise
 
-    async def create_reminder(self, db: Session, user_id: str, reminder_data: dict):
+    async def create_reminder(self, db: Session, customer_id: str, reminder_data: dict):
         """Create a new reminder with proper foreign key lookups"""
         try:
             # Ensure customer exists
-            customer = await self.ensure_customer_exists(db, user_id)
+            customer = await self.ensure_customer_exists(db, customer_id)
             
             # Look up priority_id using label field
             priority_id = None
@@ -129,13 +129,13 @@ class ReminderService:
             logger.error(f"Error creating reminder: {e}")
             raise
 
-    async def get_user_reminders(self, db: Session, user_id: str, skip: int, limit: int, filters: dict):
-        """Get reminders for a user with filtering"""
+    async def get_user_reminders(self, db: Session, customer_id: str, skip: int, limit: int, filters: dict):
+        """Get reminders for a customer with filtering"""
         try:
-            customer_id = int(user_id)
+            customer_id_int = int(customer_id)
             
             query = db.query(Reminder).filter(
-                Reminder.customer_id == customer_id,
+                Reminder.customer_id == customer_id_int,
                 Reminder.is_active == True
             )
             
@@ -168,15 +168,15 @@ class ReminderService:
             logger.error(f"Error getting user reminders: {e}")
             return []
 
-    async def get_reminder(self, db: Session, reminder_id: str, user_id: str):
+    async def get_reminder(self, db: Session, reminder_id: str, customer_id: str):
         """Get a specific reminder"""
         try:
-            customer_id = int(user_id)
+            customer_id_int = int(customer_id)
             reminder_id_int = int(reminder_id)
             
             reminder = db.query(Reminder).filter(
                 Reminder.id == reminder_id_int,
-                Reminder.customer_id == customer_id,
+                Reminder.customer_id == customer_id_int,
                 Reminder.is_active == True
             ).first()
             
@@ -186,10 +186,10 @@ class ReminderService:
             logger.error(f"Error getting reminder: {e}")
             return None
 
-    async def update_reminder(self, db: Session, reminder_id: str, user_id: str, update_data: dict):
+    async def update_reminder(self, db: Session, reminder_id: str, customer_id: str, update_data: dict):
         """Update a reminder"""
         try:
-            reminder = await self.get_reminder(db, reminder_id, user_id)
+            reminder = await self.get_reminder(db, reminder_id, customer_id)
             if not reminder:
                 return None
             
@@ -233,10 +233,10 @@ class ReminderService:
             logger.error(f"Error updating reminder: {e}")
             return None
 
-    async def delete_reminder(self, db: Session, reminder_id: str, user_id: str):
+    async def delete_reminder(self, db: Session, reminder_id: str, customer_id: str):
         """Soft delete a reminder"""
         try:
-            reminder = await self.get_reminder(db, reminder_id, user_id)
+            reminder = await self.get_reminder(db, reminder_id, customer_id)
             if not reminder:
                 return False
             
@@ -251,10 +251,10 @@ class ReminderService:
             logger.error(f"Error deleting reminder: {e}")
             return False
 
-    async def complete_reminder(self, db: Session, reminder_id: str, user_id: str):
+    async def complete_reminder(self, db: Session, reminder_id: str, customer_id: str):
         """Mark a reminder as completed"""
         try:
-            reminder = await self.get_reminder(db, reminder_id, user_id)
+            reminder = await self.get_reminder(db, reminder_id, customer_id)
             if not reminder:
                 return None
             
@@ -271,10 +271,10 @@ class ReminderService:
             logger.error(f"Error completing reminder: {e}")
             return None
 
-    async def snooze_reminder(self, db: Session, reminder_id: str, user_id: str, snooze_minutes: int):
+    async def snooze_reminder(self, db: Session, reminder_id: str, customer_id: str, snooze_minutes: int):
         """Snooze a reminder"""
         try:
-            reminder = await self.get_reminder(db, reminder_id, user_id)
+            reminder = await self.get_reminder(db, reminder_id, customer_id)
             if not reminder:
                 return None
             
@@ -292,28 +292,28 @@ class ReminderService:
             logger.error(f"Error snoozing reminder: {e}")
             return None
 
-    async def share_reminder(self, db: Session, reminder_id: str, owner_user_id: str, shared_with_user_id: str, permissions: dict):
-        """Share a reminder with another user"""
+    async def share_reminder(self, db: Session, reminder_id: str, owner_customer_id: str, shared_with_customer_id: str, permissions: dict):
+        """Share a reminder with another customer"""
         try:
-            # This is a stub for now - would need more complex user lookup
+            # This is a stub for now - would need more complex customer lookup
             return None
             
         except Exception as e:
             logger.error(f"Error sharing reminder: {e}")
             return None
 
-    async def get_shared_with_user(self, db: Session, user_id: str, skip: int, limit: int):
-        """Get reminders shared with user"""
+    async def get_shared_with_user(self, db: Session, customer_id: str, skip: int, limit: int):
+        """Get reminders shared with customer"""
         # Stub for now
         return []
 
-    async def get_reminders_in_timeframe(self, db: Session, user_id: str, from_time: datetime, to_time: datetime):
+    async def get_reminders_in_timeframe(self, db: Session, customer_id: str, from_time: datetime, to_time: datetime):
         """Get reminders in a specific timeframe"""
         try:
-            customer_id = int(user_id)
+            customer_id_int = int(customer_id)
             
             reminders = db.query(Reminder).filter(
-                Reminder.customer_id == customer_id,
+                Reminder.customer_id == customer_id_int,
                 Reminder.is_active == True,
                 Reminder.is_completed == False,
                 Reminder.time >= from_time,

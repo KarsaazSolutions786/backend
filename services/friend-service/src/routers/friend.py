@@ -1,3 +1,53 @@
+# Use secure shared authentication 
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
+
+try:
+    from simple_auth import get_current_customer_id
+except ImportError:
+    # Fallback to local secure implementation
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi import Depends, HTTPException, status
+    import jwt
+    
+    def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
+        """Secure local implementation as fallback"""
+        try:
+            token = credentials.credentials
+            secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+            
+            # Validate production environment
+            if os.getenv("ENVIRONMENT") == "production" and secret_key in [
+                "your-secret-key-here", 
+                "your-secret-key-here-change-in-production",
+                "eindr-super-secret-key-change-in-production-123456789"
+            ]:
+                raise ValueError("Production environment requires a secure SECRET_KEY")
+            
+            payload = jwt.decode(
+                token, 
+                secret_key, 
+                algorithms=["HS256"],
+                options={"verify_signature": True, "verify_exp": True}
+            )
+            customer_id = payload.get("sub")
+            if customer_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid token: missing subject"
+                )
+            return int(customer_id)
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired"
+            )
+        except jwt.InvalidTokenError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -14,7 +64,7 @@ class FriendRequest(BaseModel):
 
 class FriendResponse(BaseModel):
     id: str
-    user_id: str
+    customer_id: str
     friend_id: str
     friend_name: str
     friend_email: str
@@ -36,32 +86,33 @@ users_storage = {
     'user-456': {'name': 'Jane Smith', 'email': 'jane@example.com'},
 }
 
-def get_current_user_id() -> str:
-    return "user-123"
+
 
 @router.post("/requests", response_model=FriendResponse)
-async def send_friend_request(request_data: FriendRequest):
+async def send_friend_request(
+    request_data: FriendRequest,
+    customer_id: int = Depends(get_current_customer_id)
+):
     """Send a friend request"""
     try:
-        user_id = get_current_user_id()
         
         # Find friend by email (mock lookup)
         friend_id = None
-        for uid, user_data in users_storage.items():
-            if user_data['email'] == request_data.friend_email:
+        for uid, customer_data in users_storage.items():
+            if customer_data['email'] == request_data.friend_email:
                 friend_id = uid
                 break
         
         if not friend_id:
             raise HTTPException(status_code=404, detail="User not found")
         
-        if friend_id == user_id:
+        if friend_id == customer_id:
             raise HTTPException(status_code=400, detail="Cannot add yourself as friend")
         
         friendship_id = str(uuid.uuid4())
         friendship = {
             "id": friendship_id,
-            "user_id": user_id,
+            "customer_id": customer_id,
             "friend_id": friend_id,
             "friend_name": users_storage[friend_id]['name'],
             "friend_email": users_storage[friend_id]['email'],
@@ -82,12 +133,14 @@ async def send_friend_request(request_data: FriendRequest):
         raise HTTPException(status_code=500, detail="Failed to send friend request")
 
 @router.get("/", response_model=List[FriendResponse])
-async def get_friends(status: Optional[str] = Query(None)):
-    """Get user's friends"""
+async def get_friends(
+    status: Optional[str] = Query(None),
+    customer_id: int = Depends(get_current_customer_id)
+):
+    """Get customer's friends"""
     try:
-        user_id = get_current_user_id()
         user_friendships = [f for f in friendships_storage.values() 
-                           if f["user_id"] == user_id or f["friend_id"] == user_id]
+                           if f["customer_id"] == customer_id or f["friend_id"] == customer_id]
         
         if status:
             user_friendships = [f for f in user_friendships if f["status"] == status]
@@ -131,16 +184,15 @@ async def decline_friend_request(friendship_id: str):
         raise HTTPException(status_code=500, detail="Failed to decline friend request")
 
 @router.get("/stats", response_model=FriendshipStats)
-async def get_friendship_stats():
+async def get_friendship_stats(customer_id: int = Depends(get_current_customer_id)):
     """Get friendship statistics"""
     try:
-        user_id = get_current_user_id()
         user_friendships = [f for f in friendships_storage.values() 
-                           if f["user_id"] == user_id or f["friend_id"] == user_id]
+                           if f["customer_id"] == customer_id or f["friend_id"] == customer_id]
         
         total_friends = len([f for f in user_friendships if f["status"] == "accepted"])
-        pending_requests = len([f for f in user_friendships if f["status"] == "pending" and f["friend_id"] == user_id])
-        sent_requests = len([f for f in user_friendships if f["status"] == "pending" and f["user_id"] == user_id])
+        pending_requests = len([f for f in user_friendships if f["status"] == "pending" and f["friend_id"] == customer_id])
+        sent_requests = len([f for f in user_friendships if f["status"] == "pending" and f["customer_id"] == customer_id])
         
         return FriendshipStats(
             total_friends=total_friends,

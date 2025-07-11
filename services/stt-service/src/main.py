@@ -4,9 +4,12 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 import time
+import os
 
 from .config import settings
-from .routers import transcribe
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Configure logging
 logging.basicConfig(
@@ -15,17 +18,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://yourdomain.com").split(",")
+
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     logger.info("Starting Speech-to-Text service...")
     
     try:
-        # Initialize Whisper service
-        from .services.whisper_service import initialize_whisper_service
-        whisper_service = initialize_whisper_service()
-        await whisper_service.load_model()
-        
+        # The Hugging Face Whisper model is loaded directly in the transcribe router
         logger.info("Service initialized successfully")
         
     except Exception as e:
@@ -44,13 +48,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Set limiter on app state
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request, exc):
+    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,  # No wildcards!
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"]
 )
 
 # Request timing middleware
@@ -71,16 +82,19 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"detail": "Internal server error"}
     )
 
-# Include routers
+# Import and include routers after app is created
+from .routers import transcribe
 app.include_router(transcribe.router, prefix="/stt", tags=["speech-to-text"])
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    from .services.whisper_service import get_whisper_service
-    whisper_service = get_whisper_service()
-    
-    model_status = "available" if whisper_service and whisper_service.is_available() else "unavailable"
+    # Check if the Hugging Face model is loaded by importing the transcribe module
+    try:
+        from .routers.transcribe import WHISPER_MODEL
+        model_status = "available" if WHISPER_MODEL else "unavailable"
+    except:
+        model_status = "unavailable"
     
     return {
         "status": "healthy",
@@ -88,16 +102,6 @@ async def health_check():
         "version": "1.0.0",
         "whisper_model": model_status,
         "timestamp": time.time()
-    }
-
-@app.get("/")
-async def root():
-    """Root endpoint"""
-    return {
-        "service": "stt-service",
-        "message": "Speech-to-Text service with Whisper is running",
-        "version": "1.0.0",
-        "docs": "/docs"
     }
 
 @app.get("/")

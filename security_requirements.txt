@@ -1,0 +1,15 @@
+# Security Dependencies for Eindr Microservices
+# Add these to your service requirements.txt
+
+PyJWT>=2.8.0
+bcrypt>=4.0.0
+redis>=4.5.0
+cryptography>=41.0.0
+zxcvbn>=4.4.24
+sqlparse>=0.4.4
+fastapi-limiter>=0.1.5
+passlib[bcrypt]>=1.7.4
+
+# Dependencies to REMOVE:
+# python-jose  # REMOVE - INSECURE
+# python-jose[cryptography]  # REMOVE - INSECURE

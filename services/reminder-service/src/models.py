@@ -39,6 +39,19 @@ class Timezone(Base):
     # Relationships
     reminders = relationship("Reminder", back_populates="timezone")
 
+class RepeatPattern(Base):
+    __tablename__ = "repeat_patterns"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    interval_value = Column(Integer, nullable=False)  # e.g. 1, 2, 3
+    interval_unit = Column(String(50), nullable=False)  # e.g. day, week, month, year
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # Relationships
+    reminders = relationship("Reminder", back_populates="repeat_pattern")
+
 class Reminder(Base):
     __tablename__ = "reminders"
     
@@ -47,7 +60,7 @@ class Reminder(Base):
     title = Column(Text, nullable=True)
     description = Column(Text, nullable=True)
     time = Column(DateTime, nullable=True)
-    repeat_pattern_id = Column(Integer, nullable=True)  # No FK constraint since table doesn't exist
+    repeat_pattern_id = Column(Integer, ForeignKey("repeat_patterns.id"), nullable=True)
     timezone_id = Column(Integer, ForeignKey("timezones.id"), nullable=True)
     is_shared = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
@@ -64,6 +77,7 @@ class Reminder(Base):
     customer = relationship("Customer", back_populates="reminders")
     priority = relationship("PriorityLevel", back_populates="reminders")
     timezone = relationship("Timezone", back_populates="reminders")
+    repeat_pattern = relationship("RepeatPattern", back_populates="reminders")
     shares = relationship("ReminderShare", back_populates="reminder", cascade="all, delete-orphan")
     notifications = relationship("ReminderNotification", back_populates="reminder", cascade="all, delete-orphan")
 

@@ -16,8 +16,8 @@ Eindr is a sophisticated microservices-based platform that combines AI capabilit
 ## ✨ Features
 
 ### 🤖 AI Capabilities
-- Speech-to-Text (Whisper STT)
-- Text-to-Speech (Coqui TTS)
+  - Speech-to-Text (Whisper STT)
+  - Text-to-Speech (Coqui TTS)
 - Intent Classification (MiniLM)
 - Conversational AI Pipeline
 - Multi-intent Processing

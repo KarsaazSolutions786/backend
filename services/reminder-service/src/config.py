@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
     
     # Services URLs
-    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://user-service:8000")
+    USER_SERVICE_URL: str = os.getenv("USER_SERVICE_URL", "http://customer-service:8000")
     
     class Config:
         env_file = ".env"

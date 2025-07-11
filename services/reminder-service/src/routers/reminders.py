@@ -9,8 +9,20 @@ import logging
 from ..database import get_db
 from ..models import Reminder, ReminderNotification, ReminderShare
 from ..services.reminder_service import ReminderService
-from ..services.auth_service import AuthService
 from ..services.event_publisher import EventPublisher
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi import Limiter
+from fastapi.responses import JSONResponse
+# Use secure authentication from service auth module
+from ..services.auth_service import get_current_customer
+
+def get_current_customer_id(current_customer: dict = Depends(get_current_customer)) -> int:
+    """Get current customer ID using secure authentication"""
+    return current_customer["customer_id"]
+
+# Create local limiter instance
+limiter = Limiter(key_func=get_remote_address)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -42,7 +54,7 @@ class ReminderUpdate(BaseModel):
 
 class ReminderResponse(BaseModel):
     id: str
-    user_id: str
+    customer_id: str
     title: str
     description: Optional[str]
     time: datetime
@@ -61,7 +73,7 @@ class ReminderResponse(BaseModel):
     max_occurrences: Optional[str]
 
 class ReminderShareCreate(BaseModel):
-    shared_with_user_id: str
+    shared_with_customer_id: str
     can_edit: bool = False
     can_complete: bool = True
     can_reschedule: bool = False
@@ -69,8 +81,8 @@ class ReminderShareCreate(BaseModel):
 class ReminderShareResponse(BaseModel):
     id: str
     reminder_id: str
-    owner_user_id: str
-    shared_with_user_id: str
+    owner_customer_id: str
+    shared_with_customer_id: str
     can_edit: bool
     can_complete: bool
     can_reschedule: bool
@@ -80,24 +92,9 @@ class ReminderShareResponse(BaseModel):
 
 # Initialize services
 reminder_service = ReminderService()
-auth_service = AuthService()
+# auth_service = AuthService()  # Temporarily disabled - not needed with local auth
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """Validate JWT (or stub) and return user info"""
-
-    token = credentials.credentials
-    user_info = await auth_service.validate_token(token)
-    
-    if not user_info:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-    
-    return user_info
+# Removed local get_current_customer function - now using shared authentication
 
 def reminder_to_response(reminder) -> ReminderResponse:
     """Convert a Reminder model to ReminderResponse"""
@@ -130,7 +127,7 @@ def reminder_to_response(reminder) -> ReminderResponse:
     
     return ReminderResponse(
         id=str(reminder.id),
-        user_id=str(reminder.customer_id),  # Convert customer_id back to user_id for API
+        customer_id=str(reminder.customer_id),  # Use customer_id directly
         title=reminder.title or "",
         description=reminder.description,
         time=reminder.time,
@@ -149,18 +146,19 @@ def reminder_to_response(reminder) -> ReminderResponse:
         max_occurrences=str(reminder.max_occurrence) if reminder.max_occurrence else None
     )
 
-@router.post("/", response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/reminders/", response_model=ReminderResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("10/minute")
 async def create_reminder(
     reminder_data: ReminderCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Create a new reminder"""
     try:
         reminder = await reminder_service.create_reminder(
             db=db,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             reminder_data=reminder_data.dict()
         )
         
@@ -168,7 +166,7 @@ async def create_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder created: {reminder.id} for user: {current_user['user_id']}")
+        logger.info(f"Reminder created: {reminder.id} for user: {current_customer_id['customer_id']}")
         
         return reminder_to_response(reminder)
     
@@ -179,10 +177,10 @@ async def create_reminder(
             detail="Failed to create reminder"
         )
 
-@router.get("/", response_model=List[ReminderResponse])
+@router.get("/reminders/", response_model=List[ReminderResponse])
 async def get_reminders(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_customer_id: int = Depends(get_current_customer_id),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     category: Optional[str] = Query(None),
@@ -191,7 +189,7 @@ async def get_reminders(
     from_date: Optional[datetime] = Query(None),
     to_date: Optional[datetime] = Query(None)
 ):
-    """Get user's reminders with filtering options"""
+    """Get customer's reminders with filtering options"""
     try:
         filters = {
             "category": category,
@@ -203,7 +201,7 @@ async def get_reminders(
         
         reminders = await reminder_service.get_user_reminders(
             db=db,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             skip=skip,
             limit=limit,
             filters=filters
@@ -218,18 +216,18 @@ async def get_reminders(
             detail="Failed to get reminders"
         )
 
-@router.get("/{reminder_id}", response_model=ReminderResponse)
+@router.get("/reminders/{reminder_id}", response_model=ReminderResponse)
 async def get_reminder(
     reminder_id: str,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Get a specific reminder"""
     try:
         reminder = await reminder_service.get_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"]
+            customer_id=current_customer_id
         )
         
         if not reminder:
@@ -249,13 +247,13 @@ async def get_reminder(
             detail="Failed to get reminder"
         )
 
-@router.put("/{reminder_id}", response_model=ReminderResponse)
+@router.put("/reminders/{reminder_id}", response_model=ReminderResponse)
 async def update_reminder(
     reminder_id: str,
     reminder_data: ReminderUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Update a reminder"""
     try:
@@ -263,7 +261,7 @@ async def update_reminder(
         existing_reminder = await reminder_service.get_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"]
+            customer_id=current_customer_id
         )
         
         if not existing_reminder:
@@ -276,7 +274,7 @@ async def update_reminder(
         updated_reminder = await reminder_service.update_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             update_data=reminder_data.dict(exclude_unset=True)
         )
         
@@ -284,7 +282,7 @@ async def update_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder updated: {reminder_id} by user: {current_user['user_id']}")
+        logger.info(f"Reminder updated: {reminder_id} by user: {current_customer_id['customer_id']}")
         
         return reminder_to_response(updated_reminder)
     
@@ -297,19 +295,19 @@ async def update_reminder(
             detail="Failed to update reminder"
         )
 
-@router.delete("/{reminder_id}")
+@router.delete("/reminders/{reminder_id}")
 async def delete_reminder(
     reminder_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Delete a reminder"""
     try:
         success = await reminder_service.delete_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"]
+            customer_id=current_customer_id
         )
         
         if not success:
@@ -322,7 +320,7 @@ async def delete_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder deleted: {reminder_id} by user: {current_user['user_id']}")
+        logger.info(f"Reminder deleted: {reminder_id} by user: {current_customer_id['customer_id']}")
         
         return {"message": "Reminder deleted successfully"}
     
@@ -335,19 +333,19 @@ async def delete_reminder(
             detail="Failed to delete reminder"
         )
 
-@router.post("/{reminder_id}/complete")
+@router.post("/reminders/{reminder_id}/complete")
 async def complete_reminder(
     reminder_id: str,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Mark a reminder as completed"""
     try:
         reminder = await reminder_service.complete_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"]
+            customer_id=current_customer_id
         )
         
         if not reminder:
@@ -360,7 +358,7 @@ async def complete_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder completed: {reminder_id} by user: {current_user['user_id']}")
+        logger.info(f"Reminder completed: {reminder_id} by user: {current_customer_id['customer_id']}")
         
         return {"message": "Reminder marked as completed"}
     
@@ -373,20 +371,20 @@ async def complete_reminder(
             detail="Failed to complete reminder"
         )
 
-@router.post("/{reminder_id}/snooze")
+@router.post("/reminders/{reminder_id}/snooze")
 async def snooze_reminder(
     reminder_id: str,
     request: Request,
     snooze_minutes: int = Query(..., ge=1, le=10080),  # Max 1 week
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Snooze a reminder for specified minutes"""
     try:
         reminder = await reminder_service.snooze_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             snooze_minutes=snooze_minutes
         )
         
@@ -400,7 +398,7 @@ async def snooze_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder snoozed: {reminder_id} for {snooze_minutes} minutes by user: {current_user['user_id']}")
+        logger.info(f"Reminder snoozed: {reminder_id} for {snooze_minutes} minutes by user: {current_customer_id['customer_id']}")
         
         return {
             "message": "Reminder snoozed successfully",
@@ -416,21 +414,21 @@ async def snooze_reminder(
             detail="Failed to snooze reminder"
         )
 
-@router.post("/{reminder_id}/share", response_model=ReminderShareResponse)
+@router.post("/reminders/{reminder_id}/share", response_model=ReminderShareResponse)
 async def share_reminder(
     reminder_id: str,
     share_data: ReminderShareCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    current_customer_id: int = Depends(get_current_customer_id)
 ):
-    """Share a reminder with another user"""
+    """Share a reminder with another customer"""
     try:
-        # Verify reminder exists and belongs to user
+        # Verify reminder exists and belongs to customer
         reminder = await reminder_service.get_reminder(
             db=db,
             reminder_id=reminder_id,
-            user_id=current_user["user_id"]
+            customer_id=current_customer_id
         )
         
         if not reminder:
@@ -443,8 +441,8 @@ async def share_reminder(
         share = await reminder_service.share_reminder(
             db=db,
             reminder_id=reminder_id,
-            owner_user_id=current_user["user_id"],
-            shared_with_user_id=share_data.shared_with_user_id,
+            owner_customer_id=current_customer_id,
+            shared_with_customer_id=share_data.shared_with_customer_id,
             permissions={
                 "can_edit": share_data.can_edit,
                 "can_complete": share_data.can_complete,
@@ -456,13 +454,13 @@ async def share_reminder(
         # event_publisher = request.app.state.event_publisher
         # await event_publisher.publish_event(...)
         
-        logger.info(f"Reminder shared: {reminder_id} with user: {share_data.shared_with_user_id}")
+        logger.info(f"Reminder shared: {reminder_id} with customer: {share_data.shared_with_customer_id}")
         
         return ReminderShareResponse(
             id=str(share.id),
             reminder_id=str(share.reminder_id),
-            owner_user_id=share.owner_user_id,
-            shared_with_user_id=share.shared_with_user_id,
+            owner_customer_id=share.owner_customer_id,
+            shared_with_customer_id=share.shared_with_customer_id,
             can_edit=share.can_edit,
             can_complete=share.can_complete,
             can_reschedule=share.can_reschedule,
@@ -483,15 +481,15 @@ async def share_reminder(
 @router.get("/shared/with-me", response_model=List[ReminderResponse])
 async def get_shared_reminders(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_customer_id: int = Depends(get_current_customer_id),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000)
 ):
-    """Get reminders shared with the current user"""
+    """Get reminders shared with the current customer"""
     try:
         reminders = await reminder_service.get_shared_with_user(
             db=db,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             skip=skip,
             limit=limit
         )
@@ -508,7 +506,7 @@ async def get_shared_reminders(
 @router.get("/due/upcoming")
 async def get_upcoming_reminders(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_customer_id: int = Depends(get_current_customer_id),
     hours: int = Query(24, ge=1, le=168)  # Max 1 week
 ):
     """Get reminders due in the next X hours"""
@@ -518,7 +516,7 @@ async def get_upcoming_reminders(
         
         reminders = await reminder_service.get_reminders_in_timeframe(
             db=db,
-            user_id=current_user["user_id"],
+            customer_id=current_customer_id,
             from_time=from_time,
             to_time=to_time
         )
