@@ -1,0 +1,14 @@
+# Include production requirements
+-r requirements.txt
+
+# AI/ML Libraries (for development only)
+torch==2.1.1
+transformers==4.36.2
+sentence-transformers==2.2.2
+openai-whisper==20231117
+TTS==0.22.0
+pandas==2.1.4
+
+# Audio processing
+librosa==0.10.1
+soundfile==0.12.1 

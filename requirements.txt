@@ -30,20 +30,10 @@ pydantic-settings==2.1.0
 # Logging
 python-json-logger==2.0.7
 
-# AI/ML Libraries
-torch==2.1.1
-transformers==4.36.2
-sentence-transformers==2.2.2
-openai-whisper==20231117
-TTS==0.22.0
-scikit-learn==1.3.2
-numpy==1.24.3
-pandas==2.1.4
-
-# Audio processing
-librosa==0.10.1
-soundfile==0.12.1
-
 # Utilities
 python-dotenv==1.0.0
-pytz==2023.3 
+pytz==2023.3
+
+# Core ML libraries (lighter versions for Railway)
+numpy==1.24.3
+scikit-learn==1.3.2 

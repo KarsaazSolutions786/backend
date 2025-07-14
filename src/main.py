@@ -21,6 +21,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Check for ML libraries availability
+ML_AVAILABLE = False
+try:
+    import torch
+    import transformers
+    ML_AVAILABLE = True
+    logger.info("ML libraries available")
+except ImportError:
+    logger.warning("ML libraries not available - running in API-only mode")
+
 # Create FastAPI app
 app = FastAPI(
     title="Eindr Microservices API",
@@ -70,13 +80,14 @@ async def api_status():
     """API status endpoint"""
     return {
         "status": "operational",
+        "ml_available": ML_AVAILABLE,
         "services": {
             "auth": "available",
             "customer": "available", 
-            "chat": "available",
-            "stt": "available",
-            "tts": "available",
-            "intent": "available",
+            "chat": "available" if ML_AVAILABLE else "limited",
+            "stt": "available" if ML_AVAILABLE else "limited",
+            "tts": "available" if ML_AVAILABLE else "limited",
+            "intent": "available" if ML_AVAILABLE else "limited",
             "reminder": "available",
             "note": "available",
             "ledger": "available",

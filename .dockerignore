@@ -1,77 +1,47 @@
-# Git and version control
+# Git
 .git
 .gitignore
 .gitattributes
 
-# Large model files (should be downloaded at runtime or mounted)
-models/*.bin
-models/*.safetensors
-models/*.pt
-models/*.pth
-models/cache/
-models/hub/
-
-# Python cache and virtual environments
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
 .Python
-env/
-venv/
-.venv/
-.env311/
+env
 pip-log.txt
 pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
 
-# IDE and editor files
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Logs and temporary files
-logs/
-*.log
-uploads/
-temp/
-tmp/
-*.tmp
-
-# Testing and development
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-
-# Documentation
-*.md
-docs/
-README.md
-
-# Development and test files
-test_*.py
-tests/
-scripts/test_*.py
-scripts/generate_*.py
-*.wav
-*.mp3
-*.mp4
-*.avi
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# OS generated files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -80,37 +50,21 @@ dist/
 ehthumbs.db
 Thumbs.db
 
-# Large dependencies that can be installed separately
-node_modules/
+# Documentation
+README.md
+*.md
+docs/
 
-# Backup files
-*.bak
-*.backup
+# Development files
+requirements-dev.txt
+*.log
+local.env
+railway.env.template
 
-# Environment files
-.env
-.env.*
-!.env.example
-railway.env.example
-
-# Docker files (not needed in container)
-docker-compose.yml
-Dockerfile.dev
-
-# Railway config (not needed in container)
-railway.json
-railway.toml
-
-# Development database files
-*.db
-*.sqlite3
-
-# Model files - Allow Python files but exclude large model files
-models/*.tflite
+# Large model files (will be pulled via LFS)
+models/*.bin
 models/*.onnx
-models/*.h5
-models/*.pkl
-models/*.joblib
-# Allow Python files in models directory
-!models/*.py
-!models/__init__.py 
+models/*.safetensors
+models/*.pt
+models/*.pth
+models/*.tflite 
