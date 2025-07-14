@@ -1,5 +1,10 @@
-# Exclude large model files directory
+# Exclude large model files directory (but allow specific files via LFS)
 models/
+
+# Allow specific model files to be tracked by LFS
+!models/Mini_LM.bin
+!models/whisper-tiny.bin
+!models/coqui.tflite
 
 # Large model folders generated at runtime
 models/**/snapshots/
