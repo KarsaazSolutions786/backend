@@ -27,11 +27,6 @@ RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
 COPY start.sh .
 RUN chmod +x start.sh
 
-# Copy run script first
-COPY run.py .
-RUN chmod +x run.py
-
-
 # Copy source code
 COPY src/ ./src/
 COPY migrations/ ./migrations/

@@ -18,13 +18,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 
-COPY start.sh .
-RUN chmod +x start.sh
+
 
 # Copy start script first
 COPY start.sh .
-
-# Make start script executable
 RUN chmod +x start.sh
 
 # Copy the rest of the application code
