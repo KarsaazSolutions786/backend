@@ -17,6 +17,12 @@ COPY requirements.txt .
 # Install Python dependencies with timeout and no cache
 RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
 
+# Copy run script first
+COPY run.py .
+
+# Make run script executable
+RUN chmod +x run.py
+
 # Copy source code
 COPY src/ ./src/
 COPY migrations/ ./migrations/
@@ -33,5 +39,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the application by running main.py directly
-CMD ["python", "-m", "src.main"] 
+# Start the application using the run script
+CMD ["python", "run.py"] 
