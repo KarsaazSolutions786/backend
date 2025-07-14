@@ -3,18 +3,11 @@ from typing import List
 import os
 from pathlib import Path
 
-# Load environment from root local.env file
+# Load environment variables
 from dotenv import load_dotenv
 
-# Load environment variables from root directory
-root_env_path = Path(__file__).parent.parent.parent.parent / "local.env"
-if root_env_path.exists():
-    load_dotenv(root_env_path)
-    print(f"✅ Loaded environment from: {root_env_path}")
-else:
-    print(f"⚠️  Root environment file not found at: {root_env_path}")
-    # Try loading from local .env file
-    load_dotenv()
+# Try to load from local .env file if it exists
+load_dotenv()
 
 class Settings(BaseSettings):
     # App settings
