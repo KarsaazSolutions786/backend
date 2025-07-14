@@ -23,9 +23,12 @@ COPY requirements.txt .
 # Install Python dependencies with timeout and no cache
 RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
 
+# Add permissions to start.sh to make it executable
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-COPY start.sh .
-RUN chmod +x start.sh
+# Make sure you are running the start command
+CMD ["/start.sh"]
 
 # Copy source code
 COPY src/ ./src/
