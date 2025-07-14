@@ -1,11 +1,13 @@
 #!/bin/bash
-# Railway startup script
-# This script ensures the PORT environment variable is properly handled
+set -e
 
-# Set default port if not provided
-export PORT=${PORT:-8000}
+# Default to port 8000 if $PORT is not set
+PORT=${PORT:-8000}
 
-echo "Starting Customer Service on port $PORT"
+# Ensure PORT is an integer
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+  echo "ERROR: PORT must be a number. Got '$PORT'"
+  exit 1
+fi
 
-# Start the FastAPI application (using correct path from project structure)
 exec uvicorn src.main:app --host 0.0.0.0 --port $PORT

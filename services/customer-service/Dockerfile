@@ -13,8 +13,12 @@ COPY . .
 # Install dependencies and set up the environment
 RUN pip install -r requirements.txt
 
-# Make start.sh executable
+# Expose the port
+EXPOSE $PORT
+
+# Copy and make executable
+COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Use the corrected start.sh script
-CMD ["/app/start.sh"] 
+# Run with environment variables
+CMD ["/app/start.sh"]
