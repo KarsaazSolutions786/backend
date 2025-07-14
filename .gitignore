@@ -1,5 +1,5 @@
 # Exclude large model files directory
-models/
+
 
 # Python
 __pycache__/
