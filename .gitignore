@@ -1,6 +1,10 @@
 # Exclude large model files directory
 models/
 
+# Large model folders generated at runtime
+models/**/snapshots/
+models/**/.no_exist/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -114,6 +114,27 @@ make test service=service-name
 make update service=service-name
 ```
 
+### Git LFS Setup
+This repository uses Git LFS to handle large ML model files. If you're setting up the project for the first time:
+
+```bash
+# Install Git LFS (if not already installed)
+# macOS: brew install git-lfs
+# Ubuntu: sudo apt-get install git-lfs
+# Windows: https://git-lfs.github.com/
+
+# Initialize Git LFS
+git lfs install
+
+# Pull LFS files
+git lfs pull
+```
+
+For existing repositories with large model files in history, run the migration script:
+```bash
+./scripts/migrate_to_lfs.sh
+```
+
 ## 🗄️ Database
 
 ### Overview
