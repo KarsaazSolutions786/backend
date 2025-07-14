@@ -17,6 +17,10 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+
+COPY start.sh .
+RUN chmod +x start.sh
+
 # Copy start script first
 COPY start.sh .
 

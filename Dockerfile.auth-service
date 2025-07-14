@@ -24,6 +24,9 @@ COPY services/auth-service/migrations/ ./migrations/
 COPY services/auth-service/alembic.ini .
 
 
+COPY start.sh .
+RUN chmod +x start.sh
+
 # Copy run script first
 COPY run.py .
 
