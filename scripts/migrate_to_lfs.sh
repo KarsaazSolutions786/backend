@@ -25,7 +25,7 @@ if ! git diff-index --quiet HEAD --; then
     exit 1
 fi
 
-patterns='*.bin,*.onnx,*.safetensors,*.lock,*.pt,*.pth'
+patterns='*.bin,*.onnx,*.safetensors,*.lock,*.pt,*.pth,models/**/blobs/*,models/**/snapshots/*/blobs/*'
 
 echo "📋 Installing Git LFS..."
 git lfs install
