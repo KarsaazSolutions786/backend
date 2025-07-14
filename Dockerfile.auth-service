@@ -18,11 +18,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Add permissions to start.sh to make it executable
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
 
-# Make sure you are running the start command
-CMD ["/start.sh"]
 
 
 # Copy the rest of the application code
@@ -39,5 +35,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Start the application
-CMD ["./start.sh"] 
+    COPY start.sh /start.sh
+    RUN chmod +x /start.sh
+    
+    # Make sure you are running the start command
+    CMD ["/start.sh"]

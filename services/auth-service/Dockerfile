@@ -23,12 +23,7 @@ COPY requirements.txt .
 # Install Python dependencies with timeout and no cache
 RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt
 
-# Add permissions to start.sh to make it executable
-COPY start.sh /start.sh
-RUN chmod +x /start.sh
 
-# Make sure you are running the start command
-CMD ["/start.sh"]
 
 # Copy source code
 COPY src/ ./src/
@@ -47,4 +42,10 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Start the application using the run script
+# Add permissions to start.sh to make it executable
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
+
+# Make sure you are running the start command
+CMD ["/start.sh"]
 CMD ["python", "-u", "run.py"] 

@@ -1,4 +1,5 @@
 #!/bin/bash
 # Start the application
 echo "Starting the service..."
-exec python run.py
+     #!/bin/bash
+     python /app/main.py
