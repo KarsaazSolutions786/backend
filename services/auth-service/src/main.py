@@ -62,9 +62,15 @@ async def health_check():
     return {"status": "healthy", "service": "auth-service"}
 
 if __name__ == "__main__":
+    # Get port from environment variable (Railway sets PORT)
+    port = int(os.getenv("PORT", settings.PORT))
+    host = os.getenv("HOST", settings.HOST)
+    
+    print(f"Starting Auth Service on {host}:{port}")
+    
     uvicorn.run(
-        "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        "src.main:app",
+        host=host,
+        port=port,
         reload=settings.DEBUG
     ) 
