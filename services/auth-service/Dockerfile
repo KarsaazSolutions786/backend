@@ -1,7 +1,13 @@
 FROM python:3.11-slim
 
+# Add build argument to force rebuild
+ARG BUILD_DATE=unknown
+ARG VCS_REF=unknown
+
 # Set the working directory
 WORKDIR /app
+
+# Updated Dockerfile - no start.sh dependency
 
 # Install system dependencies in one layer to reduce size
 RUN apt-get update && apt-get install -y \
