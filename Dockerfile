@@ -17,11 +17,14 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy start script first
+COPY start.sh .
 
 # Make start script executable
 RUN chmod +x start.sh
+
+# Copy the rest of the application code
+COPY . .
 
 # Set environment variables
 ENV PYTHONPATH=/app
