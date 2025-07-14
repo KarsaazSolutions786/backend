@@ -322,24 +322,29 @@ class IntentClassifier:
 # Global classifier instance
 classifier = IntentClassifier()
 
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 @router.post("/classify", response_model=IntentResponse)
+@limiter.limit("100/minute")
 async def classify_intent(
     request: Request,
-    intent_request: IntentRequest, 
+    request_data: IntentRequest, 
     current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Classify intent from customer text"""
     try:
-        # Get limiter from app state
-        limiter = request.app.state.limiter
-        await limiter.check(request)
-        
         # Classify the intent
-        result = classifier.classify(intent_request.text)
+        intent_result = classifier.classify(request_data.text)
         
-        logger.info(f"Classified intent: {result['intent']} (confidence: {result['confidence']:.2f}) for user {current_customer_id}")
+        logger.info(f"Intent classified for user {current_customer_id}: '{request_data.text}' -> {intent_result['intent']} (confidence: {intent_result['confidence']:.2f})")
         
-        return IntentResponse(**result)
+        return IntentResponse(
+            intent=intent_result["intent"],
+            confidence=intent_result["confidence"],
+            entities=intent_result.get("entities", {}),
+            suggested_action=intent_result.get("suggested_action")
+        )
         
     except Exception as e:
         logger.error(f"Intent classification error: {e}")

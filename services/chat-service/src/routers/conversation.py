@@ -61,6 +61,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter
 from fastapi.responses import JSONResponse
 
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -90,18 +93,13 @@ class ChatResponse(BaseModel):
 conversation_store: Dict[str, List[Dict]] = {}
 
 @router.post("/chat")
+@limiter.limit("100/minute") # Apply rate limiting using the decorator
 async def chat_endpoint(
     request_data: ChatRequest, 
     request: Request,
     current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Main chat endpoint for AI conversations using BLOOM-560M"""
-    # Get limiter from app state to avoid circular import
-    limiter = request.app.state.limiter
-    
-    # Apply rate limiting
-    await limiter.check_request_and_update(request)
-    
     try:
         # Get BLOOM service
         bloom_service = get_bloom_service()

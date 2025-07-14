@@ -1,57 +1,91 @@
 import os
 import logging
+import asyncio
 from typing import Optional, Dict, Any, List
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 import re
+import threading
 
 logger = logging.getLogger(__name__)
 
 class BloomService:
-    """Service for BLOOM-560M language model"""
+    """Service for BLOOM-560M language model with async loading"""
     
     def __init__(self, model_path: str = "/app/models/bloom-560m"):
         self.model_path = model_path
         self.tokenizer = None
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._load_model()
+        self._loading = False
+        self._loaded = False
+        self._load_error = None
+        
+        # Start loading the model in a background thread
+        self._start_async_loading()
     
-    def _load_model(self):
-        """Load the BLOOM model and tokenizer"""
-        try:
-            logger.info(f"Loading BLOOM-560M model from {self.model_path}")
-            logger.info(f"Using device: {self.device}")
-            
-            # Load tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_path,
-                local_files_only=True,
-                trust_remote_code=True
-            )
-            
-            # Add padding token if not present
-            if self.tokenizer.pad_token is None:
-                self.tokenizer.pad_token = self.tokenizer.eos_token
-            
-            # Load model
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                local_files_only=True,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-                device_map="auto" if self.device == "cuda" else None,
-                trust_remote_code=True
-            )
-            
-            if self.device == "cpu":
-                self.model = self.model.to(self.device)
-            
-            self.model.eval()
-            logger.info("BLOOM-560M model loaded successfully")
-            
-        except Exception as e:
-            logger.error(f"Failed to load BLOOM model: {e}")
-            raise
+    def _start_async_loading(self):
+        """Start loading the model in a background thread"""
+        def load_model_async():
+            try:
+                self._loading = True
+                logger.info(f"Starting async loading of BLOOM-560M model from {self.model_path}")
+                logger.info(f"Using device: {self.device}")
+                
+                # Load tokenizer
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.model_path,
+                    local_files_only=True,
+                    trust_remote_code=True
+                )
+                
+                # Add padding token if not present
+                if self.tokenizer.pad_token is None:
+                    self.tokenizer.pad_token = self.tokenizer.eos_token
+                
+                # Load model
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    local_files_only=True,
+                    torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
+                    device_map="auto" if self.device == "cuda" else None,
+                    trust_remote_code=True
+                )
+                
+                if self.device == "cpu":
+                    self.model = self.model.to(self.device)
+                
+                self.model.eval()
+                self._loaded = True
+                self._loading = False
+                logger.info("BLOOM-560M model loaded successfully")
+                
+            except Exception as e:
+                self._load_error = str(e)
+                self._loading = False
+                logger.error(f"Failed to load BLOOM model: {e}")
+        
+        # Start loading in background thread
+        thread = threading.Thread(target=load_model_async, daemon=True)
+        thread.start()
+    
+    def is_loaded(self) -> bool:
+        """Check if the model is loaded"""
+        return self._loaded and self.model is not None and self.tokenizer is not None
+    
+    def is_loading(self) -> bool:
+        """Check if the model is currently loading"""
+        return self._loading
+    
+    def get_loading_status(self) -> Dict[str, Any]:
+        """Get the current loading status"""
+        return {
+            "loaded": self.is_loaded(),
+            "loading": self.is_loading(),
+            "error": self._load_error,
+            "device": self.device,
+            "model_path": self.model_path
+        }
     
     def _create_conversation_prompt(self, message: str, conversation_history: Optional[List[Dict]] = None) -> str:
         """Create a better conversational prompt"""
@@ -109,8 +143,15 @@ class BloomService:
     ) -> str:
         """Generate a response using BLOOM model"""
         try:
-            if not self.model or not self.tokenizer:
-                raise RuntimeError("Model not loaded")
+            # Check if model is loaded
+            if not self.is_loaded():
+                if self.is_loading():
+                    return "I'm still loading my AI model. Please try again in a moment."
+                elif self._load_error:
+                    logger.error(f"Model failed to load: {self._load_error}")
+                    return "I'm experiencing technical difficulties. Please try again later."
+                else:
+                    return "I'm initializing. Please try again in a moment."
             
             # Prepare input
             inputs = self.tokenizer.encode(
@@ -255,7 +296,9 @@ class BloomService:
             "model_name": "BLOOM-560M",
             "model_path": self.model_path,
             "device": self.device,
-            "loaded": self.model is not None and self.tokenizer is not None,
+            "loaded": self.is_loaded(),
+            "loading": self.is_loading(),
+            "error": self._load_error,
             "parameters": "560M" if self.model else "Unknown"
         }
 

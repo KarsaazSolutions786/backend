@@ -63,6 +63,9 @@ except ImportError:
                 detail="Invalid token"
             )
 
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -80,18 +83,13 @@ class TTSResponse(BaseModel):
     engine_used: str
 
 @router.post("/synthesize")
+@limiter.limit("10/minute")  # Rate limit: 10 requests per minute
 async def synthesize_speech(
     request_data: TTSRequest, 
     request: Request, 
     current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Convert text to speech using Coqui TTS with fallbacks"""
-    # Get limiter from app state to avoid circular import
-    limiter = request.app.state.limiter
-    
-    # Apply rate limiting
-    await limiter.check_request_and_update(request)
-    
     try:
         # Get TTS service
         from ..services.tts_service import get_tts_service

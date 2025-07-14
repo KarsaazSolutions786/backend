@@ -71,6 +71,9 @@ WHISPER_MODEL = whisper.load_model("tiny")
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Initialize limiter
+limiter = Limiter(key_func=get_remote_address)
+
 class TranscriptionResponse(BaseModel):
     text: str
     language: str
@@ -79,6 +82,7 @@ class TranscriptionResponse(BaseModel):
     segments: Optional[list] = None
 
 @router.post("/transcribe")
+@limiter.limit("10/minute")  # Rate limit: 10 requests per minute
 async def transcribe(
     audio: UploadFile, 
     request: Request,
@@ -87,12 +91,6 @@ async def transcribe(
     current_customer_id: int = Depends(get_current_customer_id)
 ):
     """Transcribe audio file to text using OpenAI Whisper model"""
-    # Get limiter from app state to avoid circular import
-    limiter = request.app.state.limiter
-    
-    # Apply rate limiting
-    await limiter.check_request_and_update(request)
-    
     try:
         # Validate file type
         if not audio.content_type.startswith("audio/"):
