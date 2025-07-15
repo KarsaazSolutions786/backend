@@ -4,6 +4,9 @@ FROM python:3.11-slim
 ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
 
+# Set default port
+ENV PORT=8000
+
 # Ensure the working directory is set to /app
 WORKDIR /app
 
@@ -27,7 +30,12 @@ COPY alembic.ini .
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE ${PORT:-8000}
-# Use /bin/sh to execute the command so $PORT gets expanded
-CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Expose the port
+EXPOSE $PORT
 
+# Copy and make executable
+COPY ./start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+# Run with environment variables
+CMD ["/app/start.sh"]
