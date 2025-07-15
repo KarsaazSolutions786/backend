@@ -1,16 +1,27 @@
 #!/bin/bash
 set -e
 
-# Default to port 8000 if $PORT is not set
-PORT=${PORT:-8000}
+# Debug: Print environment variables
+echo "Debug: Environment variables:"
+echo "PORT=$PORT"
+echo "PYTHONPATH=$PYTHONPATH"
+
+# Default to port 8000 if $PORT is not set or empty
+if [ -z "$PORT" ]; then
+    PORT=8000
+    echo "PORT not set, using default: $PORT"
+else
+    echo "Using PORT from environment: $PORT"
+fi
 
 # Ensure PORT is an integer
 if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
-  echo "ERROR: PORT must be a number. Got '$PORT'"
-  exit 1
+    echo "ERROR: PORT must be a number. Got '$PORT'"
+    echo "Setting PORT to default value: 8000"
+    PORT=8000
 fi
 
-echo "Starting Note Service on port $PORT"
+echo "Starting service on port $PORT"
 
-# Start the FastAPI application
-exec uvicorn src.main:app --host 0.0.0.0 --port $PORT 
+# Start the FastAPI application with explicit port
+exec uvicorn src.main:app --host 0.0.0.0 --port "$PORT"
