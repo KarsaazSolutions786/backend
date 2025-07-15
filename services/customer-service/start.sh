@@ -1,27 +1,30 @@
 #!/bin/bash
 set -e
 
-# Debug: Print environment variables
-echo "Debug: Environment variables:"
-echo "PORT=$PORT"
-echo "PYTHONPATH=$PYTHONPATH"
+# Railway-specific PORT handling
+echo "=== Railway Deployment Debug ==="
+echo "Raw PORT variable: '$PORT'"
+echo "Environment check:"
+env | grep -i port || echo "No PORT found in environment"
 
-# Default to port 8000 if $PORT is not set or empty
-if [ -z "$PORT" ]; then
+# Handle Railway's dynamic PORT assignment
+if [ -z "$PORT" ] || [ "$PORT" = "$PORT" ]; then
+    # If PORT is empty or literally "$PORT", use default
     PORT=8000
-    echo "PORT not set, using default: $PORT"
+    echo "⚠️  PORT not properly set, using default: $PORT"
 else
-    echo "Using PORT from environment: $PORT"
+    echo "✅ Using Railway PORT: $PORT"
 fi
 
-# Ensure PORT is an integer
+# Ensure PORT is a valid integer
 if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
-    echo "ERROR: PORT must be a number. Got '$PORT'"
-    echo "Setting PORT to default value: 8000"
+    echo "❌ Invalid PORT value: '$PORT'"
+    echo "🔄 Falling back to default port: 8000"
     PORT=8000
 fi
 
-echo "Starting service on port $PORT"
+echo "🚀 Starting Customer Service on port $PORT"
+echo "📡 Uvicorn command: uvicorn src.main:app --host 0.0.0.0 --port $PORT"
 
-# Start the FastAPI application with explicit port
+# Start the FastAPI application
 exec uvicorn src.main:app --host 0.0.0.0 --port "$PORT"
