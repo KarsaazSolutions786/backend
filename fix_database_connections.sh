@@ -1,0 +1,122 @@
+#!/bin/bash
+
+# Script to fix database connection issues
+set -e
+
+echo "🔧 Fixing database connections..."
+
+# Create a standardized environment template
+cat > "railway.env.fixed" << 'EOF'
+# Database Configuration - Fixed for Railway/Production
+DATABASE_URL=postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+
+# JWT Configuration
+SECRET_KEY=eindr-super-secure-jwt-secret-key-for-production-2024-v1
+JWT_SECRET=eindr-super-secure-jwt-secret-key-for-production-2024-v1
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Environment Configuration
+ENVIRONMENT=production
+DEBUG=false
+
+# CORS Configuration
+ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
+
+# Rate Limiting Configuration
+REDIS_URL=redis://redis:6379/0
+RATE_LIMITING_ENABLED=true
+
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_SENSITIVE_DATA=false
+
+# Security Headers Configuration
+SECURITY_HEADERS_ENABLED=true
+HSTS_ENABLED=true
+CONTENT_SECURITY_POLICY_ENABLED=true
+
+# AI Model Configuration
+AI_MODELS_PATH=/app/models
+BLOOM_MODEL_PATH=/app/models/bloom-560m
+WHISPER_MODEL_PATH=/app/models/whisper-tiny.bin
+SENTENCE_TRANSFORMER_MODEL_PATH=/app/models/all-MiniLM-L6-v2
+XTTS_MODEL_PATH=/app/models/coqui_xtts_v2
+
+# Service Configuration
+SERVICE_NAME=eindr-microservice
+SERVICE_VERSION=1.0.0
+
+# Performance Configuration
+MODEL_CACHE_SIZE=2
+MAX_WORKERS=4
+TIMEOUT_SECONDS=30
+
+# Feature Flags
+ENABLE_MODEL_CACHING=true
+ENABLE_PROMETHEUS_METRICS=true
+ENABLE_HEALTH_CHECKS=true
+
+# RabbitMQ Configuration
+RABBITMQ_URL=amqp://eindr:eindr123@rabbitmq:5672/
+
+# Service URLs (for inter-service communication)
+AUTH_SERVICE_URL=http://auth-service:8000
+CUSTOMER_SERVICE_URL=http://customer-service:8000
+REMINDER_SERVICE_URL=http://reminder-service:8000
+NOTE_SERVICE_URL=http://note-service:8000
+LEDGER_SERVICE_URL=http://ledger-service:8000
+FRIEND_SERVICE_URL=http://friend-service:8000
+HISTORY_SERVICE_URL=http://history-service:8000
+CHAT_SERVICE_URL=http://chat-service:8000
+SCHEDULER_SERVICE_URL=http://scheduler-service:8000
+STT_SERVICE_URL=http://stt-service:8000
+TTS_SERVICE_URL=http://tts-service:8000
+INTENT_SERVICE_URL=http://intent-service:8000
+AI_PIPELINE_SERVICE_URL=http://ai-pipeline-service:8000
+
+# Port Configuration
+PORT=8000
+
+# Email Configuration
+SMTP_HOST=localhost
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_USE_TLS=true
+EMAIL_FROM=noreply@eindr.com
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+ALLOWED_FILE_TYPES=pdf,doc,docx,txt,md,jpg,jpeg,png,gif,wav,mp3,mp4
+
+# Pagination Configuration
+DEFAULT_PAGE_SIZE=20
+MAX_PAGE_SIZE=100
+
+# Security Configuration
+BCRYPT_ROUNDS=12
+SESSION_TIMEOUT_MINUTES=60
+MAX_LOGIN_ATTEMPTS=5
+ACCOUNT_LOCKOUT_MINUTES=30
+EOF
+
+echo "✅ Created fixed environment template: railway.env.fixed"
+echo ""
+echo "📋 Database Connection Fixes Applied:"
+echo "1. ✅ Standardized DATABASE_URL with correct hostname: new-postgres-server"
+echo "2. ✅ Added all service URLs for inter-service communication"
+echo "3. ✅ Set proper environment variables for production"
+echo "4. ✅ Added RabbitMQ configuration"
+echo "5. ✅ Fixed PORT environment variable"
+echo ""
+echo "🔧 To apply these fixes:"
+echo "1. Copy the fixed environment:"
+echo "   cp railway.env.fixed railway.env"
+echo ""
+echo "2. Update your deployment platform (Railway, etc.) with these variables"
+echo ""
+echo "3. Rebuild and restart services:"
+echo "   docker-compose -f docker-compose.microservices.yml down"
+echo "   docker-compose -f docker-compose.microservices.yml up --build -d" 

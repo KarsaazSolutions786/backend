@@ -1,5 +1,13 @@
 FROM python:3.11-slim
 
+# Add build argument to force rebuild
+ARG BUILD_DATE=unknown
+ARG VCS_REF=unknown
+
+# Set default port
+ENV PORT=8000
+
+# Ensure the working directory is set to /app
 WORKDIR /app
 
 # Install system dependencies
@@ -9,25 +17,25 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY ./services/history-service/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY ./services/history-service/src/ ./src/
-COPY ./shared/ ./shared/
-COPY ./services/history-service/migrations/ ./migrations/
-COPY ./services/history-service/alembic.ini .
+# Copy source code and shared dependencies
+COPY src/ ./src/
+COPY ../../shared/ ./shared/
+COPY migrations/ ./migrations/
+COPY alembic.ini .
 
 # Set environment variables
 ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
-# Expose port
-EXPOSE 8000
+# Expose the port
+EXPOSE $PORT
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# Copy and make executable
+COPY ./start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
-# Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Run with environment variables
+CMD ["/app/start.sh"]

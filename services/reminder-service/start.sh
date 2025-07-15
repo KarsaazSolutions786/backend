@@ -10,7 +10,7 @@ if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-echo "Starting Customer Service on port $PORT"
+echo "Starting Reminder Service on port $PORT"
 
 # Start the FastAPI application
-exec uvicorn src.main:app --host 0.0.0.0 --port $PORT
+exec uvicorn src.main:app --host 0.0.0.0 --port $PORT 
