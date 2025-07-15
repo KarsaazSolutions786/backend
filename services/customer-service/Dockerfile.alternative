@@ -30,5 +30,5 @@ ENV PYTHONUNBUFFERED=1
 # Railway: Expose port dynamically
 EXPOSE ${PORT:-8000}
 
-# Railway: Direct uvicorn command - most reliable for Railway
-CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Railway: Direct uvicorn command with PORT handling
+CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000} 
