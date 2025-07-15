@@ -31,7 +31,7 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
 # Railway: Expose port dynamically (Railway will set PORT env var)
-EXPOSE ${PORT:-8000}
+EXPOSE 8000
 
 # Copy and make executable
 COPY ./start.sh /app/start.sh
