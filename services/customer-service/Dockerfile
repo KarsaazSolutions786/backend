@@ -28,4 +28,6 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE ${PORT:-8000}
-CMD uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Use /bin/sh to execute the command so $PORT gets expanded
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+

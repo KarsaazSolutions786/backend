@@ -1,23 +1,14 @@
 #!/bin/bash
 set -e
 
-# Railway-specific PORT handling
-echo "=== Railway Deployment Debug ==="
 echo "Raw PORT variable: '$PORT'"
-echo "Environment check:"
-env | grep -i port || echo "No PORT found in environment"
-
-# Handle Railway's dynamic PORT assignment
-if [ -z "$PORT" ] || ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
-    # If PORT is empty or not a valid number, use default
-    PORT=8000
-    echo "⚠️  PORT not properly set or invalid, using default: $PORT"
+# If PORT is not set or not a number, default to 8000
+if [[ -z "$PORT" || ! "$PORT" =~ ^[0-9]+$ ]]; then
+  PORT=8000
+  echo "⚠️  PORT not set or invalid, defaulting to $PORT"
 else
-    echo "✅ Using Railway PORT: $PORT"
+  echo "✅ Using PORT $PORT"
 fi
 
-echo "🚀 Starting Customer Service on port $PORT"
-echo "📡 Uvicorn command: uvicorn src.main:app --host 0.0.0.0 --port $PORT"
-
-# Start the FastAPI application
+echo "Starting Uvicorn on port $PORT..."
 exec uvicorn src.main:app --host 0.0.0.0 --port "$PORT"
