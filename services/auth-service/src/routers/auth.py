@@ -20,7 +20,7 @@ from ..schemas import (
     CustomerRegister, CustomerLogin, TokenResponse, CustomerResponse,
     CustomerWithSessions, LoginAttemptResponse, CustomerUpdate,
     PasswordChange, PasswordResetRequest, PasswordReset, ErrorResponse,
-    CustomerSessionResponse, TokenRefresh
+    CustomerSessionResponse, TokenRefresh, RegisterRequest
 )
 from ..config import settings
 from ..services.auth_service import AuthService
@@ -92,13 +92,20 @@ def validate_request_security(request: Request, endpoint: str):
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register_customer(
-    customer_data: CustomerRegister,
+    customer_data: RegisterRequest,
     request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Register a new customer with enhanced security"""
+    
+    # Validate password confirmation
+    if customer_data.password != customer_data.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match"
+        )
     
     # Apply rate limiting and security checks
     validate_request_security(request, "auth.register")
@@ -125,7 +132,12 @@ async def register_customer(
             validated_password = customer_data.password
         
         # Create customer using auth service
-        customer = auth_service.create_customer(validated_email, validated_password)
+        customer = auth_service.create_customer(
+            validated_email, 
+            validated_password, 
+            customer_data.full_name, 
+            customer_data.gender
+        )
         
         # Log successful registration attempt (with sanitized data)
         log_data = {"email": validated_email, "success": True}
@@ -171,10 +183,12 @@ async def register_customer(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Registration error: {type(e).__name__}")  # Don't log sensitive details
+        logger.error(f"Registration error: {type(e).__name__}: {str(e)}")  # Log full error details
+        import traceback
+        logger.error(f"Registration traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration temporarily unavailable. Please try again later."
+            detail=f"Registration error: {type(e).__name__}: {str(e)}"
         )
 
 @router.post("/login", response_model=TokenResponse)
@@ -437,7 +451,7 @@ async def logout_customer(
             revoke_token(credentials.credentials)
         
         # Invalidate all sessions for the customer
-        customer_id = current_customer.get("id")
+        customer_id = current_customer_id
         if customer_id:
             auth_service.invalidate_sessions(customer_id)
         
@@ -463,7 +477,7 @@ async def revoke_token_endpoint(
         payload = jwt_service.verify_token(token_data.refresh_token)
         token_customer_id = payload.get("sub")
         
-        if str(current_customer.get("id")) != token_customer_id:
+        if str(current_customer_id) != token_customer_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Cannot revoke token belonging to another user"

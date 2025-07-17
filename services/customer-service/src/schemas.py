@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -20,12 +20,12 @@ class DeviceType(str, Enum):
 
 # Customer Schemas
 class CustomerBase(BaseModel):
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     is_active: Optional[bool] = True
     is_verified: Optional[bool] = False
     
 class CustomerCreate(CustomerBase):
-    email: EmailStr
+    email: str
     password_hash: str
     
 class CustomerUpdate(CustomerBase):

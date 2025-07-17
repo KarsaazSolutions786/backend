@@ -25,6 +25,7 @@ class Customer(Base):
     sessions = relationship("CustomerSession", back_populates="customer", cascade="all, delete-orphan")
     login_attempt_logs = relationship("LoginAttempt", back_populates="customer", cascade="all, delete-orphan")
     subscription_plan = relationship("SubscriptionPlan", back_populates="customers")
+    profile = relationship("CustomerProfile", back_populates="customer", uselist=False, cascade="all, delete-orphan")
 
 class CustomerSession(Base):
     __tablename__ = "customer_sessions"
@@ -54,6 +55,29 @@ class LoginAttempt(Base):
     
     # Relationships
     customer = relationship("Customer", back_populates="login_attempt_logs")
+
+class CustomerProfile(Base):
+    __tablename__ = "customers_profiles"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    full_name = Column(String(255))
+    user_name = Column(String(255))
+    bio = Column(Text)
+    avatar_url = Column(String(500))
+    phone_number = Column(String(20))
+    date_of_birth = Column(DateTime)
+    timezone_id = Column(Integer)
+    language_id = Column(Integer)
+    subscription_plan_id = Column(Integer)
+    country = Column(String(100))
+    city = Column(String(100))
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    gender = Column(String(50))
+    
+    # Relationships
+    customer = relationship("Customer", back_populates="profile")
 
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"

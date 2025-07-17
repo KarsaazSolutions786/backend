@@ -38,6 +38,13 @@ class PasswordReset(BaseModel):
 class EmailVerification(BaseModel):
     token: str
 
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    confirm_password: str
+    full_name: str
+    gender: str
+
 # Response Schemas
 class CustomerBase(BaseModel):
     id: int

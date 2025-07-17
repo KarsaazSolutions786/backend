@@ -11,7 +11,7 @@ import jwt
 import bcrypt
 from typing import Dict, Optional
 
-from ..models import Customer, CustomerSession, LoginAttempt
+from ..models import Customer, CustomerSession, LoginAttempt, CustomerProfile
 from ..config import settings
 from ..database import get_db
 # from shared.simple_auth import get_current_customer_id  # Temporarily disabled
@@ -37,8 +37,8 @@ class AuthService:
         """Hash a token for storage"""
         return hashlib.sha256(token.encode()).hexdigest()
     
-    def create_customer(self, email: str, password: str) -> Customer:
-        """Create a new customer"""
+    def create_customer(self, email: str, password: str, full_name: str, gender: str) -> Customer:
+        """Create a new customer with profile"""
         # Check if customer already exists
         existing_customer = self.db.query(Customer).filter(Customer.email == email).first()
         if existing_customer:
@@ -57,6 +57,16 @@ class AuthService:
         )
         
         self.db.add(customer)
+        self.db.flush()  # Get the customer ID without committing
+        
+        # Create customer profile
+        profile = CustomerProfile(
+            customer_id=customer.id,
+            full_name=full_name,
+            gender=gender
+        )
+        
+        self.db.add(profile)
         self.db.commit()
         self.db.refresh(customer)
         
