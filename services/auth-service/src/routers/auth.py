@@ -10,6 +10,7 @@ import secrets
 import logging
 import sys
 import os
+import traceback
 
 # Add shared modules to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
@@ -21,7 +22,7 @@ from ..schemas import (
     CustomerWithSessions, LoginAttemptResponse, CustomerUpdate,
     PasswordChange, PasswordResetRequest, PasswordReset, ErrorResponse,
     CustomerSessionResponse, TokenRefresh, RegisterRequest,
-    CustomerWithProfileResponse
+    CustomerWithProfileResponse, CustomerProfileResponse
 )
 from ..config import settings
 from ..services.auth_service import AuthService
@@ -180,11 +181,44 @@ async def register_customer(
             joinedload(Customer.profile)
         ).filter(Customer.id == customer.id).first()
         
+        # Manually construct the response to handle the profile relationship
+        try:
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=getattr(customer_with_profile, 'login_attempts', 0),
+                locked_until=getattr(customer_with_profile, 'locked_until', None),
+                subscription_plan_id=getattr(customer_with_profile, 'subscription_plan_id', None),
+                profile=CustomerProfileResponse(
+                    full_name=getattr(customer_with_profile.profile, 'full_name', None) if customer_with_profile.profile else None,
+                    gender=getattr(customer_with_profile.profile, 'gender', None) if customer_with_profile.profile else None,
+                    is_new=getattr(customer_with_profile.profile, 'is_new', True) if customer_with_profile.profile else True
+                ) if customer_with_profile.profile else None
+            )
+        except Exception as e:
+            logger.error(f"Error constructing customer response: {e}")
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=0,
+                locked_until=None,
+                subscription_plan_id=None,
+                profile=None
+            )
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
+            customer=customer_response
         )
     
     except HTTPException:
@@ -295,11 +329,44 @@ async def login_customer(
             joinedload(Customer.profile)
         ).filter(Customer.id == customer.id).first()
         
+        # Manually construct the response to handle the profile relationship
+        try:
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=getattr(customer_with_profile, 'login_attempts', 0),
+                locked_until=getattr(customer_with_profile, 'locked_until', None),
+                subscription_plan_id=getattr(customer_with_profile, 'subscription_plan_id', None),
+                profile=CustomerProfileResponse(
+                    full_name=getattr(customer_with_profile.profile, 'full_name', None) if customer_with_profile.profile else None,
+                    gender=getattr(customer_with_profile.profile, 'gender', None) if customer_with_profile.profile else None,
+                    is_new=getattr(customer_with_profile.profile, 'is_new', True) if customer_with_profile.profile else True
+                ) if customer_with_profile.profile else None
+            )
+        except Exception as e:
+            logger.error(f"Error constructing customer response: {e}")
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=0,
+                locked_until=None,
+                subscription_plan_id=None,
+                profile=None
+            )
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
+            customer=customer_response
         )
     
     except HTTPException:
@@ -332,13 +399,7 @@ async def refresh_token(
             )
         
         # Verify refresh token
-        payload = jwt_service.verify_token(token_data.refresh_token)
-        
-        if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type"
-            )
+        payload = jwt_service.verify_refresh_token(token_data.refresh_token)
         
         customer_id = payload.get("sub")
         if not customer_id:
@@ -389,14 +450,57 @@ async def refresh_token(
             joinedload(Customer.profile)
         ).filter(Customer.id == customer.id).first()
         
+        # Check if customer_with_profile is None
+        if customer_with_profile is None:
+            logger.error(f"Customer with profile not found for ID: {customer.id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer not found"
+            )
+        
+        # Manually construct the response to handle the profile relationship
+        try:
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=getattr(customer_with_profile, 'login_attempts', 0),
+                locked_until=getattr(customer_with_profile, 'locked_until', None),
+                subscription_plan_id=getattr(customer_with_profile, 'subscription_plan_id', None),
+                profile=CustomerProfileResponse(
+                    full_name=getattr(customer_with_profile.profile, 'full_name', None) if customer_with_profile.profile else None,
+                    gender=getattr(customer_with_profile.profile, 'gender', None) if customer_with_profile.profile else None,
+                    is_new=getattr(customer_with_profile.profile, 'is_new', True) if customer_with_profile.profile else True
+                ) if customer_with_profile.profile else None
+            )
+        except Exception as e:
+            logger.error(f"Error constructing customer response: {e}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            customer_response = CustomerWithProfileResponse(
+                id=customer_with_profile.id,
+                email=customer_with_profile.email,
+                is_verified=customer_with_profile.is_verified,
+                is_active=customer_with_profile.is_active,
+                created_at=customer_with_profile.created_at,
+                last_login=customer_with_profile.last_login,
+                login_attempts=0,
+                locked_until=None,
+                subscription_plan_id=None,
+                profile=None
+            )
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
+            customer=customer_response
         )
     
     except jwt.ExpiredSignatureError:
+        logger.error("Refresh token has expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token has expired"
@@ -404,7 +508,8 @@ async def refresh_token(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Token refresh error: {type(e).__name__}")
+        logger.error(f"Token refresh error: {type(e).__name__}: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token refresh failed"
