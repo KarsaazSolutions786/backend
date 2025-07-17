@@ -37,7 +37,7 @@ class AuthService:
         """Hash a token for storage"""
         return hashlib.sha256(token.encode()).hexdigest()
     
-    def create_customer(self, email: str, password: str, full_name: str, gender: str) -> Customer:
+    def create_customer(self, email: str, password: str, full_name: str, gender: str, is_new: bool = True) -> Customer:
         """Create a new customer with profile"""
         # Check if customer already exists
         existing_customer = self.db.query(Customer).filter(Customer.email == email).first()
@@ -63,7 +63,8 @@ class AuthService:
         profile = CustomerProfile(
             customer_id=customer.id,
             full_name=full_name,
-            gender=gender
+            gender=gender,
+            is_new=is_new
         )
         
         self.db.add(profile)

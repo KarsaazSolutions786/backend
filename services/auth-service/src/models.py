@@ -75,6 +75,7 @@ class CustomerProfile(Base):
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
     gender = Column(String(50))
+    is_new = Column(Boolean, default=True)
     
     # Relationships
     customer = relationship("Customer", back_populates="profile")

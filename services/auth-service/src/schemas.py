@@ -44,6 +44,7 @@ class RegisterRequest(BaseModel):
     confirm_password: str
     full_name: str
     gender: str
+    is_new: bool = True
 
 # Response Schemas
 class CustomerBase(BaseModel):

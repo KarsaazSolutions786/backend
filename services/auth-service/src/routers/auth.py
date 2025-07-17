@@ -136,7 +136,8 @@ async def register_customer(
             validated_email, 
             validated_password, 
             customer_data.full_name, 
-            customer_data.gender
+            customer_data.gender,
+            customer_data.is_new
         )
         
         # Log successful registration attempt (with sanitized data)
