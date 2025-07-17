@@ -63,12 +63,26 @@ class CustomerResponse(CustomerBase):
     locked_until: Optional[datetime]
     subscription_plan_id: Optional[int]
 
+class CustomerProfileResponse(BaseModel):
+    full_name: Optional[str]
+    gender: Optional[str]
+    is_new: bool
+    
+    class Config:
+        from_attributes = True
+
+class CustomerWithProfileResponse(CustomerBase):
+    login_attempts: int
+    locked_until: Optional[datetime]
+    subscription_plan_id: Optional[int]
+    profile: Optional[CustomerProfileResponse]
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
-    customer: CustomerBase
+    customer: CustomerWithProfileResponse
 
 class CustomerSessionResponse(BaseModel):
     id: int

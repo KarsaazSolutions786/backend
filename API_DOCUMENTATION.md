@@ -39,7 +39,15 @@
     "is_verified": true,
     "is_active": true,
     "created_at": "datetime",
-    "last_login": "datetime|null"
+    "last_login": "datetime|null",
+    "login_attempts": 0,
+    "locked_until": "datetime|null",
+    "subscription_plan_id": 1,
+    "profile": {
+      "full_name": "string",
+      "gender": "string",
+      "is_new": true
+    }
   }
 }
 ```
@@ -55,7 +63,7 @@
   "remember_me": false
 }
 ```
-**Response:** _Same as `/auth/register`_
+**Response:** _Same as `/auth/register` (includes profile with `is_new` field)_
 
 ### POST `/auth/refresh`
 **Description:** Refresh access token using a refresh token.

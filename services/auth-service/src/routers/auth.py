@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm, HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, desc
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -20,7 +20,8 @@ from ..schemas import (
     CustomerRegister, CustomerLogin, TokenResponse, CustomerResponse,
     CustomerWithSessions, LoginAttemptResponse, CustomerUpdate,
     PasswordChange, PasswordResetRequest, PasswordReset, ErrorResponse,
-    CustomerSessionResponse, TokenRefresh, RegisterRequest
+    CustomerSessionResponse, TokenRefresh, RegisterRequest,
+    CustomerWithProfileResponse
 )
 from ..config import settings
 from ..services.auth_service import AuthService
@@ -174,11 +175,16 @@ async def register_customer(
         
         logger.info(f"Customer registered successfully: {validated_email}")
         
+        # Get customer with profile information
+        customer_with_profile = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == customer.id).first()
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerResponse.from_orm(customer)
+            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
         )
     
     except HTTPException:
@@ -284,11 +290,16 @@ async def login_customer(
         
         logger.info(f"Customer logged in successfully: {validated_email}")
         
+        # Get customer with profile information
+        customer_with_profile = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == customer.id).first()
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerResponse.from_orm(customer)
+            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
         )
     
     except HTTPException:
@@ -373,11 +384,16 @@ async def refresh_token(
         access_token = jwt_service.create_access_token(data=new_token_data)
         new_refresh_token = jwt_service.create_refresh_token(data=new_token_data)
         
+        # Get customer with profile information
+        customer_with_profile = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == customer.id).first()
+        
         return TokenResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            customer=CustomerResponse.from_orm(customer)
+            customer=CustomerWithProfileResponse.from_orm(customer_with_profile)
         )
     
     except jwt.ExpiredSignatureError:
