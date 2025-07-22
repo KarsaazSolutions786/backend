@@ -3,6 +3,7 @@ from jwt.exceptions import InvalidTokenError as JWTError
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import logging
+import traceback
 
 from ..config import settings
 
@@ -55,20 +56,47 @@ class JWTService:
         logger.debug(f"Refresh token created for user: {data.get('sub')}")
         return encoded_jwt
     
-    def verify_access_token(self, token: str) -> Dict[str, Any]:
-        """Verify and decode an access token"""
+    def verify_token(self, token: str) -> dict:
+        """Verify and decode a token"""
         try:
+            # Log token details for debugging
+            logger.info(f"Verifying token: {token[:10]}...")
+            
+            # Decode token
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
             
-            # Check token type
-            if payload.get("type") != "access":
-                raise JWTError("Invalid token type")
+            # Validate token payload
+            if not payload:
+                logger.warning("Token payload is empty")
+                raise jwt.JWTError("Empty token payload")
+            
+            # Check required fields
+            required_fields = ["sub", "email", "type", "exp"]
+            for field in required_fields:
+                if field not in payload:
+                    logger.warning(f"Missing required field: {field}")
+                    raise jwt.JWTError(f"Missing required field: {field}")
+            
+            # Validate token type
+            if payload.get("type") not in ["access", "refresh"]:
+                logger.warning(f"Invalid token type: {payload.get('type')}")
+                raise jwt.JWTError("Invalid token type")
             
             return payload
         
-        except JWTError as e:
-            logger.warning(f"Access token verification failed: {e}")
-            raise JWTError("Could not validate credentials")
+        except jwt.ExpiredSignatureError:
+            logger.warning("Token has expired")
+            raise
+        
+        except jwt.InvalidTokenError as e:
+            logger.error(f"Invalid token error: {str(e)}")
+            raise
+        
+        except Exception as e:
+            logger.error(f"Unexpected token verification error: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise jwt.JWTError("Could not validate token")
     
     def verify_refresh_token(self, token: str) -> Dict[str, Any]:
         """Verify and decode a refresh token"""

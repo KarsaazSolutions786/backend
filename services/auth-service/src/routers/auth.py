@@ -631,22 +631,31 @@ async def validate_token(
     """Validate token and return customer info"""
     try:
         if not credentials:
+            logger.warning("No token provided in validate_token")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No token provided"
             )
         
         token = credentials.credentials
+        logger.info(f"Validating token: {token[:10]}...")  # Log first 10 chars of token
         
         # Check if token is revoked
         if check_token_revoked(token):
+            logger.warning("Token has been revoked")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has been revoked"
             )
         
         # Verify token
-        payload = jwt_service.verify_token(token)
+        try:
+            payload = jwt_service.verify_token(token)
+            logger.info(f"Token payload: {payload}")
+        except Exception as verify_error:
+            logger.error(f"Token verification error: {type(verify_error).__name__} - {str(verify_error)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise
         
         return {
             "valid": True,
@@ -657,17 +666,20 @@ async def validate_token(
         }
     
     except jwt.ExpiredSignatureError:
+        logger.warning("Token has expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired"
         )
     except jwt.InvalidTokenError:
+        logger.warning("Invalid token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
     except Exception as e:
         logger.error(f"Token validation error: {type(e).__name__}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token validation failed"
