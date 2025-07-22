@@ -44,6 +44,7 @@ class CustomerProfile(Base):
     city = Column(String, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
+    is_new = Column(Boolean, default=True)  # Add is_new column
     
     # Relationships
     customer = relationship("Customer", back_populates="profile")

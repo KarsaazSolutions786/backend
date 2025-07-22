@@ -18,30 +18,6 @@ class DeviceType(str, Enum):
     ANDROID = "android"
     WEB = "web"
 
-# Customer Schemas
-class CustomerBase(BaseModel):
-    email: Optional[str] = None
-    is_active: Optional[bool] = True
-    is_verified: Optional[bool] = False
-    
-class CustomerCreate(CustomerBase):
-    email: str
-    password_hash: str
-    
-class CustomerUpdate(CustomerBase):
-    pass
-
-class CustomerResponse(CustomerBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-    last_login: Optional[datetime] = None
-    login_attempts: int = 0
-    locked_until: Optional[datetime] = None
-    
-    class Config:
-        from_attributes = True
-
 # Customer Profile Schemas
 class CustomerProfileBase(BaseModel):
     first_name: Optional[str] = Field(None, max_length=100)
@@ -66,6 +42,32 @@ class CustomerProfileResponse(CustomerProfileBase):
     is_verified: bool = False
     created_at: datetime
     updated_at: datetime
+    is_new: bool = True  # Required boolean field
+    
+    class Config:
+        from_attributes = True
+
+# Customer Schemas
+class CustomerBase(BaseModel):
+    email: Optional[str] = None
+    is_active: Optional[bool] = True
+    is_verified: Optional[bool] = False
+    
+class CustomerCreate(CustomerBase):
+    email: str
+    password_hash: str
+    
+class CustomerUpdate(CustomerBase):
+    is_new: Optional[bool] = None  # Add is_new field to update schema
+
+class CustomerResponse(CustomerBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    last_login: Optional[datetime] = None
+    login_attempts: int = 0
+    locked_until: Optional[datetime] = None
+    profile: Optional[CustomerProfileResponse] = None  # Ensure profile is included
     
     class Config:
         from_attributes = True

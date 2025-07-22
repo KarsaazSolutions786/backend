@@ -7,7 +7,7 @@ import logging
 import secrets
 
 from ..database import get_db
-from ..models import Customer, CustomerPreference as CustomerPreferences, CustomerDevice
+from ..models import Customer, CustomerPreference as CustomerPreferences, CustomerDevice, CustomerProfile
 from ..schemas import (
     CustomerResponse, CustomerCreate, CustomerUpdate,
     CustomerPreferencesResponse, CustomerPreferencesUpdate,
@@ -99,16 +99,46 @@ async def get_current_customer_profile(
     current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
-    """Get current customer profile"""
-    customer = db.query(Customer).filter(Customer.id == current_customer_id).first()
+    """Get current customer profile with full details"""
+    try:
+        # Fetch customer with profile in a single query
+        customer = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == current_customer_id).first()
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer not found"
+            )
+        
+        # Ensure profile exists, create if not
+        if not customer.profile:
+            # Create a default profile if it doesn't exist
+            profile = CustomerProfile(
+                customer_id=customer.id, 
+                is_new=True  # Default to new user
+            )
+            db.add(profile)
+            db.commit()
+            db.refresh(customer)
+        
+        # Manually construct the response to include profile
+        response_dict = {
+            **{k: v for k, v in customer.__dict__.items() if k != '_sa_instance_state'},
+            'profile': {
+                **{k: v for k, v in customer.profile.__dict__.items() if k != '_sa_instance_state'}
+            } if customer.profile else None
+        }
+        
+        return response_dict
     
-    if not customer:
+    except Exception as e:
+        logger.error(f"Error fetching customer profile: {e}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error retrieving customer profile"
         )
-    
-    return CustomerResponse.from_orm(customer)
 
 @router.put("/me", response_model=CustomerResponse)
 async def update_current_customer(
@@ -116,24 +146,62 @@ async def update_current_customer(
     current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
-    """Update current customer"""
-    customer = db.query(Customer).filter(Customer.id == current_customer_id).first()
+    """Update current customer profile"""
+    try:
+        # Find the customer with profile
+        customer = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == current_customer_id).first()
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer not found"
+            )
+        
+        # Update customer fields
+        if customer_data.email is not None:
+            customer.email = customer_data.email
+        
+        if customer_data.is_active is not None:
+            customer.is_active = customer_data.is_active
+        
+        if customer_data.is_verified is not None:
+            customer.is_verified = customer_data.is_verified
+        
+        # Ensure profile exists
+        if not customer.profile:
+            customer.profile = CustomerProfile(
+                customer_id=customer.id,
+                is_new=True  # Default to new user
+            )
+            db.add(customer.profile)
+        
+        # Update is_new if provided
+        if customer_data.is_new is not None:
+            customer.profile.is_new = customer_data.is_new
+        
+        # Commit changes
+        db.commit()
+        db.refresh(customer)
+        
+        # Manually construct the response to include profile
+        response_dict = {
+            **{k: v for k, v in customer.__dict__.items() if k != '_sa_instance_state'},
+            'profile': {
+                **{k: v for k, v in customer.profile.__dict__.items() if k != '_sa_instance_state'}
+            } if customer.profile else None
+        }
+        
+        return response_dict
     
-    if not customer:
+    except Exception as e:
+        logger.error(f"Error updating customer: {e}")
+        db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error updating customer profile"
         )
-    
-    update_data = customer_data.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(customer, field, value)
-    
-    customer.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(customer)
-    
-    return CustomerResponse.from_orm(customer)
 
 @router.get("/stats", response_model=CustomerStats)
 async def get_customer_stats(
