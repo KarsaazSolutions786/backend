@@ -57,8 +57,22 @@ class CustomerCreate(CustomerBase):
     email: str
     password_hash: str
     
-class CustomerUpdate(CustomerBase):
-    is_new: Optional[bool] = None  # Add is_new field to update schema
+class CustomerUpdate(BaseModel):
+    # Customer fields
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_verified: Optional[bool] = None
+    is_new: Optional[bool] = None
+    
+    # Profile-related fields
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)
+    display_name: Optional[str] = Field(None, max_length=150)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone_number: Optional[str] = Field(None, max_length=20)
+    timezone: Optional[str] = "UTC"
+    language: Optional[str] = "en"
+    is_public: Optional[bool] = False
 
 class CustomerResponse(CustomerBase):
     id: int

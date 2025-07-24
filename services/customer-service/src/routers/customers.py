@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Query
 from sqlalchemy.orm import Session, joinedload
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta
 import logging
@@ -98,6 +98,130 @@ async def search_customers_by_name(
         pages=(total + limit - 1) // limit
     )
 
+@router.put("/me", response_model=CustomerResponse)
+async def update_current_customer(
+    update_data: CustomerUpdate,
+    current_customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """Update current customer and profile details"""
+    try:
+        # Find the customer with profile
+        customer = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == current_customer_id).first()
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer not found"
+            )
+        
+        # Ensure profile exists
+        if not customer.profile:
+            customer.profile = CustomerProfile(
+                customer_id=customer.id,
+                is_new=True  # Default to new user
+            )
+            db.add(customer.profile)
+        
+        # Convert to dictionary to handle update fields
+        update_dict = update_data.dict(exclude_unset=True)
+        
+        # Update customer fields if applicable
+        if 'email' in update_dict:
+            customer.email = update_dict['email']
+        
+        if 'is_active' in update_dict:
+            customer.is_active = update_dict['is_active']
+        
+        if 'is_verified' in update_dict:
+            customer.is_verified = update_dict['is_verified']
+        
+        # Update profile fields if applicable
+        if 'first_name' in update_dict or 'last_name' in update_dict:
+            first_name = update_dict.get('first_name', '')
+            last_name = update_dict.get('last_name', '')
+            customer.profile.full_name = f"{first_name} {last_name}".strip()
+        
+        if 'display_name' in update_dict:
+            customer.profile.user_name = update_dict['display_name']
+        
+        if 'bio' in update_dict:
+            customer.profile.bio = update_dict['bio']
+        
+        if 'phone_number' in update_dict:
+            customer.profile.phone_number = update_dict['phone_number']
+        
+        # Safely handle timezone and language
+        if 'timezone' in update_dict:
+            try:
+                customer.profile.timezone = update_dict['timezone']
+            except Exception:
+                # Silently ignore if timezone can't be set
+                pass
+        
+        if 'language' in update_dict:
+            try:
+                customer.profile.language = update_dict['language']
+            except Exception:
+                # Silently ignore if language can't be set
+                pass
+        
+        if 'is_public' in update_dict:
+            customer.profile.is_public = update_dict['is_public']
+        
+        # Update is_new if provided
+        if 'is_new' in update_dict:
+            customer.profile.is_new = update_dict['is_new']
+        
+        # Set is_new to False if any meaningful profile data is updated
+        if any(key in update_dict for key in ['first_name', 'last_name', 'display_name', 'bio', 'phone_number']):
+            customer.profile.is_new = False
+        
+        # Commit changes
+        db.commit()
+        db.refresh(customer)
+        db.refresh(customer.profile)
+        
+        # Construct response manually to avoid SQLAlchemy state issues
+        return CustomerResponse(
+            id=customer.id,
+            email=customer.email,
+            is_active=customer.is_active,
+            is_verified=customer.is_verified,
+            created_at=customer.created_at,
+            updated_at=customer.updated_at,
+            last_login=customer.last_login,
+            login_attempts=customer.login_attempts,
+            locked_until=customer.locked_until,
+            profile=CustomerProfileResponse(
+                id=customer.profile.id,
+                customer_id=customer.profile.customer_id,
+                first_name=update_dict.get('first_name'),
+                last_name=update_dict.get('last_name'),
+                display_name=customer.profile.user_name,
+                bio=customer.profile.bio,
+                phone_number=customer.profile.phone_number,
+                timezone=update_dict.get('timezone', 'UTC'),
+                language=update_dict.get('language', 'en'),
+                is_public=update_dict.get('is_public', False),
+                avatar_url=customer.profile.avatar_url,
+                is_verified=customer.is_verified,
+                created_at=customer.profile.created_at,
+                updated_at=customer.profile.updated_at,
+                is_new=customer.profile.is_new
+            )
+        )
+    
+    except Exception as e:
+        logger.error(f"Error updating customer profile: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating customer profile: {str(e)}"
+        )
+
 @router.get("/me", response_model=CustomerResponse)
 async def get_current_customer_profile(
     current_customer_id: int = Depends(get_current_customer_id),
@@ -127,140 +251,6 @@ async def get_current_customer_profile(
             db.commit()
             db.refresh(customer)
         
-        # Manually construct the response to include profile
-        response_dict = {
-            **{k: v for k, v in customer.__dict__.items() if k != '_sa_instance_state'},
-            'profile': {
-                **{k: v for k, v in customer.profile.__dict__.items() if k != '_sa_instance_state'}
-            } if customer.profile else None
-        }
-        
-        return response_dict
-    
-    except Exception as e:
-        logger.error(f"Error fetching customer profile: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error retrieving customer profile"
-        )
-
-@router.put("/me", response_model=CustomerResponse)
-async def update_current_customer(
-    customer_data: CustomerUpdate,
-    current_customer_id: int = Depends(get_current_customer_id),
-    db: Session = Depends(get_db)
-):
-    """Update current customer profile"""
-    try:
-        # Find the customer with profile
-        customer = db.query(Customer).options(
-            joinedload(Customer.profile)
-        ).filter(Customer.id == current_customer_id).first()
-        
-        if not customer:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Customer not found"
-            )
-        
-        # Update customer fields
-        if customer_data.email is not None:
-            customer.email = customer_data.email
-        
-        if customer_data.is_active is not None:
-            customer.is_active = customer_data.is_active
-        
-        if customer_data.is_verified is not None:
-            customer.is_verified = customer_data.is_verified
-        
-        # Ensure profile exists
-        if not customer.profile:
-            customer.profile = CustomerProfile(
-                customer_id=customer.id,
-                is_new=True  # Default to new user
-            )
-            db.add(customer.profile)
-        
-        # Update is_new if provided
-        if customer_data.is_new is not None:
-            customer.profile.is_new = customer_data.is_new
-        
-        # Commit changes
-        db.commit()
-        db.refresh(customer)
-        
-        # Manually construct the response to include profile
-        response_dict = {
-            **{k: v for k, v in customer.__dict__.items() if k != '_sa_instance_state'},
-            'profile': {
-                **{k: v for k, v in customer.profile.__dict__.items() if k != '_sa_instance_state'}
-            } if customer.profile else None
-        }
-        
-        return response_dict
-    
-    except Exception as e:
-        logger.error(f"Error updating customer: {e}")
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error updating customer profile"
-        )
-
-@router.put("/me/profile", response_model=CustomerResponse)
-async def update_current_customer_profile(
-    profile_data: CustomerProfileUpdate,
-    current_customer_id: int = Depends(get_current_customer_id),
-    db: Session = Depends(get_db)
-):
-    """Update current customer profile details"""
-    try:
-        # Find the customer with profile
-        customer = db.query(Customer).options(
-            joinedload(Customer.profile)
-        ).filter(Customer.id == current_customer_id).first()
-        
-        if not customer:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Customer not found"
-            )
-        
-        # Ensure profile exists
-        if not customer.profile:
-            customer.profile = CustomerProfile(
-                customer_id=customer.id,
-                is_new=True  # Default to new user
-            )
-            db.add(customer.profile)
-        
-        # Update profile fields
-        update_data = profile_data.dict(exclude_unset=True)
-        
-        # Explicitly update only allowed fields
-        if 'first_name' in update_data or 'last_name' in update_data:
-            first_name = update_data.get('first_name', '')
-            last_name = update_data.get('last_name', '')
-            customer.profile.full_name = f"{first_name} {last_name}".strip()
-        
-        if 'display_name' in update_data:
-            customer.profile.user_name = update_data['display_name']
-        
-        if 'bio' in update_data:
-            customer.profile.bio = update_data['bio']
-        
-        if 'phone_number' in update_data:
-            customer.profile.phone_number = update_data['phone_number']
-        
-        # Set is_new to False if any meaningful profile data is updated
-        if any(update_data.values()):
-            customer.profile.is_new = False
-        
-        # Commit changes
-        db.commit()
-        db.refresh(customer)
-        db.refresh(customer.profile)
-        
         # Construct response manually to avoid SQLAlchemy state issues
         return CustomerResponse(
             id=customer.id,
@@ -275,14 +265,14 @@ async def update_current_customer_profile(
             profile=CustomerProfileResponse(
                 id=customer.profile.id,
                 customer_id=customer.profile.customer_id,
-                first_name=update_data.get('first_name'),
-                last_name=update_data.get('last_name'),
+                first_name=customer.profile.full_name.split()[0] if customer.profile.full_name else None,
+                last_name=customer.profile.full_name.split()[-1] if customer.profile.full_name and ' ' in customer.profile.full_name else None,
                 display_name=customer.profile.user_name,
                 bio=customer.profile.bio,
                 phone_number=customer.profile.phone_number,
-                timezone=update_data.get('timezone', 'UTC'),
-                language=update_data.get('language', 'en'),
-                is_public=update_data.get('is_public', False),
+                timezone='UTC',  # Default timezone
+                language='en',   # Default language
+                is_public=False,
                 avatar_url=customer.profile.avatar_url,
                 is_verified=customer.is_verified,
                 created_at=customer.profile.created_at,
@@ -292,11 +282,10 @@ async def update_current_customer_profile(
         )
     
     except Exception as e:
-        logger.error(f"Error updating customer profile: {e}", exc_info=True)
-        db.rollback()
+        logger.error(f"Error fetching customer profile: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating customer profile: {str(e)}"
+            detail="Error retrieving customer profile"
         )
 
 @router.get("/stats", response_model=CustomerStats)
