@@ -7,12 +7,15 @@ import logging
 import secrets
 
 from ..database import get_db
-from ..models import Customer, CustomerPreference as CustomerPreferences, CustomerDevice, CustomerProfile
+from ..models import (
+    Customer, CustomerPreference as CustomerPreferences, 
+    CustomerDevice, CustomerProfile, Timezone, Language
+)
 from ..schemas import (
     CustomerResponse, CustomerCreate, CustomerUpdate,
     CustomerPreferencesResponse, CustomerPreferencesUpdate,
     CustomerDeviceResponse, CustomerDeviceCreate, CustomerDeviceUpdate,
-    CustomersListResponse, CustomerStats
+    CustomersListResponse, CustomerStats, CustomerProfileUpdate, CustomerProfileResponse
 )
 # from shared.simple_auth import get_current_customer_id  # Temporarily disabled
 
@@ -21,6 +24,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException, status
 import jwt
 import os
+from sqlalchemy import select
 
 def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
     """Temporary local implementation of get_current_customer_id"""
@@ -201,6 +205,98 @@ async def update_current_customer(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error updating customer profile"
+        )
+
+@router.put("/me/profile", response_model=CustomerResponse)
+async def update_current_customer_profile(
+    profile_data: CustomerProfileUpdate,
+    current_customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """Update current customer profile details"""
+    try:
+        # Find the customer with profile
+        customer = db.query(Customer).options(
+            joinedload(Customer.profile)
+        ).filter(Customer.id == current_customer_id).first()
+        
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Customer not found"
+            )
+        
+        # Ensure profile exists
+        if not customer.profile:
+            customer.profile = CustomerProfile(
+                customer_id=customer.id,
+                is_new=True  # Default to new user
+            )
+            db.add(customer.profile)
+        
+        # Update profile fields
+        update_data = profile_data.dict(exclude_unset=True)
+        
+        # Explicitly update only allowed fields
+        if 'first_name' in update_data or 'last_name' in update_data:
+            first_name = update_data.get('first_name', '')
+            last_name = update_data.get('last_name', '')
+            customer.profile.full_name = f"{first_name} {last_name}".strip()
+        
+        if 'display_name' in update_data:
+            customer.profile.user_name = update_data['display_name']
+        
+        if 'bio' in update_data:
+            customer.profile.bio = update_data['bio']
+        
+        if 'phone_number' in update_data:
+            customer.profile.phone_number = update_data['phone_number']
+        
+        # Set is_new to False if any meaningful profile data is updated
+        if any(update_data.values()):
+            customer.profile.is_new = False
+        
+        # Commit changes
+        db.commit()
+        db.refresh(customer)
+        db.refresh(customer.profile)
+        
+        # Construct response manually to avoid SQLAlchemy state issues
+        return CustomerResponse(
+            id=customer.id,
+            email=customer.email,
+            is_active=customer.is_active,
+            is_verified=customer.is_verified,
+            created_at=customer.created_at,
+            updated_at=customer.updated_at,
+            last_login=customer.last_login,
+            login_attempts=customer.login_attempts,
+            locked_until=customer.locked_until,
+            profile=CustomerProfileResponse(
+                id=customer.profile.id,
+                customer_id=customer.profile.customer_id,
+                first_name=update_data.get('first_name'),
+                last_name=update_data.get('last_name'),
+                display_name=customer.profile.user_name,
+                bio=customer.profile.bio,
+                phone_number=customer.profile.phone_number,
+                timezone=update_data.get('timezone', 'UTC'),
+                language=update_data.get('language', 'en'),
+                is_public=update_data.get('is_public', False),
+                avatar_url=customer.profile.avatar_url,
+                is_verified=customer.is_verified,
+                created_at=customer.profile.created_at,
+                updated_at=customer.profile.updated_at,
+                is_new=customer.profile.is_new
+            )
+        )
+    
+    except Exception as e:
+        logger.error(f"Error updating customer profile: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating customer profile: {str(e)}"
         )
 
 @router.get("/stats", response_model=CustomerStats)
