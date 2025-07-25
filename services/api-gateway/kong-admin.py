@@ -330,8 +330,8 @@ def setup_microservices_gateway():
     kong.create_consumer("eindr-auth-service")
     kong.add_jwt_to_consumer(
         username="eindr-auth-service",
-        key="eindr-issuer",
-        secret="your-jwt-secret-key-change-in-production"
+        key="eindr-auth-service",
+        secret="eindr-super-secure-jwt-secret-key-for-production-2024-v1"
     )
     
     # Add global plugins
@@ -392,4 +392,4 @@ def main():
             print(f"  - {plugin['name']}")
 
 if __name__ == "__main__":
-    main() 
+    main()

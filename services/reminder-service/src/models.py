@@ -14,8 +14,8 @@ class Customer(Base):
     
     # Relationships
     reminders = relationship("Reminder", back_populates="customer", cascade="all, delete-orphan")
-    shared_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.shared_with_id", back_populates="shared_with")
-    shared_by_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.shared_by_id", back_populates="shared_by")
+    shared_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.shared_with_customer_id", back_populates="shared_with")
+    shared_by_reminders = relationship("ReminderShare", foreign_keys="ReminderShare.owner_customer_id", back_populates="owner")
     reminder_notifications = relationship("ReminderNotification", back_populates="customer", cascade="all, delete-orphan")
 
 class PriorityLevel(Base):
@@ -86,21 +86,19 @@ class ReminderShare(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     reminder_id = Column(Integer, ForeignKey("reminders.id"), nullable=False)
-    shared_by_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    shared_with_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    permission_level = Column(String, default="read")  # 'read', 'write', 'admin'
+    owner_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    shared_with_customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     can_edit = Column(Boolean, default=False)
-    can_delete = Column(Boolean, default=False)
-    can_mark_complete = Column(Boolean, default=False)
-    can_reshare = Column(Boolean, default=False)
+    can_complete = Column(Boolean, default=True)
+    can_reshedule = Column(Boolean, default=True)
+    status = Column(String(50), nullable=True)
     shared_at = Column(DateTime, default=func.current_timestamp())
-    expires_at = Column(DateTime, nullable=True)
-    is_active = Column(Boolean, default=True)
+    responded_at = Column(DateTime, nullable=True)
     
     # Relationships
     reminder = relationship("Reminder", back_populates="shares")
-    shared_by = relationship("Customer", foreign_keys=[shared_by_id], back_populates="shared_by_reminders")
-    shared_with = relationship("Customer", foreign_keys=[shared_with_id], back_populates="shared_reminders")
+    owner = relationship("Customer", foreign_keys=[owner_customer_id], back_populates="shared_by_reminders")
+    shared_with = relationship("Customer", foreign_keys=[shared_with_customer_id], back_populates="shared_reminders")
 
 class ReminderNotification(Base):
     __tablename__ = "reminder_notifications"
@@ -119,4 +117,4 @@ class ReminderNotification(Base):
     
     # Relationships
     reminder = relationship("Reminder", back_populates="notifications")
-    customer = relationship("Customer", back_populates="reminder_notifications") 
+    customer = relationship("Customer", back_populates="reminder_notifications")

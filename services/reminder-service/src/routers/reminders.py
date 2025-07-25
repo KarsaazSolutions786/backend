@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from ..database import get_db
-from ..models import Reminder, ReminderNotification, ReminderShare
+from ..models import Reminder, ReminderNotification, ReminderShare, PriorityLevel
 from ..services.reminder_service import ReminderService
 from ..services.event_publisher import EventPublisher
 from slowapi.util import get_remote_address
@@ -175,6 +175,118 @@ async def create_reminder(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create reminder"
+        )
+
+@router.get("/stats")
+async def get_reminder_stats(
+    db: Session = Depends(get_db),
+    current_customer_id: int = Depends(get_current_customer_id)
+):
+    """Get reminder statistics for the current customer"""
+    try:
+        # Total reminders
+        total_reminders = db.query(Reminder).filter(Reminder.customer_id == current_customer_id).count()
+        
+        # Active reminders
+        active_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True
+        ).count()
+        
+        # Completed reminders
+        completed_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_completed == True
+        ).count()
+        
+        # Pending reminders (active but not completed)
+        pending_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            Reminder.is_completed == False
+        ).count()
+        
+        # Overdue reminders (past due time and not completed)
+        current_time = datetime.utcnow()
+        overdue_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            Reminder.is_completed == False,
+            Reminder.time < current_time
+        ).count()
+        
+        # Upcoming reminders (next 24 hours)
+        next_24_hours = current_time + timedelta(hours=24)
+        upcoming_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            Reminder.is_completed == False,
+            Reminder.time >= current_time,
+            Reminder.time <= next_24_hours
+        ).count()
+        
+        # Reminders by priority
+        high_priority = db.query(Reminder).join(PriorityLevel).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            PriorityLevel.label == "High"
+        ).count()
+        
+        medium_priority = db.query(Reminder).join(PriorityLevel).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            PriorityLevel.label == "Medium"
+        ).count()
+        
+        low_priority = db.query(Reminder).join(PriorityLevel).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            PriorityLevel.label == "Low"
+        ).count()
+        
+        # Shared reminders
+        reminders_shared_by_me = db.query(ReminderShare).filter(
+            ReminderShare.owner_customer_id == current_customer_id,
+            ReminderShare.status == "accepted"
+        ).count()
+        
+        reminders_shared_with_me = db.query(ReminderShare).filter(
+            ReminderShare.shared_with_customer_id == current_customer_id,
+            ReminderShare.status == "accepted"
+        ).count()
+        
+        # Recurring reminders
+        recurring_reminders = db.query(Reminder).filter(
+            Reminder.customer_id == current_customer_id,
+            Reminder.is_active == True,
+            Reminder.repeat_pattern_id.isnot(None),
+            Reminder.repeat_pattern_id != 0
+        ).count()
+        
+        return {
+            "total_reminders": total_reminders,
+            "active_reminders": active_reminders,
+            "completed_reminders": completed_reminders,
+            "pending_reminders": pending_reminders,
+            "overdue_reminders": overdue_reminders,
+            "upcoming_reminders": upcoming_reminders,
+            "priority_breakdown": {
+                "high": high_priority,
+                "medium": medium_priority,
+                "low": low_priority
+            },
+            "sharing_stats": {
+                "shared_by_me": reminders_shared_by_me,
+                "shared_with_me": reminders_shared_with_me
+            },
+            "recurring_reminders": recurring_reminders
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting reminder stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get reminder statistics"
         )
 
 @router.get("/reminders/", response_model=List[ReminderResponse])
@@ -537,4 +649,4 @@ async def get_upcoming_reminders(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get upcoming reminders"
-        ) 
+        )

@@ -155,6 +155,51 @@ async def get_notes(
         has_prev=page > 1
         )
 
+@router.get("/stats", response_model=NoteStats)
+async def get_note_stats(
+    current_customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """Get note statistics for current customer"""
+    customer_id = current_customer_id
+    
+    # Basic counts
+    total_notes = db.query(Note).filter(Note.customer_id == customer_id).count()
+    favorite_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_favorite == True)
+    ).count()
+    pinned_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_pinned == True)
+    ).count()
+    shared_notes = db.query(Note).filter(
+        and_(Note.customer_id == customer_id, Note.is_shared == True)
+    ).count()
+    
+    # Notes shared with me
+    notes_shared_with_me = db.query(NoteShare).filter(
+        and_(
+            NoteShare.shared_with_id == customer_id,
+            NoteShare.status == "accepted"
+        )
+    ).count()
+        
+    # Notes by content type
+    content_type_stats = db.query(
+        Note.content_type,
+        func.count(Note.id).label('count')
+    ).filter(Note.customer_id == customer_id).group_by(Note.content_type).all()
+    
+    notes_by_content_type = {stat.content_type: stat.count for stat in content_type_stats}
+    
+    return NoteStats(
+        total_notes=total_notes,
+        favorite_notes=favorite_notes,
+        pinned_notes=pinned_notes,
+        shared_notes=shared_notes,
+        notes_shared_with_me=notes_shared_with_me,
+        notes_by_content_type=notes_by_content_type
+    )
+
 @router.get("/{note_id}", response_model=NoteWithShares)
 async def get_note(
     note_id: int,
@@ -587,52 +632,3 @@ async def bulk_delete_notes(
     db.commit()
     
     return {"message": f"Successfully deleted {len(notes)} notes"}
-
-@router.get("/stats", response_model=NoteStats)
-async def get_note_stats(
-    current_customer_id: int = Depends(get_current_customer_id),
-    db: Session = Depends(get_db)
-):
-    """Get note statistics for current customer"""
-    customer_id = current_customer_id
-    
-    # Basic counts
-    total_notes = db.query(Note).filter(Note.customer_id == customer_id).count()
-    favorite_notes = db.query(Note).filter(
-        and_(Note.customer_id == customer_id, Note.is_favorite == True)
-    ).count()
-    pinned_notes = db.query(Note).filter(
-        and_(Note.customer_id == customer_id, Note.is_pinned == True)
-    ).count()
-    shared_notes = db.query(Note).filter(
-        and_(Note.customer_id == customer_id, Note.is_shared == True)
-    ).count()
-    
-    # Notes shared with me
-    notes_shared_with_me = db.query(NoteShare).filter(
-        and_(
-            NoteShare.shared_with_id == customer_id,
-            NoteShare.is_active == True,
-            or_(
-                NoteShare.expires_at.is_(None),
-                NoteShare.expires_at > datetime.utcnow()
-            )
-        )
-    ).count()
-        
-    # Notes by content type
-    content_type_stats = db.query(
-        Note.content_type,
-        func.count(Note.id).label('count')
-    ).filter(Note.customer_id == customer_id).group_by(Note.content_type).all()
-    
-    notes_by_content_type = {stat.content_type: stat.count for stat in content_type_stats}
-    
-    return NoteStats(
-        total_notes=total_notes,
-        favorite_notes=favorite_notes,
-        pinned_notes=pinned_notes,
-        shared_notes=shared_notes,
-        notes_shared_with_me=notes_shared_with_me,
-        notes_by_content_type=notes_by_content_type
-        )
