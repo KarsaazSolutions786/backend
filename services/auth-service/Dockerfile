@@ -17,14 +17,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY services/auth-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
-COPY src/ ./src/
-COPY ../../shared/ ./shared/
-COPY migrations/ ./migrations/
-COPY alembic.ini .
+COPY services/auth-service/src/ ./src/
+COPY shared/ ./shared/
+COPY services/auth-service/migrations/ ./migrations/
+COPY services/auth-service/alembic.ini .
 
 # Set environment variables
 ENV PYTHONPATH=/app:/app/src:/app/shared
@@ -34,7 +34,7 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE $PORT
 
 # Copy and make executable
-COPY start.sh /app/start.sh
+COPY services/auth-service/start.sh ./start.sh
 RUN chmod +x /app/start.sh
 
 # Run with environment variables
