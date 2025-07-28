@@ -258,6 +258,34 @@ class RefreshTokenService:
         logger.info(f"Rotated refresh token for customer {old_token_record.customer_id}")
         return new_token, new_token_record
     
+    def is_token_revoked(self, token: str) -> bool:
+        """
+        Check if a token has been revoked
+        
+        Args:
+            token: Token to check
+            
+        Returns:
+            True if token is revoked or invalid
+        """
+        token_hash = self.hash_token(token)
+        
+        # Check Redis blacklist first
+        if self.redis_client:
+            blacklist_key = f"{self.blacklist_prefix}{token_hash}"
+            if self.redis_client.exists(blacklist_key):
+                return True
+        
+        # Check database
+        token_record = self.db.query(RefreshToken).filter(
+            RefreshToken.token_hash == token_hash
+        ).first()
+        
+        if not token_record:
+            return True  # Token doesn't exist, consider it revoked
+        
+        return token_record.is_revoked or token_record.expires_at <= datetime.utcnow()
+    
     def revoke_token(self, token: str, reason: str = "manual") -> bool:
         """
         Revoke a specific refresh token
@@ -514,4 +542,4 @@ _redis_client = get_redis_client()
 
 def create_refresh_token_service(db: Session) -> RefreshTokenService:
     """Create a refresh token service instance"""
-    return RefreshTokenService(db, _redis_client) 
+    return RefreshTokenService(db, _redis_client)
