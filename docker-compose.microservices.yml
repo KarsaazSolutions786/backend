@@ -170,8 +170,6 @@ services:
       PORT: 8000
     ports:
       - "8001:8000"
-    volumes:
-      - ./services/auth-service:/app
     networks:
       - eindr-network
     depends_on:
