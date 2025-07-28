@@ -11,6 +11,7 @@ import logging
 import sys
 import os
 import traceback
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 # Shared modules are now accessible via PYTHONPATH
 
