@@ -14,7 +14,7 @@ import traceback
 
 # Try to import from shared module, fall back to local implementation if not available
 try:
-    from shared import refresh_token_service
+    from shared.refresh_token_service import RefreshTokenService
 except ImportError:
     # If shared module is not available, use a local implementation or raise a more informative error
     logger = logging.getLogger(__name__)
@@ -77,9 +77,9 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     """Get AuthService instance with database dependency"""
     return AuthService(db)
 
-def get_refresh_token_service(db: Session = Depends(get_db)):
+def get_refresh_token_service(db: Session = Depends(get_db)) -> RefreshTokenService:
     """Get refresh token service instance"""
-    return refresh_token_service.RefreshTokenService(db)
+    return RefreshTokenService(db)
 
 # Token revocation functions removed - now handled directly by RefreshTokenService
 
@@ -99,7 +99,7 @@ async def register_customer(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Register a new customer with enhanced security"""
     
@@ -251,7 +251,7 @@ async def login_customer(
     request: Request,
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Authenticate customer with enhanced security"""
     
@@ -410,7 +410,7 @@ async def refresh_token(
     request: Request,
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Refresh access token with enhanced security"""
     
@@ -586,7 +586,7 @@ async def logout_customer(
     current_customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db),
     auth_service: AuthService = Depends(get_auth_service),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Logout customer and revoke refresh token"""
     try:
@@ -614,7 +614,7 @@ async def logout_customer(
 async def revoke_token_endpoint(
     token_data: TokenRefresh,
     current_customer_id: int = Depends(get_current_customer_id),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Revoke a specific refresh token"""
     try:
@@ -654,7 +654,7 @@ async def revoke_token_endpoint(
 @router.post("/validate-token")
 async def validate_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Validate token and return customer info"""
     try:
