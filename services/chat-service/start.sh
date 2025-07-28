@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+
+# Set correct PYTHONPATH for Railway deployment
+export PYTHONPATH="/app:/app/src:/app/shared"
+
 # Debug: Print environment variables
 echo "Debug: Environment variables:"
 echo "PORT=$PORT"
