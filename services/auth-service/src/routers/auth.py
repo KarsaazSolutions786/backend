@@ -11,30 +11,32 @@ import logging
 import sys
 import os
 import traceback
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
+# Add backend root to path so we can import shared modules
+backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
+if backend_root not in sys.path:
+    sys.path.insert(0, backend_root)
 
-# Shared modules are now accessible via PYTHONPATH
 
-from ..database import get_db
+from src.database import get_db
 from shared.refresh_token_service import RefreshTokenService
-from ..models import Customer, CustomerSession, LoginAttempt
-from ..schemas import (
+from src.models import Customer, CustomerSession, LoginAttempt
+from src.schemas import (
     CustomerRegister, CustomerLogin, TokenResponse, CustomerResponse,
     CustomerWithSessions, LoginAttemptResponse, CustomerUpdate,
     PasswordChange, PasswordResetRequest, PasswordReset, ErrorResponse,
     CustomerSessionResponse, TokenRefresh, RegisterRequest,
     CustomerWithProfileResponse, CustomerProfileResponse
 )
-from ..config import settings
-from ..services.auth_service import AuthService
-from ..services.jwt_service import JWTService
+from src.config import settings
+from src.services.auth_service import AuthService
+from src.services.jwt_service import JWTService
 # from shared.simple_auth import get_current_customer_id  # Temporarily disabled
 
 # Temporary local implementation
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Depends, HTTPException, status
 import jwt
-from ..config import settings
+from src.config import settings
 
 def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
     """Temporary local implementation of get_current_customer_id"""
