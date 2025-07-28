@@ -159,7 +159,9 @@ services:
   # MICROSERVICES
   # ======================
   auth-service:
-    image: backend-auth-service:latest
+    build:
+      context: .
+      dockerfile: ./services/auth-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       REDIS_URL: redis://redis:6379
