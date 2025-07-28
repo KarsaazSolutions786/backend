@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Ensure correct PYTHONPATH for shared modules
+export PYTHONPATH="/app:/app/src"
+
 # Debug: Print environment variables
 echo "Debug: Environment variables:"
 echo "PORT=$PORT"
