@@ -12,9 +12,7 @@ import sys
 import os
 import traceback
 
-# Add shared modules to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../'))
+# Shared modules are now accessible via PYTHONPATH
 
 from ..database import get_db
 from shared.refresh_token_service import RefreshTokenService
