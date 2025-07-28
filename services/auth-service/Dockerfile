@@ -20,9 +20,9 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code and shared dependencies
+# Copy source code and dependencies
 COPY src/ ./src/
-COPY shared/ ./shared/
+COPY ../../shared/ ./shared/
 COPY migrations/ ./migrations/
 COPY alembic.ini .
 
