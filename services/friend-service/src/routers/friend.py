@@ -47,7 +47,7 @@ except ImportError:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ValidationError
 from datetime import datetime
@@ -126,6 +126,7 @@ def ensure_customer_exists(db: Session, customer_id: int, email: str = None) -> 
 @router.post("/requests", response_model=FriendResponse)
 async def send_friend_request(
     request_data: FriendRequest,
+    request: Request,
     customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
@@ -182,7 +183,9 @@ async def send_friend_request(
             requested_id=friend_customer.id,
             action="sent",
             message=request_data.message,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            ip_address=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
         
         db.add(history_record)
@@ -259,6 +262,7 @@ async def get_friends(
 @router.put("/requests/{friendship_id}/accept")
 async def accept_friend_request(
     friendship_id: str,
+    request: Request,
     customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
@@ -292,7 +296,9 @@ async def accept_friend_request(
             requester_id=friendship.customer_id,
             requested_id=customer_id,
             action="accepted",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            ip_address=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
         
         db.add(history_record)
@@ -310,6 +316,7 @@ async def accept_friend_request(
 @router.delete("/requests/{friendship_id}")
 async def decline_friend_request(
     friendship_id: str,
+    request: Request,
     customer_id: int = Depends(get_current_customer_id),
     db: Session = Depends(get_db)
 ):
@@ -336,7 +343,9 @@ async def decline_friend_request(
             requester_id=friendship.customer_id,
             requested_id=friendship.friend_id,
             action=action,
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
+            ip_address=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
         
         db.add(history_record)
