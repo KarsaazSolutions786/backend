@@ -14,7 +14,7 @@ import traceback
 
 # Try to import from shared module, fall back to local implementation if not available
 try:
-    from shared.refresh_token_service import RefreshTokenService
+    from .....shared.refresh_token_service import RefreshTokenService
 except ImportError:
     # If shared module is not available, use a local implementation or raise a more informative error
     logger = logging.getLogger(__name__)

@@ -161,9 +161,10 @@ services:
   auth-service:
     build:
       context: .
-      dockerfile: ./services/auth-service/Dockerfile
+      dockerfile: ./services/auth-service:/app
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      PYTHONPATH: /app:/app/src:/app/shared  # Removed the extra space here
       REDIS_URL: redis://redis:6379
       JWT_SECRET: eindr-super-secure-jwt-secret-key-for-production-2024-v1
       SERVICE_NAME: auth-service
