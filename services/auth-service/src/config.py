@@ -39,7 +39,13 @@ class Settings(BaseSettings):
     LOCKOUT_DURATION_MINUTES: int = 30
     
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["*"]
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "*")
+    
+    @property
+    def allowed_origins_list(self) -> List[str]:
+        if self.ALLOWED_ORIGINS == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
     
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
@@ -51,4 +57,4 @@ class Settings(BaseSettings):
 def get_settings():
     return Settings()
 
-settings = Settings() 
+settings = Settings()
