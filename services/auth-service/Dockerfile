@@ -22,12 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
 COPY src/ ./src/
-COPY ../../shared/ ./shared/
+COPY shared/ ./shared/
 COPY migrations/ ./migrations/
 COPY alembic.ini .
 
 # Set environment variables
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app:/app/src
 ENV PYTHONUNBUFFERED=1
 
 # Expose the port
