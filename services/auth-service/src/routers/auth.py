@@ -195,6 +195,8 @@ async def register_customer(
         access_token = jwt_service.create_access_token(data=token_data)
         
         # Create refresh token using RefreshTokenService (not JWT)
+        # RefreshTokenService now handles Redis failures internally
+        redis_warning = None
         try:
             refresh_token, _ = refresh_token_service.create_refresh_token(
                 customer_id=customer.id,
@@ -203,9 +205,11 @@ async def register_customer(
                 ip_address=request.client.host
             )
         except Exception as e:
-            logger.warning(f"Failed to create refresh token: {e}")  
+            logger.warning(f"Failed to create refresh token: {type(e).__name__}: {str(e)}")
+            logger.warning(f"Full traceback: {traceback.format_exc()}")
             # Fallback to JWT refresh token if RefreshTokenService fails
             refresh_token = jwt_service.create_refresh_token(data=token_data)
+            redis_warning = "Using fallback token mechanism due to service degradation"
         
         logger.info(f"Customer registered successfully: {validated_email}")
         
@@ -247,12 +251,18 @@ async def register_customer(
                 profile=None
             )
         
-        return TokenResponse(
+        response = TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             customer=customer_response
         )
+        
+        # Add warning if Redis operations failed
+        if redis_warning:
+            response.warning = redis_warning
+            
+        return response
     
     except HTTPException:
         raise
@@ -356,6 +366,8 @@ async def login_customer(
         access_token = jwt_service.create_access_token(data=token_data)
         
         # Create refresh token using RefreshTokenService (not JWT)
+        # RefreshTokenService now handles Redis failures internally
+        redis_warning = None
         try:
             refresh_token, _ = refresh_token_service.create_refresh_token(
                 customer_id=customer.id,
@@ -364,9 +376,11 @@ async def login_customer(
                 ip_address=request.client.host
             )
         except Exception as e:
-            logger.warning(f"Failed to create refresh token: {e}")
+            logger.warning(f"Failed to create refresh token: {type(e).__name__}: {str(e)}")
+            logger.warning(f"Full traceback: {traceback.format_exc()}")
             # Fallback to JWT refresh token if RefreshTokenService fails
             refresh_token = jwt_service.create_refresh_token(data=token_data)
+            redis_warning = "Using fallback token mechanism due to service degradation"
         
         logger.info(f"Customer logged in successfully: {validated_email}")
         
@@ -408,12 +422,18 @@ async def login_customer(
                 profile=None
             )
         
-        return TokenResponse(
+        response = TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             customer=customer_response
         )
+        
+        # Add warning if Redis operations failed
+        if redis_warning:
+            response.warning = redis_warning
+            
+        return response
     
     except HTTPException:
         raise
@@ -439,11 +459,20 @@ async def refresh_token(
     
     try:
         # Validate refresh token using RefreshTokenService
-        token_record = refresh_token_service.validate_token(token_data.refresh_token)
-        if not token_record:
+        # RefreshTokenService now handles Redis failures internally
+        try:
+            token_record = refresh_token_service.validate_token(token_data.refresh_token)
+            if not token_record:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or expired refresh token"
+                )
+        except Exception as validate_error:
+            logger.error(f"Error validating token: {type(validate_error).__name__}: {str(validate_error)}")
+            logger.error(f"Full traceback: {traceback.format_exc()}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired refresh token"
+                detail="Token validation failed"
             )
         
         # Get customer
@@ -455,6 +484,7 @@ async def refresh_token(
             )
         
         # Use token rotation for enhanced security
+        redis_warning = None
         try:
             new_refresh_token, new_token_record = refresh_token_service.rotate_token(
                 old_token=token_data.refresh_token,
@@ -466,22 +496,41 @@ async def refresh_token(
             # Token rotation failed (likely due to reuse detection)
             raise
         except Exception as e:
-            logger.warning(f"Token rotation failed: {e}")
+            logger.warning(f"Token rotation failed: {type(e).__name__}: {str(e)}")
+            logger.warning(f"Full traceback: {traceback.format_exc()}")
             # Fallback: revoke old token and create new one
-            refresh_token_service.revoke_token(token_data.refresh_token, "rotation_failed")
-            new_refresh_token, new_token_record = refresh_token_service.create_refresh_token(
-                customer_id=customer.id,
-                device_id=request.headers.get("x-device-id"),
-                user_agent=request.headers.get("user-agent"),
-                ip_address=request.client.host
-            )
+            try:
+                refresh_token_service.revoke_token(token_data.refresh_token, "rotation_failed")
+            except Exception as revoke_error:
+                logger.error(f"Error revoking token during rotation fallback: {type(revoke_error).__name__}: {str(revoke_error)}")
+                redis_warning = "Token security may be reduced due to distributed cache issues"
+            
+            try:
+                new_refresh_token, new_token_record = refresh_token_service.create_refresh_token(
+                    customer_id=customer.id,
+                    device_id=request.headers.get("x-device-id"),
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host
+                )
+            except Exception as create_error:
+                logger.error(f"Error creating new token during rotation fallback: {type(create_error).__name__}: {str(create_error)}")
+                # If we can't create a new token, fall back to JWT refresh token
+                token_data = {
+                    "sub": str(customer.id),
+                    "email": customer.email,
+                    "iat": datetime.utcnow(),
+                    "permissions": ["user"]
+                }
+                new_refresh_token = jwt_service.create_refresh_token(data=token_data)
+                redis_warning = "Using fallback token mechanism due to service degradation"
         
         # Generate new access token
         new_token_data = {
             "sub": str(customer.id),
             "email": customer.email,
             "iat": datetime.utcnow(),
-            "permissions": ["user"]
+            "permissions": ["user"],
+            "redis_warning": redis_warning
         }
         
         access_token = jwt_service.create_access_token(data=new_token_data)
@@ -533,12 +582,18 @@ async def refresh_token(
                 profile=None
             )
         
-        return TokenResponse(
+        response = TokenResponse(
             access_token=access_token,
             refresh_token=new_refresh_token,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             customer=customer_response
         )
+        
+        # Add warning if Redis operations failed
+        if redis_warning:
+            response.warning = redis_warning
+            
+        return response
     
     except jwt.ExpiredSignatureError:
         logger.error("Refresh token has expired")
@@ -612,19 +667,37 @@ async def logout_customer(
     try:
         # Revoke all refresh tokens for the customer
         customer_id = current_customer_id
+        redis_warning = None
+        
         if customer_id:
-            revoked_count = refresh_token_service.revoke_all_tokens(customer_id, "logout")
-            logger.info(f"Revoked {revoked_count} refresh tokens for customer {customer_id}")
+            try:
+                # RefreshTokenService now handles Redis failures internally
+                revoked_count = refresh_token_service.revoke_all_tokens(customer_id, "logout")
+                logger.info(f"Revoked {revoked_count} refresh tokens for customer {customer_id}")
+            except Exception as revoke_error:
+                logger.error(f"Error revoking tokens: {type(revoke_error).__name__}: {str(revoke_error)}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                # Continue with session invalidation even if token revocation had issues
+                redis_warning = "Some distributed caches may still contain valid tokens for a short period"
             
-            # Invalidate all sessions for the customer
-            auth_service.invalidate_sessions(customer_id)
+            try:
+                # Invalidate all sessions for the customer
+                auth_service.invalidate_sessions(customer_id)
+            except Exception as session_error:
+                logger.error(f"Error invalidating sessions: {type(session_error).__name__}: {str(session_error)}")
+                # Continue with logout even if session invalidation had issues
         
         logger.info(f"Customer logged out: {customer_id}")
         
-        return {"message": "Successfully logged out"}
+        response = {"message": "Successfully logged out"}
+        if redis_warning:
+            response["warning"] = redis_warning
+            
+        return response
     
     except Exception as e:
-        logger.error(f"Logout error: {type(e).__name__}")
+        logger.error(f"Logout error: {type(e).__name__}: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Logout failed"
@@ -634,7 +707,7 @@ async def logout_customer(
 async def revoke_token_endpoint(
     token_data: TokenRefresh,
     current_customer_id: int = Depends(get_current_customer_id),
-    refresh_token_service = Depends(get_refresh_token_service)
+    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
 ):
     """Revoke a specific refresh token"""
     try:
@@ -652,20 +725,31 @@ async def revoke_token_endpoint(
                 detail="Cannot revoke token belonging to another user"
             )
         
-        # Revoke the token
-        success = refresh_token_service.revoke_token(token_data.refresh_token, "manual")
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to revoke token"
-            )
-        
-        return {"message": "Token revoked successfully"}
+        # Revoke the token - RefreshTokenService now handles Redis failures internally
+        try:
+            success = refresh_token_service.revoke_token(token_data.refresh_token, "manual")
+            if not success:
+                logger.warning(f"Failed to revoke token for customer {current_customer_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to revoke token"
+                )
+            
+            return {"message": "Token revoked successfully"}
+        except Exception as revoke_error:
+            logger.error(f"Error during token revocation: {type(revoke_error).__name__}: {str(revoke_error)}")
+            # Even if there was an error with Redis, the database operation might have succeeded
+            # We'll return a success message with a warning
+            return {
+                "message": "Token revoked successfully",
+                "warning": "Token may still be valid in distributed caches for a short period"
+            }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Token revocation error: {type(e).__name__}")
+        logger.error(f"Token revocation error: {type(e).__name__}: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token revocation failed"
@@ -700,13 +784,19 @@ async def validate_token(
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
         
-        return {
+        response = {
             "valid": True,
             "customer_id": payload.get("sub"),
             "email": payload.get("email"),
             "permissions": payload.get("permissions", []),
             "expires_at": payload.get("exp")
         }
+        
+        # Include any Redis warnings from the token payload
+        if payload.get("redis_warning"):
+            response["warning"] = payload.get("redis_warning")
+            
+        return response
     
     except HTTPException:
         raise

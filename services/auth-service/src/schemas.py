@@ -83,6 +83,7 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     customer: CustomerWithProfileResponse
+    warning: Optional[str] = None
 
 class CustomerSessionResponse(BaseModel):
     id: int
@@ -136,4 +137,4 @@ class PasswordChange(BaseModel):
     def validate_password(cls, v):
         if not re.search(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]", v):
             raise ValueError('Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character')
-        return v 
+        return v
