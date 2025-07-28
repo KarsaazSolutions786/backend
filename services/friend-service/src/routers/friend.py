@@ -1,7 +1,6 @@
 # Use secure shared authentication 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 try:
     from simple_auth import get_current_customer_id
@@ -123,8 +122,6 @@ def ensure_customer_exists(db: Session, customer_id: int, email: str = None) -> 
         db.refresh(customer)
         logger.info(f"Created customer record for customer_id: {customer_id}")
     return customer
-
-
 
 @router.post("/requests", response_model=FriendResponse)
 async def send_friend_request(

@@ -7,11 +7,9 @@ import sys
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 
 # Import your models
 from models import Base
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../'))
 from shared.refresh_token_service import RefreshTokenBase
 
 # this is the Alembic Config object, which provides
@@ -31,7 +29,6 @@ target_metadata = [Base.metadata, RefreshTokenBase.metadata]
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-
 def get_database_url():
     """Get database URL from environment or config"""
     # Try to get from environment first
@@ -41,7 +38,6 @@ def get_database_url():
     
     # Fallback to config
     return config.get_main_option("sqlalchemy.url")
-
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -65,7 +61,6 @@ def run_migrations_offline() -> None:
 
     with context.begin_transaction():
         context.run_migrations()
-
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
@@ -91,7 +86,6 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()

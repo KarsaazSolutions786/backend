@@ -11,11 +11,6 @@ import logging
 import sys
 import os
 import traceback
-# Add backend root to path so we can import shared modules
-backend_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..'))
-if backend_root not in sys.path:
-    sys.path.insert(0, backend_root)
-
 
 from src.database import get_db
 from shared.refresh_token_service import RefreshTokenService

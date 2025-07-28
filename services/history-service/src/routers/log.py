@@ -1,7 +1,6 @@
 # Use secure shared authentication 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 try:
     from simple_auth import get_current_customer_id
@@ -83,8 +82,6 @@ class ActivityStats(BaseModel):
 
 # Mock storage
 activity_logs_storage = {}
-
-
 
 @router.post("/", response_model=ActivityLog)
 async def log_activity(activity_data: ActivityCreate, request: Request = None):

@@ -25,7 +25,7 @@ COPY src/ ./src/
 COPY ../../shared/ ./shared/
 
 # Set environment variables
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app:/app/src:/app/shared
 ENV PYTHONUNBUFFERED=1
 
 # Expose the port

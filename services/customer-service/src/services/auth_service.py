@@ -18,7 +18,6 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Try to import shared authentication
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 try:
     from simple_auth import get_current_customer_id as shared_get_current_customer_id

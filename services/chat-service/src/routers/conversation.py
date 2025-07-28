@@ -9,7 +9,6 @@ from ..services.bloom_service import get_bloom_service
 # Use secure shared authentication 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 try:
     from simple_auth import get_current_customer_id

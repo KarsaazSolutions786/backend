@@ -7,13 +7,8 @@ import os
 import sys
 import uvicorn
 
-# Add the current directory to Python path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, current_dir)
-
-# Add the backend root directory to Python path for shared modules
-backend_root = os.path.join(current_dir, '../..')
-sys.path.insert(0, os.path.abspath(backend_root))
+# The PYTHONPATH is already set correctly in the Dockerfile
+# No need to manually manipulate sys.path
 
 # Import the FastAPI app
 from src.main import app

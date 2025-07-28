@@ -8,7 +8,6 @@ import os
 import sys
 
 # Add shared modules to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../shared'))
 
 from .config import settings
 from .database import init_db

@@ -1,7 +1,6 @@
 # Use secure shared authentication 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 
 try:
     from simple_auth import get_current_customer_id
@@ -100,8 +99,6 @@ class JobStats(BaseModel):
 # Mock storage
 jobs_storage = {}
 job_queue = []
-
-
 
 async def execute_job(job_id: str):
     """Execute a background job"""

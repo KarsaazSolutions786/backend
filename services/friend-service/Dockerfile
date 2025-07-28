@@ -27,7 +27,7 @@ COPY migrations/ ./migrations/
 COPY alembic.ini .
 
 # Set environment variables
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app:/app/src:/app/shared
 ENV PYTHONUNBUFFERED=1
 
 # Expose the port
