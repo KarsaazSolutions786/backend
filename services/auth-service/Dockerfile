@@ -9,12 +9,15 @@ ENV PORT=8000
 
 # Ensure the working directory is set to /app
 WORKDIR /app
-
+# Set environment variables
+ENV PYTHONPATH=/app:/app/src:/app/shared
+ENV PYTHONUNBUFFERED=1
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     && rm -rf /var/lib/apt/lists/*
+
 
 # Copy requirements first for better caching
 COPY services/auth-service/requirements.txt .
@@ -26,9 +29,7 @@ COPY shared/ ./shared/
 COPY services/auth-service/migrations/ ./migrations/
 COPY services/auth-service/alembic.ini .
 
-# Set environment variables
-ENV PYTHONPATH=/app:/app/src:/app/shared
-ENV PYTHONUNBUFFERED=1
+
 
 # Expose the port
 EXPOSE $PORT
