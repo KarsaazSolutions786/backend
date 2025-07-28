@@ -21,20 +21,20 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and dependencies
-COPY src/ ./src/
-COPY ../../shared/ ./shared/
-COPY migrations/ ./migrations/
-COPY alembic.ini .
+COPY services/auth-service/src/ ./src/
+COPY shared/ ./shared/
+COPY services/auth-service/migrations/ ./migrations/
+COPY services/auth-service/alembic.ini .
 
 # Set environment variables
-ENV PYTHONPATH=/app:/app/src
+ENV PYTHONPATH=/app:/app/src:/app/shared
 ENV PYTHONUNBUFFERED=1
 
 # Expose the port
 EXPOSE $PORT
 
 # Copy and make executable
-COPY ./start.sh /app/start.sh
+COPY services/auth-service/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # Run with environment variables
