@@ -161,7 +161,7 @@ services:
   auth-service:
     build:
       context: .
-      dockerfile: ./services/auth-service:/app
+      dockerfile: ./services/auth-service/Dockerfile
     environment:
       DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
       PYTHONPATH: /app:/app/src:/app/shared  # Removed the extra space here
