@@ -882,7 +882,8 @@ Error: Invalid value for '--port': '$PORT' is not a valid integer.
 
 ### Documentation
 - **Main README**: This file
-- **API Documentation**: Interactive docs at `/docs` endpoints
+- **API Documentation**: Interactive docs at `/docs` endpoints and in [API_DOCUMENTATION.md](API_DOCUMENTATION.md)
+- **Friend Service API**: Detailed documentation in [Friend Service API Documentation](/services/friend-service/API_DOCUMENTATION.md)
 - **Security Guide**: Comprehensive security implementation
 - **Database Guide**: Complete database schema and relationships
 

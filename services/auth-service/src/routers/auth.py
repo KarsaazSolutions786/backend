@@ -268,7 +268,6 @@ async def register_customer(
         raise
     except Exception as e:
         logger.error(f"Registration error: {type(e).__name__}: {str(e)}")  # Log full error details
-        import traceback
         logger.error(f"Registration traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
