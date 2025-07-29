@@ -5,8 +5,9 @@ from alembic import context
 import os
 import sys
 
-# Add the src directory to the path
+# Add the src directory and backend directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../'))
 
 # Import your models
 from models import Base
