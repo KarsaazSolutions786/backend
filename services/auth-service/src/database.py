@@ -8,16 +8,11 @@ import logging
 import sys
 import os
 
-# Add the backend directory to Python path to access shared module
-backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
-if backend_path not in sys.path:
-    sys.path.insert(0, backend_path)
-
 try:
     from shared.refresh_token_service import RefreshTokenBase
-except ImportError:
+except ImportError as e:
     logger = logging.getLogger(__name__)
-    logger.error("Failed to import RefreshTokenBase from shared module")
+    logger.error(f"Failed to import RefreshTokenBase from shared module: {e}")
     RefreshTokenBase = None
 
 logger = logging.getLogger(__name__)
