@@ -487,6 +487,44 @@ class RefreshTokenService:
         except Exception as e:
             logger.error(f"Failed to revoke token family {family_hash[:10]}...: {e}")
             # Continue execution - we'll try to revoke as many as possible
+
+    def _cache_token(self, token_hash: str, token_record: RefreshToken):
+        """Cache token data in Redis"""
+        if not self.redis_client:
+            return
+        
+        try:
+            cache_key = f"refresh_token:{token_hash}"
+            token_data = {
+                "customer_id": token_record.customer_id,
+                "expires_at": token_record.expires_at.isoformat(),
+                "is_revoked": token_record.is_revoked,
+                "device_id": token_record.device_id,
+                "user_agent": token_record.user_agent,
+                "ip_address": token_record.ip_address
+            }
+            
+            # Cache for 7 days (token expiry + buffer)
+            self.redis_client.setex(
+                cache_key,
+                timedelta(days=7),
+                json.dumps(token_data)
+            )
+        except Exception as e:
+            logger.error(f"Failed to cache token: {e}")
+            # Continue execution - we'll fall back to database
+
+    def _remove_cached_token(self, token_hash: str):
+        """Remove token from Redis cache"""
+        if not self.redis_client:
+            return
+        
+        try:
+            cache_key = f"refresh_token:{token_hash}"
+            self.redis_client.delete(cache_key)
+        except Exception as e:
+            logger.error(f"Failed to remove token from cache: {e}")
+            # Continue execution - cache will expire naturally
     
 def create_refresh_token_service(db: Session) -> RefreshTokenService:
     """Create a refresh token service instance"""

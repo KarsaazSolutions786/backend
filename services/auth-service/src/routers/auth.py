@@ -21,34 +21,14 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
-try:
-    from shared.refresh_token_service import RefreshTokenService
-    logger = logging.getLogger(__name__)
-    logger.info("Successfully imported RefreshTokenService from shared module")
-except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.error(f"Failed to import RefreshTokenService from shared module: {e}")
-    logger.error(f"Current working directory: {os.getcwd()}")
-    logger.error(f"Backend path: {backend_path}")
-    logger.error(f"Python path: {sys.path}")
-    # Define a minimal RefreshTokenService class to prevent NameError
-    class RefreshTokenService:
-        def __init__(self, db, redis_client=None):
-            self.db = db
-            self.redis_client = redis_client
-            logger.warning("Using minimal RefreshTokenService implementation")
-        
-        def create_refresh_token(self, customer_id, device_id=None, user_agent=None, ip_address=None):
-            return secrets.token_urlsafe(64), None
-            
-        def validate_token(self, token):
-            return None
-            
-        def revoke_token(self, token, reason="manual"):
-            return True
-            
-        def revoke_all_tokens(self, customer_id):
-            return True
+# Add shared module path
+shared_path = os.path.join(backend_path, 'shared')
+if shared_path not in sys.path:
+    sys.path.insert(0, shared_path)
+
+from shared.refresh_token_service import RefreshTokenService
+logger = logging.getLogger(__name__)
+logger.info("Successfully imported RefreshTokenService from shared module")
 
 from src.database import get_db
 from src.models import Customer, CustomerSession, LoginAttempt
@@ -639,55 +619,14 @@ async def logout_customer(
             detail="Logout failed"
         )
 
-@router.post("/revoke-token")
-async def revoke_token_endpoint(
-    token_data: TokenRefresh,
-    current_customer_id: int = Depends(get_current_customer_id),
-    refresh_token_service: RefreshTokenService = Depends(get_refresh_token_service)
-):
-    """Revoke a specific refresh token"""
-    try:
-        # Validate the token and check ownership
-        token_record = refresh_token_service.validate_token(token_data.refresh_token)
-        if not token_record:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired token"
-            )
-        
-        if token_record.customer_id != current_customer_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot revoke token belonging to another user"
-            )
-        
-        # Revoke the token
-        success = refresh_token_service.revoke_token(token_data.refresh_token, "manual")
-        if not success:
-            logger.warning(f"Failed to revoke token for customer {current_customer_id}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to revoke token"
-            )
-        
-        return {"message": "Token revoked successfully"}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Token revocation error: {type(e).__name__}: {str(e)}")
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Token revocation failed"
-        )
+
 
 @router.post("/validate-token")
 async def validate_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    refresh_token_service = Depends(get_refresh_token_service)
+    db: Session = Depends(get_db)
 ):
-    """Validate token and return customer info"""
+    """Validate access token and return customer info"""
     try:
         if not credentials:
             logger.warning("No token provided in validate_token")
@@ -699,23 +638,45 @@ async def validate_token(
         token = credentials.credentials
         logger.info(f"Validating token: {token[:10]}...")  # Log first 10 chars of token
         
-        # Note: Access tokens are not stored in RefreshTokenService
-        # They are stateless JWT tokens that expire naturally
-        
-        # Verify token
+        # Verify token using JWT service
         try:
             payload = jwt_service.verify_token(token)
-            logger.info(f"Token payload: {payload}")
+            logger.info(f"Token payload verified successfully")
         except Exception as verify_error:
             logger.error(f"Token verification error: {type(verify_error).__name__} - {str(verify_error)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            raise
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+        
+        # Get customer ID from payload
+        customer_id = payload.get("sub")
+        if not customer_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload"
+            )
+        
+        # Get customer from database to verify existence and status
+        customer = db.query(Customer).filter(Customer.id == int(customer_id)).first()
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Customer not found"
+            )
+        
+        if not customer.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated"
+            )
         
         response = {
             "valid": True,
-            "customer_id": payload.get("sub"),
-            "email": payload.get("email"),
-            "permissions": payload.get("permissions", []),
+            "customer_id": int(customer_id),
+            "email": customer.email,
+            "is_verified": customer.is_verified,
+            "is_active": customer.is_active,
             "expires_at": payload.get("exp")
         }
         
@@ -723,20 +684,8 @@ async def validate_token(
     
     except HTTPException:
         raise
-    except jwt.ExpiredSignatureError:
-        logger.warning("Token has expired")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        logger.warning("Invalid token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
     except Exception as e:
-        logger.error(f"Token validation error: {type(e).__name__}")
+        logger.error(f"Token validation error: {type(e).__name__}: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
