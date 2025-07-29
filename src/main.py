@@ -13,12 +13,24 @@ import logging
 import time
 import jwt
 from typing import Optional
+from contextlib import asynccontextmanager
 
 # Import microservice client
 from .services.microservice_client import microservice_client
 
 # Add shared modules to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '../shared'))
+
+# Import enhanced Redis manager and security modules
+try:
+    from redis_manager import get_redis_manager, RedisManager
+    from health_check import get_health_checker, HealthChecker
+    from rate_limiting import RateLimitMiddleware, rate_limit
+    from csrf_protection import csrf_protection
+    SECURITY_AVAILABLE = True
+except ImportError as e:
+    logging.warning(f"Security modules not available: {e}")
+    SECURITY_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -37,11 +49,31 @@ try:
 except ImportError:
     logger.warning("ML libraries not available - running in API-only mode")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    logger.info("Starting Eindr Microservices API...")
+    
+    if SECURITY_AVAILABLE:
+        # Initialize Redis manager
+        redis_manager = get_redis_manager()
+        health_status = redis_manager.get_status()
+        
+        if health_status["available"]:
+            logger.info("Redis connection established successfully")
+        else:
+            logger.warning("Redis not available - service will use local fallbacks")
+    
+    yield
+    
+    logger.info("Shutting down Eindr Microservices API")
+
 # Create FastAPI app
 app = FastAPI(
     title="Eindr Microservices API",
     description="Unified API for Eindr microservices platform",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # CORS middleware
@@ -52,6 +84,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"]
 )
+
+# Add security middleware if available
+if SECURITY_AVAILABLE:
+    # Add rate limiting middleware
+    app.add_middleware(RateLimitMiddleware)
+    logger.info("Rate limiting middleware enabled")
 
 # Request timing middleware
 @app.middleware("http")
@@ -96,15 +134,59 @@ async def root():
         }
     }
 
+# Dependency injection for Redis and health checker
+def get_redis() -> Optional[RedisManager]:
+    """Dependency to get Redis manager"""
+    if SECURITY_AVAILABLE:
+        return get_redis_manager()
+    return None
+
+def get_health() -> Optional[HealthChecker]:
+    """Dependency to get health checker"""
+    if SECURITY_AVAILABLE:
+        return get_health_checker()
+    return None
+
 @app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
+async def health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
+    """Basic health check endpoint"""
+    base_health = {
         "status": "healthy",
         "service": "eindr-api",
         "version": "1.0.0",
-        "ml_available": ML_AVAILABLE
+        "ml_available": ML_AVAILABLE,
+        "security_available": SECURITY_AVAILABLE
     }
+    
+    if health_checker:
+        comprehensive_health = health_checker.get_comprehensive_health()
+        base_health.update(comprehensive_health)
+    
+    return base_health
+
+@app.get("/health/comprehensive")
+async def comprehensive_health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
+    """Comprehensive health check endpoint"""
+    if not health_checker:
+        raise HTTPException(status_code=503, detail="Health checker not available")
+    
+    return health_checker.get_comprehensive_health()
+
+@app.get("/health/redis")
+async def redis_health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
+    """Redis-specific health check"""
+    if not health_checker:
+        raise HTTPException(status_code=503, detail="Health checker not available")
+    
+    return health_checker.check_redis_health()
+
+@app.post("/admin/redis/reconnect")
+async def force_redis_reconnect(health_checker: Optional[HealthChecker] = Depends(get_health)):
+    """Force Redis reconnection (admin endpoint)"""
+    if not health_checker:
+        raise HTTPException(status_code=503, detail="Health checker not available")
+    
+    return health_checker.force_redis_reconnect()
 
 @app.get("/api/status")
 async def api_status():
@@ -133,6 +215,7 @@ async def api_status():
 # ======================
 
 @app.post("/auth/register")
+@rate_limit("auth.register") if SECURITY_AVAILABLE else lambda f: f
 async def register_user(request: Request):
     """Register a new user"""
     try:
@@ -147,6 +230,7 @@ async def register_user(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/auth/login")
+@rate_limit("auth.login") if SECURITY_AVAILABLE else lambda f: f
 async def login_user(request: Request):
     """Login user"""
     try:
@@ -184,6 +268,7 @@ async def get_current_user_info(current_user = Depends(get_current_user)):
 # ======================
 
 @app.get("/customers")
+@rate_limit("api.read") if SECURITY_AVAILABLE else lambda f: f
 async def get_customers(current_user = Depends(get_current_user)):
     """Get all customers"""
     try:
@@ -364,6 +449,7 @@ async def add_friend(request: Request, current_user = Depends(get_current_user))
 # ======================
 
 @app.post("/chat")
+@rate_limit("ai.chat") if SECURITY_AVAILABLE else lambda f: f
 async def chat_endpoint(request: Request, current_user = Depends(get_current_user)):
     """Chat with AI"""
     try:
@@ -388,7 +474,120 @@ async def chat_endpoint(request: Request, current_user = Depends(get_current_use
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# ======================
+# REDIS CACHE DEMO ROUTES
+# ======================
+
+@app.get("/cache/{key}")
+@rate_limit("api.read") if SECURITY_AVAILABLE else lambda f: f
+async def get_cached_value(key: str, redis_manager: Optional[RedisManager] = Depends(get_redis)):
+    """Get value from cache with graceful fallback"""
+    if not redis_manager:
+        return {
+            "key": key,
+            "value": None,
+            "source": "redis_unavailable",
+            "redis_available": False
+        }
+    
+    value = redis_manager.get(key)
+    
+    if value is None:
+        # Simulate fetching from database or external service
+        value = f"computed_value_for_{key}"
+        
+        # Try to cache the result
+        cached = redis_manager.set(key, value, ex=300)  # 5 minutes
+        
+        return {
+            "key": key,
+            "value": value,
+            "cached": cached,
+            "source": "computed",
+            "redis_available": redis_manager.is_available
+        }
+    
+    return {
+        "key": key,
+        "value": value,
+        "source": "cache",
+        "redis_available": redis_manager.is_available
+    }
+
+@app.post("/cache/{key}")
+@rate_limit("api.write") if SECURITY_AVAILABLE else lambda f: f
+async def set_cached_value(
+    key: str, 
+    request: Request,
+    redis_manager: Optional[RedisManager] = Depends(get_redis)
+):
+    """Set value in cache with graceful fallback"""
+    try:
+        body = await request.json()
+        value = body.get("value", "")
+        ttl = body.get("ttl", 300)
+        
+        if not redis_manager:
+            return {
+                "key": key,
+                "value": value,
+                "ttl": ttl,
+                "success": False,
+                "redis_available": False,
+                "message": "Redis not available"
+            }
+        
+        success = redis_manager.set(key, value, ex=ttl)
+        
+        return {
+            "key": key,
+            "value": value,
+            "ttl": ttl,
+            "success": success,
+            "redis_available": redis_manager.is_available
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/cache/{key}")
+@rate_limit("api.delete") if SECURITY_AVAILABLE else lambda f: f
+async def delete_cached_value(key: str, redis_manager: Optional[RedisManager] = Depends(get_redis)):
+    """Delete value from cache"""
+    if not redis_manager:
+        return {
+            "key": key,
+            "deleted": False,
+            "redis_available": False,
+            "message": "Redis not available"
+        }
+    
+    deleted_count = redis_manager.delete(key)
+    
+    return {
+        "key": key,
+        "deleted": deleted_count > 0,
+        "redis_available": redis_manager.is_available
+    }
+
+# Global exception handler with Redis status
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler with Redis status"""
+    redis_manager = get_redis_manager() if SECURITY_AVAILABLE else None
+    
+    logger.error(f"Unhandled exception: {exc}")
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": "Internal server error",
+            "redis_available": redis_manager.is_available if redis_manager else False,
+            "security_available": SECURITY_AVAILABLE,
+            "timestamp": str(time.time())
+        }
+    )
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    uvicorn.run(app, host="0.0.0.0", port=port)

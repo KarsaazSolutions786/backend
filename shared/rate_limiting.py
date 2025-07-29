@@ -18,6 +18,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import redis
 import os
+from .redis_manager import get_redis_manager, RedisManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +36,14 @@ class RateLimitConfig:
 class BruteForceProtection:
     """Advanced brute-force protection with exponential backoff"""
     
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_manager: Optional[RedisManager] = None):
         """
         Initialize brute-force protection
         
         Args:
-            redis_client: Optional Redis client for distributed rate limiting
+            redis_manager: Optional Redis manager for distributed rate limiting with graceful fallback
         """
-        self.redis_client = redis_client
+        self.redis_manager = redis_manager or get_redis_manager()
         self.local_storage = defaultdict(lambda: {"attempts": 0, "last_attempt": 0, "blocked_until": 0})
         
         # Rate limit configurations for different endpoint types
@@ -104,7 +105,7 @@ class BruteForceProtection:
     
     def _check_rate_limit_redis(self, key: str, config: RateLimitConfig) -> Tuple[bool, int, int]:
         """
-        Check rate limit using Redis sliding window
+        Check rate limit using Redis sliding window with graceful fallback
         
         Args:
             key: Redis key for this rate limit
@@ -113,41 +114,47 @@ class BruteForceProtection:
         Returns:
             Tuple of (allowed, current_count, reset_time)
         """
-        if not self.redis_client:
-            return True, 0, 0
+        if not self.redis_manager.is_available:
+            return self._check_rate_limit_local(key, config)
         
-        try:
-            pipe = self.redis_client.pipeline()
-            now = time.time()
-            window_start = now - config.window_seconds
+        with self.redis_manager.safe_operation("rate_limit_check") as client:
+            if not client:
+                return self._check_rate_limit_local(key, config)
             
-            # Remove old entries
-            pipe.zremrangebyscore(key, 0, window_start)
-            
-            # Count current requests
-            pipe.zcard(key)
-            
-            # Add current request
-            pipe.zadd(key, {str(now): now})
-            
-            # Set expiration
-            pipe.expire(key, config.window_seconds)
-            
-            results = pipe.execute()
-            current_count = results[1] + 1  # +1 for the request we just added
-            
-            # Check if we're within limits
-            limit = config.burst_requests if config.burst_requests > 0 else config.requests
-            allowed = current_count <= limit
-            
-            reset_time = int(now + config.window_seconds)
-            
-            return allowed, current_count, reset_time
-            
-        except Exception as e:
-            logger.error(f"Redis rate limiting error: {e}")
-            # Fail open - allow the request if Redis is down
-            return True, 0, 0
+            try:
+                pipe = client.pipeline()
+                now = time.time()
+                window_start = now - config.window_seconds
+                
+                # Remove old entries
+                pipe.zremrangebyscore(key, 0, window_start)
+                
+                # Count current requests
+                pipe.zcard(key)
+                
+                # Add current request
+                pipe.zadd(key, {str(now): now})
+                
+                # Set expiration
+                pipe.expire(key, config.window_seconds)
+                
+                results = self.redis_manager.execute_pipeline(pipe, "rate_limit_check")
+                if not results:
+                    return self._check_rate_limit_local(key, config)
+                
+                current_count = results[1] + 1  # +1 for the request we just added
+                
+                # Check if we're within limits
+                limit = config.burst_requests if config.burst_requests > 0 else config.requests
+                allowed = current_count <= limit
+                
+                reset_time = int(now + config.window_seconds)
+                
+                return allowed, current_count, reset_time
+                
+            except Exception as e:
+                logger.warning(f"Redis rate limiting error, falling back to local: {e}")
+                return self._check_rate_limit_local(key, config)
     
     def _check_rate_limit_local(self, key: str, config: RateLimitConfig) -> Tuple[bool, int, int]:
         """
@@ -217,7 +224,7 @@ class BruteForceProtection:
         # Check rate limit
         rate_limit_key = self._get_rate_limit_key(endpoint, client_id)
         
-        if self.redis_client:
+        if self.redis_manager.is_available:
             allowed, current_count, reset_time = self._check_rate_limit_redis(rate_limit_key, config)
         else:
             allowed, current_count, reset_time = self._check_rate_limit_local(rate_limit_key, config)
@@ -252,13 +259,13 @@ class BruteForceProtection:
         """Check if client is currently blocked"""
         block_key = self._get_block_key(endpoint, client_id)
         
-        if self.redis_client:
+        # Try Redis first with graceful fallback
+        blocked_until = self.redis_manager.get(block_key)
+        if blocked_until:
             try:
-                blocked_until = self.redis_client.get(block_key)
-                if blocked_until:
-                    return time.time() < float(blocked_until)
-            except Exception as e:
-                logger.error(f"Redis block check error: {e}")
+                return time.time() < float(blocked_until)
+            except (ValueError, TypeError):
+                pass
         
         # Fallback to local storage
         storage = self.local_storage[block_key]
@@ -268,17 +275,17 @@ class BruteForceProtection:
         """Get information about current block"""
         block_key = self._get_block_key(endpoint, client_id)
         
-        if self.redis_client:
+        # Try Redis first with graceful fallback
+        blocked_until = self.redis_manager.get(block_key)
+        if blocked_until:
             try:
-                blocked_until = self.redis_client.get(block_key)
-                if blocked_until:
-                    blocked_until_time = float(blocked_until)
-                    return {
-                        "blocked_until": int(blocked_until_time),
-                        "retry_after": int(blocked_until_time - time.time())
-                    }
-            except Exception as e:
-                logger.error(f"Redis block info error: {e}")
+                blocked_until_time = float(blocked_until)
+                return {
+                    "blocked_until": int(blocked_until_time),
+                    "retry_after": int(max(0, blocked_until_time - time.time()))
+                }
+            except (ValueError, TypeError):
+                pass
         
         # Fallback to local storage
         storage = self.local_storage[block_key]
@@ -293,11 +300,8 @@ class BruteForceProtection:
         block_key = self._get_block_key(endpoint, client_id)
         blocked_until = time.time() + duration_seconds
         
-        if self.redis_client:
-            try:
-                self.redis_client.setex(block_key, duration_seconds, str(blocked_until))
-            except Exception as e:
-                logger.error(f"Redis block set error: {e}")
+        # Try Redis with graceful fallback
+        self.redis_manager.set(block_key, str(blocked_until), ex=duration_seconds)
         
         # Also store in local storage as fallback
         self.local_storage[block_key]["blocked_until"] = blocked_until
@@ -319,13 +323,12 @@ class BruteForceProtection:
             # Progressive penalty: first failure = 1 request, second = 2 requests, etc.
             penalty_key = f"penalty:{endpoint}:{client_id}"
             
-            if self.redis_client:
-                try:
-                    penalty_count = self.redis_client.incr(penalty_key)
-                    self.redis_client.expire(penalty_key, config.window_seconds * 2)
-                except Exception:
-                    penalty_count = 1
+            # Try Redis with graceful fallback
+            penalty_count = self.redis_manager.incr(penalty_key)
+            if penalty_count:
+                self.redis_manager.expire(penalty_key, config.window_seconds * 2)
             else:
+                # Fallback to local storage
                 storage = self.local_storage[penalty_key]
                 penalty_count = storage.get("count", 0) + 1
                 storage["count"] = penalty_count
@@ -337,18 +340,8 @@ class BruteForceProtection:
             
             logger.warning(f"Failed attempt #{penalty_count} for {client_id} on {endpoint}")
 
-# Global rate limiting instance
-_redis_client = None
-if os.getenv("REDIS_URL"):
-    try:
-        import redis
-        _redis_client = redis.from_url(os.getenv("REDIS_URL"))
-    except ImportError:
-        logger.warning("Redis not available, using local rate limiting")
-    except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
-
-brute_force_protection = BruteForceProtection(_redis_client)
+# Global rate limiting instance with enhanced Redis manager
+brute_force_protection = BruteForceProtection()
 
 # SlowAPI limiter for basic rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -468,4 +461,4 @@ class RateLimitMiddleware:
         elif any(method in path for method in ["POST", "PUT", "PATCH"]):
             return "api.write"
         else:
-            return "api.read" 
+            return "api.read"

@@ -18,6 +18,7 @@ from starlette.responses import JSONResponse
 import redis
 import os
 import json
+from .redis_manager import get_redis_manager
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,8 @@ class CSRFTokenManager:
     
     def __init__(self, config: CSRFConfig = None, redis_client: Optional[redis.Redis] = None):
         self.config = config or CSRFConfig()
-        self.redis_client = redis_client
+        self.redis_manager = get_redis_manager() if redis_client is None else None
+        self.redis_client = redis_client or (self.redis_manager.client if self.redis_manager and self.redis_manager.is_available else None)
         self.redis_prefix = "csrf_token:"
         
     def generate_token(self, session_id: str = None) -> str:
@@ -140,8 +142,12 @@ class CSRFTokenManager:
         
         key = f"{self.redis_prefix}{token}"
         try:
-            self.redis_client.setex(key, ttl, json.dumps(token_data))
-            return True
+            if self.redis_manager:
+                success = self.redis_manager.set(key, json.dumps(token_data), ex=ttl)
+                return success
+            else:
+                self.redis_client.setex(key, ttl, json.dumps(token_data))
+                return True
         except Exception as e:
             logger.error(f"Failed to store CSRF token: {e}")
             return False
@@ -161,8 +167,12 @@ class CSRFTokenManager:
         
         key = f"{self.redis_prefix}{token}"
         try:
-            self.redis_client.delete(key)
-            return True
+            if self.redis_manager:
+                success = self.redis_manager.delete(key)
+                return success
+            else:
+                self.redis_client.delete(key)
+                return True
         except Exception as e:
             logger.error(f"Failed to revoke CSRF token: {e}")
             return False
@@ -432,15 +442,11 @@ class CSRFProtection:
         return self.token_manager.revoke_user_tokens(customer_id)
 
 def get_redis_client() -> Optional[redis.Redis]:
-    """Get Redis client for CSRF token storage"""
-    try:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/1")  # Different DB from refresh tokens
-        client = redis.from_url(redis_url, decode_responses=True)
-        client.ping()  # Test connection
-        return client
-    except Exception as e:
-        logger.warning(f"Could not connect to Redis for CSRF: {e}")
-        return None
+    """Get Redis client for CSRF token storage with enhanced error handling"""
+    redis_manager = get_redis_manager()
+    if redis_manager.is_available:
+        return redis_manager.client
+    return None
 
 # Global instances
 _csrf_redis_client = get_redis_client()
@@ -486,4 +492,4 @@ def csrf_protect(customer_id_field: str = "customer_id"):
             
             return await func(*args, **kwargs)
         return wrapper
-    return decorator 
+    return decorator
