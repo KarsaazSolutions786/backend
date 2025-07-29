@@ -31,6 +31,11 @@ try:
 except ImportError as e:
     logging.warning(f"Security modules not available: {e}")
     SECURITY_AVAILABLE = False
+    # Define dummy classes for type hints when imports fail
+    class RedisManager:
+        pass
+    class HealthChecker:
+        pass
 
 # Configure logging
 logging.basicConfig(

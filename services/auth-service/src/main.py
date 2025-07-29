@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from typing import Optional
 import uvicorn
 import os
 import sys
@@ -25,6 +26,11 @@ try:
 except ImportError as e:
     logger.warning(f"Security modules not available: {e}")
     SECURITY_AVAILABLE = False
+    # Define dummy classes for type hints when imports fail
+    class RedisManager:
+        pass
+    class HealthChecker:
+        pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,20 +96,20 @@ async def root():
     }
 
 # Dependency injection for Redis and health checker
-def get_redis() -> RedisManager:
+def get_redis() -> Optional[RedisManager]:
     """Dependency to get Redis manager"""
     if SECURITY_AVAILABLE:
         return get_redis_manager()
     return None
 
-def get_health() -> HealthChecker:
+def get_health() -> Optional[HealthChecker]:
     """Dependency to get health checker"""
     if SECURITY_AVAILABLE:
         return get_health_checker()
     return None
 
 @app.get("/health")
-async def health_check(health_checker: HealthChecker = Depends(get_health)):
+async def health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
     """Health check endpoint."""
     base_health = {
         "status": "healthy", 
@@ -118,7 +124,7 @@ async def health_check(health_checker: HealthChecker = Depends(get_health)):
     return base_health
 
 @app.get("/health/comprehensive")
-async def comprehensive_health_check(health_checker: HealthChecker = Depends(get_health)):
+async def comprehensive_health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
     """Comprehensive health check endpoint"""
     if not health_checker:
         raise HTTPException(status_code=503, detail="Health checker not available")
@@ -126,7 +132,7 @@ async def comprehensive_health_check(health_checker: HealthChecker = Depends(get
     return health_checker.get_comprehensive_health()
 
 @app.get("/health/redis")
-async def redis_health_check(health_checker: HealthChecker = Depends(get_health)):
+async def redis_health_check(health_checker: Optional[HealthChecker] = Depends(get_health)):
     """Redis-specific health check"""
     if not health_checker:
         raise HTTPException(status_code=503, detail="Health checker not available")
