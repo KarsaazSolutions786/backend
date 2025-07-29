@@ -18,8 +18,11 @@ PyJWT==2.8.0
 httpx==0.25.2
 requests==2.31.0
 
-# Redis
+# Redis with enhanced modules
 redis==5.0.1
+redis[hiredis]==5.0.1  # High-performance Redis parser
+redisjson==0.7.1  # Redis JSON module support
+redisearch==2.1.1  # Redis Search and Vector capabilities
 
 # Rate limiting
 slowapi==0.1.9
@@ -37,4 +40,4 @@ pytz==2023.3
 
 # Core ML libraries (lighter versions for Railway)
 numpy==1.24.3
-scikit-learn==1.3.2 
+scikit-learn==1.3.2

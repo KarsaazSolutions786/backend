@@ -13,7 +13,9 @@ slowapi==0.1.9
 # Security dependencies added by migration
 PyJWT>=2.8.0
 bcrypt>=4.0.0
-redis>=4.5.0
+redis[hiredis]==5.0.1
+redisjson==0.7.1
+redisearch==2.1.1
 cryptography>=41.0.0
 zxcvbn>=4.4.24
 sqlparse>=0.4.4
