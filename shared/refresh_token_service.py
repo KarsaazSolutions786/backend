@@ -14,7 +14,6 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Foreign
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 from fastapi import HTTPException, status
-import redis
 import json
 import os
 
@@ -58,9 +57,8 @@ class RefreshToken(RefreshTokenBase):
 class RefreshTokenService:
     """Service for managing refresh tokens securely"""
     
-    def __init__(self, db: Session, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, db: Session):
         self.db = db
-        self.redis_client = redis_client
         
         # Configuration
         self.token_length = int(os.getenv("REFRESH_TOKEN_LENGTH", "32"))
@@ -69,17 +67,7 @@ class RefreshTokenService:
         self.enable_token_rotation = os.getenv("ENABLE_TOKEN_ROTATION", "true").lower() == "true"
         self.revoke_family_on_reuse = os.getenv("REVOKE_FAMILY_ON_REUSE", "true").lower() == "true"
         
-        # Redis key prefixes
-        self.redis_prefix = "refresh_token:"
-        self.blacklist_prefix = "token_blacklist:"
-        
-        # Log Redis connection status
-        if self.redis_client:
-            logger.info("RefreshTokenService initialized with Redis support")
-        else:
-            logger.warning("RefreshTokenService initialized without Redis support - using database-only mode")
-            logger.warning("Token revocation and blacklisting will be less effective without Redis")
-            logger.warning("Check Redis connection settings and ensure Redis server is running")
+        logger.info("RefreshTokenService initialized with database-only mode")
     
     def generate_token(self) -> str:
         """Generate a cryptographically secure refresh token"""
@@ -192,24 +180,6 @@ class RefreshTokenService:
         """
         token_hash = self.hash_token(token)
         
-        # Check Redis cache first
-        if self.redis_client:
-            try:
-                cached_token = self._get_cached_token(token_hash)
-                if cached_token:
-                    if cached_token.is_valid():
-                        return cached_token
-                    else:
-                        # Remove invalid token from cache
-                        try:
-                            self._remove_cached_token(token_hash)
-                        except Exception as e:
-                            logger.error(f"Failed to remove invalid token from cache: {e}")
-                            # Continue to database check
-            except Exception as e:
-                logger.error(f"Redis cache check failed: {e}")
-                # Continue to database check if Redis fails
-        
         # Check database
         token_record = self.db.query(RefreshToken).filter(
             RefreshToken.token_hash == token_hash
@@ -303,17 +273,6 @@ class RefreshTokenService:
         """
         token_hash = self.hash_token(token)
         
-        # Check Redis blacklist first
-        if self.redis_client:
-            try:
-                blacklist_key = f"{self.blacklist_prefix}{token_hash}"
-                if self.redis_client.exists(blacklist_key):
-                    logger.debug(f"Token {token_hash[:10]}... found in blacklist")
-                    return True
-            except Exception as e:
-                logger.error(f"Failed to check token blacklist status: {e}")
-                # Continue to database check if Redis fails
-        
         # Check database
         token_record = self.db.query(RefreshToken).filter(
             RefreshToken.token_hash == token_hash
@@ -349,17 +308,6 @@ class RefreshTokenService:
             token_record.revoke(reason)
             self.db.commit()
             
-            # Remove from cache and add to blacklist if Redis is available
-            if self.redis_client:
-                try:
-                    self._remove_cached_token(token_hash)
-                    self._blacklist_token(token_hash)
-                except Exception as e:
-                    logger.error(f"Redis operation failed during token revocation: {e}")
-                    # Continue execution - the token is still revoked in the database
-            else:
-                logger.warning("Redis client not available for token blacklisting - token revoked in database only")
-            
             logger.info(f"Revoked refresh token for customer {token_record.customer_id}, reason: {reason}")
             return True
         except Exception as e:
@@ -384,29 +332,15 @@ class RefreshTokenService:
             ).all()
             
             count = 0
-            redis_errors = 0
             
             for token in tokens:
                 token.revoke(reason)
                 count += 1
-                
-                # Remove from cache and add to blacklist if Redis is available
-                if self.redis_client:
-                    try:
-                        self._remove_cached_token(token.token_hash)
-                        self._blacklist_token(token.token_hash)
-                    except Exception as e:
-                        redis_errors += 1
-                        logger.error(f"Redis operation failed during token revocation: {e}")
-                        # Continue execution - the token is still revoked in the database
             
             self.db.commit()
             
             logger.info(f"Revoked {count} refresh tokens for customer {customer_id}, reason: {reason}")
             
-            if redis_errors > 0:
-                logger.warning(f"Encountered {redis_errors} Redis errors during bulk token revocation")
-                
             return count
         except Exception as e:
             logger.error(f"Bulk token revocation failed for customer {customer_id}: {e}")
@@ -432,29 +366,15 @@ class RefreshTokenService:
             ).all()
             
             count = 0
-            redis_errors = 0
             
             for token in tokens:
                 token.revoke(reason)
                 count += 1
-                
-                # Remove from cache and add to blacklist if Redis is available
-                if self.redis_client:
-                    try:
-                        self._remove_cached_token(token.token_hash)
-                        self._blacklist_token(token.token_hash)
-                    except Exception as e:
-                        redis_errors += 1
-                        logger.error(f"Redis operation failed during device token revocation: {e}")
-                        # Continue execution - the token is still revoked in the database
             
             self.db.commit()
             
             logger.info(f"Revoked {count} refresh tokens for customer {customer_id} device {device_id}, reason: {reason}")
             
-            if redis_errors > 0:
-                logger.warning(f"Encountered {redis_errors} Redis errors during device token revocation")
-                
             return count
         except Exception as e:
             logger.error(f"Device token revocation failed for customer {customer_id}, device {device_id}: {e}")
@@ -476,16 +396,8 @@ class RefreshTokenService:
             ).all()
             
             count = 0
-            redis_errors = 0
             
             for token in expired_tokens:
-                if self.redis_client:
-                    try:
-                        self._remove_cached_token(token.token_hash)
-                    except Exception as e:
-                        redis_errors += 1
-                        logger.error(f"Redis operation failed during token cleanup: {e}")
-                        # Continue execution - the token will still be removed from the database
                 self.db.delete(token)
                 count += 1
             
@@ -493,9 +405,6 @@ class RefreshTokenService:
             
             logger.info(f"Cleaned up {count} expired refresh tokens")
             
-            if redis_errors > 0:
-                logger.warning(f"Encountered {redis_errors} Redis errors during token cleanup")
-                
             return count
         except Exception as e:
             logger.error(f"Token cleanup failed: {e}")
@@ -541,27 +450,14 @@ class RefreshTokenService:
             ).all()
             
             count = 0
-            redis_errors = 0
             
             for token in expired_tokens:
                 token.revoke("expired")
                 count += 1
-                
-                # Remove from cache if Redis is available
-                if self.redis_client:
-                    try:
-                        self._remove_cached_token(token.token_hash)
-                    except Exception as e:
-                        redis_errors += 1
-                        logger.error(f"Failed to remove expired token from cache: {e}")
-                        # Continue execution - the token is still revoked in the database
             
             if count > 0:
                 self.db.commit()
                 logger.info(f"Cleaned up {count} expired tokens for customer {customer_id}")
-                
-                if redis_errors > 0:
-                    logger.warning(f"Encountered {redis_errors} Redis errors during expired token cleanup")
         except Exception as e:
             logger.error(f"Failed to clean up expired tokens for customer {customer_id}: {e}")
             # Continue execution - we'll try again later
@@ -574,145 +470,20 @@ class RefreshTokenService:
                 (RefreshToken.parent_token_hash == family_hash)
             ).all()
             
-            redis_errors = 0
             revoked_count = 0
             
             for token in family_tokens:
                 if not token.is_revoked:
                     token.revoke("family_revocation")
                     revoked_count += 1
-                    
-                    # Handle Redis operations if available
-                    if self.redis_client:
-                        try:
-                            self._remove_cached_token(token.token_hash)
-                            self._blacklist_token(token.token_hash)
-                        except Exception as e:
-                            redis_errors += 1
-                            logger.error(f"Redis operation failed during token family revocation: {e}")
-                            # Continue execution - the token is still revoked in the database
             
             if revoked_count > 0:
                 self.db.commit()
                 logger.warning(f"Revoked {revoked_count} tokens in family {family_hash[:10]}... due to security concern")
-                
-                if redis_errors > 0:
-                    logger.warning(f"Encountered {redis_errors} Redis errors during token family revocation")
         except Exception as e:
             logger.error(f"Failed to revoke token family {family_hash[:10]}...: {e}")
             # Continue execution - we'll try to revoke as many as possible
     
-    def _cache_token(self, token_hash: str, token_record: RefreshToken):
-        """Cache token in Redis"""
-        if not self.redis_client:
-            logger.debug(f"Redis client not available, skipping caching for token {token_hash[:10]}...")
-            return
-        
-        try:
-            token_data = {
-                "customer_id": token_record.customer_id,
-                "device_id": token_record.device_id,
-                "expires_at": token_record.expires_at.isoformat(),
-                "is_revoked": token_record.is_revoked,
-                "last_used_at": token_record.last_used_at.isoformat()
-            }
-            
-            cache_key = f"{self.redis_prefix}{token_hash}"
-            ttl = int((token_record.expires_at - datetime.utcnow()).total_seconds())
-            
-            self.redis_client.setex(cache_key, ttl, json.dumps(token_data))
-            logger.debug(f"Cached token {token_hash[:10]}... in Redis")
-        except Exception as e:
-            logger.error(f"Failed to cache token in Redis: {e}")
-            # Continue execution - the token is still stored in the database
-    
-    def _get_cached_token(self, token_hash: str) -> Optional[RefreshToken]:
-        """Get token from Redis cache"""
-        if not self.redis_client:
-            logger.debug(f"Redis client not available, skipping cache lookup for token {token_hash[:10]}...")
-            return None
-        
-        try:
-            # Check blacklist first
-            blacklist_key = f"{self.blacklist_prefix}{token_hash}"
-            if self.redis_client.exists(blacklist_key):
-                logger.debug(f"Token {token_hash[:10]}... found in blacklist")
-                return None
-            
-            cache_key = f"{self.redis_prefix}{token_hash}"
-            cached_data = self.redis_client.get(cache_key)
-            
-            if not cached_data:
-                logger.debug(f"Token {token_hash[:10]}... not found in Redis cache")
-                return None
-            
-            try:
-                token_data = json.loads(cached_data)
-                
-                # Create minimal token object for validation
-                token_record = RefreshToken()
-                token_record.customer_id = token_data["customer_id"]
-                token_record.device_id = token_data["device_id"]
-                token_record.expires_at = datetime.fromisoformat(token_data["expires_at"])
-                token_record.is_revoked = token_data["is_revoked"]
-                token_record.last_used_at = datetime.fromisoformat(token_data["last_used_at"])
-                
-                logger.debug(f"Retrieved token {token_hash[:10]}... from Redis cache")
-                return token_record
-            except (json.JSONDecodeError, KeyError, ValueError):
-                # Invalid cache data, remove it
-                self.redis_client.delete(cache_key)
-                logger.warning(f"Invalid cache data for token {token_hash[:10]}..., removing from cache")
-                return None
-        except Exception as e:
-            logger.error(f"Failed to retrieve token from Redis cache: {e}")
-            return None
-    
-    def _remove_cached_token(self, token_hash: str):
-        """Remove token from Redis cache"""
-        if not self.redis_client:
-            logger.debug(f"Redis client not available, skipping cache removal for token {token_hash[:10]}...")
-            return
-        
-        try:
-            cache_key = f"{self.redis_prefix}{token_hash}"
-            self.redis_client.delete(cache_key)
-            logger.debug(f"Removed token {token_hash[:10]}... from Redis cache")
-        except Exception as e:
-            logger.error(f"Failed to remove token from Redis cache: {e}")
-            raise  # Re-raise to be caught by the calling method
-    
-    def _blacklist_token(self, token_hash: str):
-        """Add token to blacklist"""
-        if not self.redis_client:
-            logger.debug(f"Redis client not available, skipping blacklisting for token {token_hash[:10]}...")
-            return
-        
-        try:
-            blacklist_key = f"{self.blacklist_prefix}{token_hash}"
-            # Keep in blacklist for 24 hours
-            self.redis_client.setex(blacklist_key, 86400, "revoked")
-            logger.debug(f"Added token {token_hash[:10]}... to Redis blacklist")
-        except Exception as e:
-            logger.error(f"Failed to add token to Redis blacklist: {e}")
-            raise  # Re-raise to be caught by the calling method
-
-def get_redis_client() -> Optional[redis.Redis]:
-    """Get Redis client for token caching"""
-    try:
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        client = redis.from_url(redis_url, decode_responses=True)
-        client.ping()  # Test connection
-        logger.info(f"Successfully connected to Redis at {redis_url}")
-        return client
-    except Exception as e:
-        logger.error(f"Could not connect to Redis at {os.getenv('REDIS_URL')}: {e}")
-        logger.error("Token revocation and other Redis-dependent operations will fall back to database-only mode")
-        return None
-
-# Global instances
-_redis_client = get_redis_client()
-
 def create_refresh_token_service(db: Session) -> RefreshTokenService:
     """Create a refresh token service instance"""
-    return RefreshTokenService(db, _redis_client)
+    return RefreshTokenService(db)
