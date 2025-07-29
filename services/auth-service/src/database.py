@@ -4,6 +4,17 @@ from sqlalchemy.orm import sessionmaker
 from .config import settings
 import logging
 
+# Import RefreshToken model from shared module
+try:
+    from ....shared.refresh_token_service import RefreshTokenBase
+except ImportError:
+    try:
+        from shared.refresh_token_service import RefreshTokenBase
+    except ImportError:
+        logger = logging.getLogger(__name__)
+        logger.error("Failed to import RefreshTokenBase from shared module")
+        RefreshTokenBase = None
+
 logger = logging.getLogger(__name__)
 
 # Create SQLAlchemy engine
@@ -36,8 +47,16 @@ def get_db():
 def init_db():
     """Initialize database tables"""
     try:
+        # Create auth-service tables
         Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
+        
+        # Create refresh token tables if available
+        if RefreshTokenBase is not None:
+            RefreshTokenBase.metadata.create_all(bind=engine)
+            logger.info("Database tables created successfully (including refresh tokens)")
+        else:
+            logger.warning("RefreshTokenBase not available - refresh token table not created")
+            logger.info("Database tables created successfully (auth tables only)")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
-        raise 
+        raise

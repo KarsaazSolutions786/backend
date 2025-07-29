@@ -99,7 +99,20 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
 
 def get_refresh_token_service(db: Session = Depends(get_db)):
     """Get refresh token service instance"""
-    return RefreshTokenService(db)
+    # Initialize Redis client if available
+    redis_client = None
+    try:
+        import redis
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        redis_client = redis.from_url(redis_url, decode_responses=True)
+        # Test connection
+        redis_client.ping()
+        logger.info("Redis connection established for RefreshTokenService")
+    except Exception as e:
+        logger.warning(f"Redis not available for RefreshTokenService: {e}")
+        redis_client = None
+    
+    return RefreshTokenService(db, redis_client)
 
 # Token revocation functions removed - now handled directly by RefreshTokenService
 

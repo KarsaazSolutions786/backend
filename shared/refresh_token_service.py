@@ -57,8 +57,9 @@ class RefreshToken(RefreshTokenBase):
 class RefreshTokenService:
     """Service for managing refresh tokens securely"""
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, redis_client=None):
         self.db = db
+        self.redis_client = redis_client
         
         # Configuration
         self.token_length = int(os.getenv("REFRESH_TOKEN_LENGTH", "32"))
@@ -67,7 +68,10 @@ class RefreshTokenService:
         self.enable_token_rotation = os.getenv("ENABLE_TOKEN_ROTATION", "true").lower() == "true"
         self.revoke_family_on_reuse = os.getenv("REVOKE_FAMILY_ON_REUSE", "true").lower() == "true"
         
-        logger.info("RefreshTokenService initialized with database-only mode")
+        if self.redis_client:
+            logger.info("RefreshTokenService initialized with Redis caching enabled")
+        else:
+            logger.info("RefreshTokenService initialized with database-only mode")
     
     def generate_token(self) -> str:
         """Generate a cryptographically secure refresh token"""
