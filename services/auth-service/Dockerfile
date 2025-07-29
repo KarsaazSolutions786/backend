@@ -34,9 +34,9 @@ COPY services/auth-service/alembic.ini .
 # Expose the port
 EXPOSE $PORT
 
-# Copy and make executable
-COPY services/auth-service/start.sh ./start.sh
-RUN chmod +x /app/start.sh
+# Copy Railway startup script
+COPY railway_start.py ./railway_start.py
+RUN chmod +x /app/railway_start.py
 
-# Run with environment variables
-CMD ["/app/start.sh"]
+# Use Python script for Railway deployment
+CMD ["python", "/app/railway_start.py"]

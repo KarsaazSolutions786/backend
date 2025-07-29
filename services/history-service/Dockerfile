@@ -33,9 +33,9 @@ ENV PYTHONUNBUFFERED=1
 # Expose the port
 EXPOSE $PORT
 
-# Copy and make executable
-COPY ./start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+# Copy Railway startup script
+COPY ../../railway_start.py ./railway_start.py
+RUN chmod +x /app/railway_start.py
 
-# Run with environment variables
-CMD ["/app/start.sh"]
+# Use Python script for Railway deployment
+CMD ["python", "/app/railway_start.py"]
