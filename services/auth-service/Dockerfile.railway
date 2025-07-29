@@ -21,22 +21,22 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY services/auth-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
-# Railway builds from the service directory context
-COPY src/ ./src/
-COPY ../shared/ ./shared/
-COPY migrations/ ./migrations/
-COPY alembic.ini .
+# Railway builds from backend root context
+COPY services/auth-service/src/ ./src/
+COPY shared/ ./shared/
+COPY services/auth-service/migrations/ ./migrations/
+COPY services/auth-service/alembic.ini .
+COPY services/auth-service/start.sh ./start.sh
+
+# Make start script executable
+RUN chmod +x /app/start.sh
 
 # Expose the port
 EXPOSE $PORT
-
-# Copy and make executable
-COPY start.sh ./start.sh
-RUN chmod +x /app/start.sh
 
 # Run with environment variables
 CMD ["/app/start.sh"]
