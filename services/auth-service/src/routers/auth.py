@@ -12,34 +12,40 @@ import sys
 import os
 import traceback
 
-# Try to import from shared module, fall back to local implementation if not available
+# Import RefreshTokenService from shared module
+import sys
+import os
+
+# Add the backend directory to Python path to access shared module
+backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
+
 try:
-    from .....shared.refresh_token_service import RefreshTokenService
-except ImportError:
-    # If shared module is not available, try absolute import
-    try:
-        from shared.refresh_token_service import RefreshTokenService
-    except ImportError:
-        # If still not available, log error but continue without raising exception
-        logger = logging.getLogger(__name__)
-        logger.error("Failed to import refresh_token_service from shared module")
-        # Define a minimal RefreshTokenService class to prevent NameError
-        class RefreshTokenService:
-            def __init__(self, db=None):
-                self.db = db
-                logger.warning("Using minimal RefreshTokenService implementation")
+    from shared.refresh_token_service import RefreshTokenService
+    logger = logging.getLogger(__name__)
+    logger.info("Successfully imported RefreshTokenService from shared module")
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Failed to import RefreshTokenService from shared module: {e}")
+    # Define a minimal RefreshTokenService class to prevent NameError
+    class RefreshTokenService:
+        def __init__(self, db, redis_client=None):
+            self.db = db
+            self.redis_client = redis_client
+            logger.warning("Using minimal RefreshTokenService implementation")
+        
+        def create_refresh_token(self, customer_id, device_id=None, user_agent=None, ip_address=None):
+            return secrets.token_urlsafe(64), None
             
-            def create_refresh_token(self, user_id, device_info=None):
-                return secrets.token_urlsafe(64)
-                
-            def validate_refresh_token(self, token):
-                return None
-                
-            def revoke_refresh_token(self, token):
-                return True
-                
-            def revoke_all_refresh_tokens(self, user_id):
-                return True
+        def validate_token(self, token):
+            return None
+            
+        def revoke_token(self, token, reason="manual"):
+            return True
+            
+        def revoke_all_tokens(self, customer_id):
+            return True
 
 from src.database import get_db
 from src.models import Customer, CustomerSession, LoginAttempt
@@ -99,18 +105,20 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
 
 def get_refresh_token_service(db: Session = Depends(get_db)):
     """Get refresh token service instance"""
-    # Initialize Redis client if available
+    # Initialize Redis client if available and configured
     redis_client = None
-    try:
-        import redis
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
-        redis_client = redis.from_url(redis_url, decode_responses=True)
-        # Test connection
-        redis_client.ping()
-        logger.info("Redis connection established for RefreshTokenService")
-    except Exception as e:
-        logger.warning(f"Redis not available for RefreshTokenService: {e}")
-        redis_client = None
+    if settings.REDIS_URL and settings.REDIS_URL.strip():
+        try:
+            import redis
+            redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            # Test connection with timeout
+            redis_client.ping()
+            logger.info("Redis connection established for RefreshTokenService")
+        except Exception as e:
+            logger.warning(f"Redis not available for RefreshTokenService: {e}")
+            redis_client = None
+    else:
+        logger.info("Redis not configured, RefreshTokenService will use database-only mode")
     
     return RefreshTokenService(db, redis_client)
 

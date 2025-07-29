@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@postgres-qxqa.railway.internal:5432/eindr_db")
     
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379")
+    # Redis (optional - service works without Redis)
+    REDIS_URL: str = os.getenv("REDIS_URL", "")
     
     # JWT Settings
     SECRET_KEY: str = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
