@@ -5,15 +5,15 @@ from typing import Optional, Dict, Any, Tuple
 import logging
 import traceback
 
-from ..models import Customer, CustomerSession, LoginAttempt, CustomerProfile
-from ..schemas import (
+from models import Customer, CustomerSession, LoginAttempt, CustomerProfile
+from schemas import (
     RegisterRequest, CustomerLogin, TokenResponse, 
     CustomerWithProfileResponse, CustomerProfileResponse
 )
-from ..config import settings
-from .auth_service import AuthService
-from .jwt_service import JWTService
-from ..utils.shared_importer import get_shared_classes
+from config import settings
+from services.auth_service import AuthService
+from services.jwt_service import JWTService
+from utils.shared_importer import get_shared_classes
 
 logger = logging.getLogger(__name__)
 

@@ -11,10 +11,10 @@ import jwt
 import bcrypt
 from typing import Dict, Optional
 
-from ..models import Customer, CustomerSession, LoginAttempt, CustomerProfile
-from ..config import settings
-from ..database import get_db
-from .jwt_service import JWTService
+from models import Customer, CustomerSession, LoginAttempt, CustomerProfile
+from config import settings
+from database import get_db
+from services.jwt_service import JWTService
 
 logger = logging.getLogger(__name__)
 

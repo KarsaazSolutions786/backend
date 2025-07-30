@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 import logging
 import traceback
 
-from ..config import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -157,4 +157,4 @@ class JWTService:
             return remaining if remaining.total_seconds() > 0 else None
         
         except Exception:
-            return None 
+            return None
