@@ -30,6 +30,9 @@ COPY backend/services/auth-service/src/ ./src/
 COPY backend/shared/ ./shared/
 COPY backend/services/auth-service/migrations/ ./migrations/
 COPY backend/services/auth-service/alembic.ini .
+COPY backend/services/auth-service/test_shared_import.py .
+COPY backend/services/auth-service/test_login.py .
+COPY backend/services/auth-service/test_server.py .
 
 # Create a simple test script to verify shared module availability
 RUN echo 'import sys; print("Python path:", sys.path); import shared; print("Shared module imported successfully")' > test_shared.py
