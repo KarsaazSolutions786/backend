@@ -46,6 +46,15 @@ class RegisterRequest(BaseModel):
     gender: str
     is_new: bool = True
 
+class TokenValidation(BaseModel):
+    token: str
+
+class CustomerCreate(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+    gender: Optional[str] = None
+
 # Response Schemas
 class CustomerBase(BaseModel):
     id: int
@@ -112,6 +121,12 @@ class LoginAttemptResponse(BaseModel):
 class CustomerWithSessions(CustomerResponse):
     sessions: List[CustomerSessionResponse] = []
     recent_login_attempts: List[LoginAttemptResponse] = []
+
+class TokenValidationResponse(BaseModel):
+    valid: bool
+    customer_id: Optional[int] = None
+    error: Optional[str] = None
+    expires_at: Optional[datetime] = None
 
 # Error Schemas
 class ErrorResponse(BaseModel):
