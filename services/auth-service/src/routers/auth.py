@@ -39,9 +39,8 @@ from src.schemas import (
     CustomerWithProfileResponse, CustomerProfileResponse
 )
 from src.config import settings
-from src.services.auth_service import AuthService
+from src.services.auth_service import AuthService, get_current_customer
 from src.services.jwt_service import JWTService
-from shared.simple_auth import get_current_customer_id
 
 # Import enhanced security modules
 try:
@@ -94,6 +93,10 @@ def validate_request_security(request: Request, endpoint: str):
         except HTTPException as e:
             logger.warning(f"Rate limit exceeded for {endpoint}: {e.detail}")
             raise
+
+async def get_current_customer_id(current_customer: dict = Depends(get_current_customer)) -> int:
+    """Extract customer ID from current customer data"""
+    return current_customer["customer_id"]
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register_customer(
