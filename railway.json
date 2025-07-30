@@ -4,105 +4,135 @@
     "auth-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/auth-service/Dockerfile.railway"
+        "context": "..",
+         "dockerfilePath": "backend/services/auth-service/Dockerfile.railway",
+      "watchPatterns": ["backend/services/auth-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "ai-pipeline-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/ai-pipeline-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/ai-pipeline-service/Dockerfile",
+          "watchPatterns": ["backend/services/ai-pipeline-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "api-gateway": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/api-gateway/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/api-gateway/Dockerfile",
+          "watchPatterns": ["backend/services/api-gateway/**"]
       },
       "startCommand": "kong start --vv"
     },
     "chat-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/chat-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/chat-service/Dockerfile",
+          "watchPatterns": ["backend/services/chat-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "customer-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/customer-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/customer-service/Dockerfile",
+          "watchPatterns": ["backend/services/customer-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "friend-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/friend-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/friend-service/Dockerfile",
+          "watchPatterns": ["backend/services/friend-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "history-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/history-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/history-service/Dockerfile",
+          "watchPatterns": ["backend/services/history-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "intent-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/intent-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/intent-service/Dockerfile",
+          "watchPatterns": ["backend/services/intent-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "ledger-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/ledger-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/ledger-service/Dockerfile",
+          "watchPatterns": ["backend/services/ledger-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "note-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/note-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/note-service/Dockerfile",
+          "watchPatterns": ["backend/services/note-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "reminder-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/reminder-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/reminder-service/Dockerfile",
+          "watchPatterns": ["backend/services/reminder-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "scheduler-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/scheduler-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/scheduler-service/Dockerfile",
+          "watchPatterns": ["backend/services/scheduler-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "stt-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/stt-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/stt-service/Dockerfile",
+          "watchPatterns": ["backend/services/stt-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "tts-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/tts-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/tts-service/Dockerfile",
+          "watchPatterns": ["backend/services/tts-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
     "user-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "dockerfilePath": "services/user-service/Dockerfile"
+        "context": "..",
+         "dockerfilePath": "backend/services/user-service/Dockerfile",
+          "watchPatterns": ["backend/services/user-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     }

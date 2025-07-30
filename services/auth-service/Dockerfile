@@ -20,14 +20,14 @@ RUN apt-get update && apt-get install -y \
 
 
 # Copy requirements first for better caching
-COPY services/auth-service/requirements.txt .
+COPY backend/services/auth-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
-COPY services/auth-service/src/ ./src/
-COPY shared/ ./shared/
-COPY services/auth-service/migrations/ ./migrations/
-COPY services/auth-service/alembic.ini .
+COPY backend/services/auth-service/src/ ./src/
+COPY backend/shared/ ./shared/
+COPY backend/services/auth-service/migrations/ ./migrations/
+COPY backend/services/auth-service/alembic.ini .
 
 
 
@@ -35,7 +35,7 @@ COPY services/auth-service/alembic.ini .
 EXPOSE $PORT
 
 # Copy and make executable
-COPY services/auth-service/start.sh ./start.sh
+COPY backend/services/auth-service/start.sh ./start.sh
 RUN chmod +x /app/start.sh
 
 # Run with environment variables
