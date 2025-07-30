@@ -1,100 +1,112 @@
-import uvicorn
-import os
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import logging
+import time
+import os
+import uvicorn
 
-# Import enhanced services from the shared module
-from shared.enhanced_services import (
-    api_service,
-    db_service,
-    logger,
-    monitoring_service,
-    error_handler,
-    config_service,
-    security_config
+from .config import settings
+from .database import init_db
+from .routers import auth
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager"""
+    logger.info("Starting Auth Service...")
+    
+    try:
+        # Initialize database
+        init_db()
+        logger.info("Database initialized successfully")
+        logger.info("Service initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize service: {e}")
+        raise
+    
+    yield
+    
+    logger.info("Service shut down successfully")
+
+# Create FastAPI app
+app = FastAPI(
+    title="Auth Service",
+    description="Authentication and authorization service",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# Import local routers
-from .routers import auth
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"]
+)
 
-# Get the FastAPI app instance from the EnhancedAPIService
-app = api_service.get_app()
+# Request timing middleware
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
 
-# --- Lifespan Management ---
-@asynccontextmanager
-async def lifespan(app_instance: api_service.FastAPI):
-    """Application lifespan manager for startup and shutdown events."""
-    logger.info("Auth Service is starting up...")
-    try:
-        # Connect to the database
-        await db_service.connect()
-        logger.info("Database connection established.")
-        
-        # Start monitoring background tasks if enabled
-        if monitoring_service.is_enabled():
-            monitoring_service.start_system_monitoring()
-            logger.info("System monitoring has started.")
-            
-    except Exception as e:
-        logger.error(f"Critical error during startup: {e}", exc_info=True)
-        # In a production scenario, you might want to prevent the service from starting
-        raise
+# Exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
 
-    yield
-
-    logger.info("Auth Service is shutting down...")
-    # Disconnect from the database
-    await db_service.disconnect()
-    logger.info("Database connection closed.")
-    
-    # Stop monitoring
-    if monitoring_service.is_enabled():
-        monitoring_service.stop_system_monitoring()
-        logger.info("System monitoring has stopped.")
-
-# Assign the lifespan manager to the app
-app.router.lifespan_context = lifespan
-
-# --- Router Inclusion ---
-# Include the authentication routes
+# Include routers
 app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 
-# --- Root and Health Check Endpoints ---
-# These are now provided by the EnhancedAPIService, but we can override or add more.
-
-@app.get("/", tags=["Health"])
-async def root():
-    """Root endpoint providing basic service information."""
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
     return {
-        "service": config_service.get_config('service').name,
-        "version": config_service.get_config('service').version,
         "status": "healthy",
-        "environment": config_service.environment
+        "service": "auth-service",
+        "version": "1.0.0",
+        "timestamp": time.time()
     }
 
 @app.get("/")
 async def root():
-    """Root endpoint for health check."""
+    """Root endpoint"""
     return {
         "service": "auth-service",
+        "message": "Authentication service is running",
         "version": "1.0.0",
-        "status": "healthy"
+        "docs": "/docs"
     }
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "auth-service"}
-
 if __name__ == "__main__":
-    # Get server config from the enhanced config service
-    api_conf = config_service.get_config('api')
-    
-    logger.info(f"Starting Auth Service on {api_conf.host}:{api_conf.port}")
+    logger.info(f"Starting Auth Service on {settings.HOST}:{settings.PORT}")
     
     uvicorn.run(
         "src.main:app",
-        host=api_conf.host,
-        port=api_conf.port,
-        reload=api_conf.reload,
-        log_level=logger.config.level.lower() if logger.config else 'info'
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+        log_level='debug' if settings.DEBUG else 'info'
     )
