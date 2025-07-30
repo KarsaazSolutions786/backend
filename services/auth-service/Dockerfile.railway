@@ -21,19 +21,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY backend/services/auth-service/requirements.txt .
+COPY services/auth-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
 # Railway builds from backend root context
-COPY backend/services/auth-service/src/ ./src/
-COPY backend/shared/ ./shared/
-COPY backend/services/auth-service/migrations/ ./migrations/
-COPY backend/services/auth-service/alembic.ini .
-COPY backend/services/auth-service/start.sh ./start.sh
+COPY services/auth-service/src/ ./src/
+COPY shared/ ./shared/
+COPY services/auth-service/migrations/ ./migrations/
+COPY services/auth-service/alembic.ini .
+COPY services/auth-service/start.sh ./start.sh
 
 # Add diagnostic script for testing imports
-COPY backend/services/auth-service/test_import.py ./test_import.py
+COPY services/auth-service/test_import.py ./test_import.py
 
 # Make start script executable
 RUN chmod +x /app/start.sh
