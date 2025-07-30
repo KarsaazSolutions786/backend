@@ -12,6 +12,9 @@ import sys
 import os
 import traceback
 
+# Initialize logger first
+logger = logging.getLogger(__name__)
+
 # Import RefreshTokenService from shared module using robust importer
 from src.utils.shared_importer import get_shared_classes
 
@@ -50,7 +53,6 @@ except ImportError:
     print("Warning: Enhanced security modules not available, using basic security")
     HAS_ENHANCED_SECURITY = False
 
-logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # OAuth2 scheme

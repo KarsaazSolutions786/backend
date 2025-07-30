@@ -214,7 +214,7 @@ class SecureBaseModel(BaseModel):
         # Validate assignment
         validate_assignment = True
         # Allow population by field name
-        allow_population_by_field_name = True
+        validate_by_name = True
         # Forbid extra fields
         extra = "forbid"
     
@@ -249,7 +249,7 @@ def secure_email_field():
     """Create a secure email field with validation"""
     return Field(
         ...,
-        regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+        pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
         max_length=254,
         description="Valid email address"
     )
@@ -258,7 +258,7 @@ def secure_url_field():
     """Create a secure URL field with validation"""
     return Field(
         ...,
-        regex=r'^https?://[^\s/$.?#].[^\s]*$',
+        pattern=r'^https?://[^\s/$.?#].[^\s]*$',
         max_length=2048,
         description="Valid HTTP/HTTPS URL"
     )
@@ -395,4 +395,4 @@ class ValidationUtils:
         # Sanitize as regular string
         query = InputSanitizer.sanitize_string(query, max_length=max_length)
         
-        return query.strip() 
+        return query.strip()
