@@ -5,7 +5,7 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "backend",
-        "dockerfilePath": "backend/services/auth-service/Dockerfile.railway",
+        "dockerfilePath": "services/auth-service/Dockerfile.railway",
         "watchPatterns": ["backend/services/auth-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"

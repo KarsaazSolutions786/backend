@@ -28,11 +28,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code and shared dependencies
 COPY services/auth-service/src/ ./src/
 COPY shared/ ./shared/
-COPY services/auth-service/migrations/ ./migrations/
-COPY services/auth-service/alembic.ini .
-COPY services/auth-service/test_shared_import.py .
-COPY services/auth-service/test_login.py .
-COPY services/auth-service/test_server.py .
 
 # Ensure no conflicting symlinks exist in the container
 RUN find /app -name "shared" -type l -delete || true
@@ -45,7 +40,7 @@ EXPOSE $PORT
 
 # Copy and make executable
 COPY services/auth-service/start.sh ./start.sh
-RUN chmod +x /app/start.sh
+RUN chmod +x ./start.sh
 
 # Add debugging for shared module
 RUN echo '#!/bin/bash' > debug_shared.sh && \
