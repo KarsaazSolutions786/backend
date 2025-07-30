@@ -22,17 +22,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
-COPY backend/services/auth-service/requirements.txt .
+COPY services/auth-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code and shared dependencies
-COPY backend/services/auth-service/src/ ./src/
-COPY backend/shared/ ./shared/
-COPY backend/services/auth-service/migrations/ ./migrations/
-COPY backend/services/auth-service/alembic.ini .
-COPY backend/services/auth-service/test_shared_import.py .
-COPY backend/services/auth-service/test_login.py .
-COPY backend/services/auth-service/test_server.py .
+COPY services/auth-service/src/ ./src/
+COPY shared/ ./shared/
+COPY services/auth-service/migrations/ ./migrations/
+COPY services/auth-service/alembic.ini .
+COPY services/auth-service/test_shared_import.py .
+COPY services/auth-service/test_login.py .
+COPY services/auth-service/test_server.py .
 
 # Create a simple test script to verify shared module availability
 RUN echo 'import sys; print("Python path:", sys.path); import shared; print("Shared module imported successfully")' > test_shared.py
@@ -41,7 +41,7 @@ RUN echo 'import sys; print("Python path:", sys.path); import shared; print("Sha
 EXPOSE $PORT
 
 # Copy and make executable
-COPY backend/services/auth-service/start.sh ./start.sh
+COPY services/auth-service/start.sh ./start.sh
 RUN chmod +x /app/start.sh
 
 # Add debugging for shared module
