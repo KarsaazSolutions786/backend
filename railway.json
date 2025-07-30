@@ -4,7 +4,7 @@
     "auth-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/auth-service/Dockerfile.railway",
         "watchPatterns": ["backend/services/auth-service/**", "backend/shared/**"]
       },
@@ -13,7 +13,7 @@
     "ai-pipeline-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/ai-pipeline-service/Dockerfile",
         "watchPatterns": ["backend/services/ai-pipeline-service/**", "backend/shared/**"]
       },
@@ -22,7 +22,7 @@
     "api-gateway": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/api-gateway/Dockerfile",
         "watchPatterns": ["backend/services/api-gateway/**"]
       },
@@ -31,7 +31,7 @@
     "chat-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/chat-service/Dockerfile",
         "watchPatterns": ["backend/services/chat-service/**", "backend/shared/**"]
       },
@@ -40,7 +40,7 @@
     "customer-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/customer-service/Dockerfile",
         "watchPatterns": ["backend/services/customer-service/**", "backend/shared/**"]
       },
@@ -49,7 +49,7 @@
     "friend-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/friend-service/Dockerfile",
         "watchPatterns": ["backend/services/friend-service/**", "backend/shared/**"]
       },
@@ -58,7 +58,7 @@
     "history-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/history-service/Dockerfile",
         "watchPatterns": ["backend/services/history-service/**", "backend/shared/**"]
       },
@@ -67,7 +67,7 @@
     "intent-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/intent-service/Dockerfile",
         "watchPatterns": ["backend/services/intent-service/**", "backend/shared/**"]
       },
@@ -76,7 +76,7 @@
     "ledger-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/ledger-service/Dockerfile",
         "watchPatterns": ["backend/services/ledger-service/**", "backend/shared/**"]
       },
@@ -85,7 +85,7 @@
     "note-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/note-service/Dockerfile",
         "watchPatterns": ["backend/services/note-service/**", "backend/shared/**"]
       },
@@ -94,7 +94,7 @@
     "reminder-service": {
       "build": {
         "builder": "DOCKERFILE",
-        "context": "..",
+        "context": "backend",
         "dockerfilePath": "backend/services/reminder-service/Dockerfile",
         "watchPatterns": ["backend/services/reminder-service/**", "backend/shared/**"]
       },
