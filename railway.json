@@ -5,8 +5,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/auth-service/Dockerfile.railway",
-      "watchPatterns": ["backend/services/auth-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/auth-service/Dockerfile.railway",
+        "watchPatterns": ["backend/services/auth-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -14,8 +14,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/ai-pipeline-service/Dockerfile",
-          "watchPatterns": ["backend/services/ai-pipeline-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/ai-pipeline-service/Dockerfile",
+        "watchPatterns": ["backend/services/ai-pipeline-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -23,8 +23,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/api-gateway/Dockerfile",
-          "watchPatterns": ["backend/services/api-gateway/**"]
+        "dockerfilePath": "backend/services/api-gateway/Dockerfile",
+        "watchPatterns": ["backend/services/api-gateway/**"]
       },
       "startCommand": "kong start --vv"
     },
@@ -32,8 +32,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/chat-service/Dockerfile",
-          "watchPatterns": ["backend/services/chat-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/chat-service/Dockerfile",
+        "watchPatterns": ["backend/services/chat-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -41,8 +41,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/customer-service/Dockerfile",
-          "watchPatterns": ["backend/services/customer-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/customer-service/Dockerfile",
+        "watchPatterns": ["backend/services/customer-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -50,8 +50,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/friend-service/Dockerfile",
-          "watchPatterns": ["backend/services/friend-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/friend-service/Dockerfile",
+        "watchPatterns": ["backend/services/friend-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -59,8 +59,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/history-service/Dockerfile",
-          "watchPatterns": ["backend/services/history-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/history-service/Dockerfile",
+        "watchPatterns": ["backend/services/history-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -68,8 +68,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/intent-service/Dockerfile",
-          "watchPatterns": ["backend/services/intent-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/intent-service/Dockerfile",
+        "watchPatterns": ["backend/services/intent-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -77,8 +77,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/ledger-service/Dockerfile",
-          "watchPatterns": ["backend/services/ledger-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/ledger-service/Dockerfile",
+        "watchPatterns": ["backend/services/ledger-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -86,8 +86,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/note-service/Dockerfile",
-          "watchPatterns": ["backend/services/note-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/note-service/Dockerfile",
+        "watchPatterns": ["backend/services/note-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -95,8 +95,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/reminder-service/Dockerfile",
-          "watchPatterns": ["backend/services/reminder-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/reminder-service/Dockerfile",
+        "watchPatterns": ["backend/services/reminder-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -104,8 +104,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/scheduler-service/Dockerfile",
-          "watchPatterns": ["backend/services/scheduler-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/scheduler-service/Dockerfile",
+        "watchPatterns": ["backend/services/scheduler-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -113,8 +113,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/stt-service/Dockerfile",
-          "watchPatterns": ["backend/services/stt-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/stt-service/Dockerfile",
+        "watchPatterns": ["backend/services/stt-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -122,8 +122,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/tts-service/Dockerfile",
-          "watchPatterns": ["backend/services/tts-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/tts-service/Dockerfile",
+        "watchPatterns": ["backend/services/tts-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     },
@@ -131,8 +131,8 @@
       "build": {
         "builder": "DOCKERFILE",
         "context": "..",
-         "dockerfilePath": "backend/services/user-service/Dockerfile",
-          "watchPatterns": ["backend/services/user-service/**", "backend/shared/**"]
+        "dockerfilePath": "backend/services/user-service/Dockerfile",
+        "watchPatterns": ["backend/services/user-service/**", "backend/shared/**"]
       },
       "startCommand": "/app/start.sh"
     }

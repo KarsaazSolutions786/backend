@@ -1,52 +1,75 @@
-from fastapi import FastAPI, HTTPException, Depends, status
-from fastapi.security import HTTPBearer
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 import uvicorn
 import os
-import sys
+from contextlib import asynccontextmanager
 
-from .config import settings
-from .database import init_db
+# Import enhanced services from the shared module
+from shared.enhanced_services import (
+    api_service,
+    db_service,
+    logger,
+    monitoring_service,
+    error_handler,
+    config_service,
+    security_config
+)
+
+# Import local routers
 from .routers import auth
-from .utils.logger import logger
 
+# Get the FastAPI app instance from the EnhancedAPIService
+app = api_service.get_app()
+
+# --- Lifespan Management ---
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app_instance: api_service.FastAPI):
     """Application lifespan manager for startup and shutdown events."""
-    logger.info("Starting Auth Service...")
-    
+    logger.info("Auth Service is starting up...")
     try:
-        # Initialize database
-        init_db()
-        logger.info("Database initialized successfully")
+        # Connect to the database
+        await db_service.connect()
+        logger.info("Database connection established.")
+        
+        # Start monitoring background tasks if enabled
+        if monitoring_service.is_enabled():
+            monitoring_service.start_system_monitoring()
+            logger.info("System monitoring has started.")
+            
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Critical error during startup: {e}", exc_info=True)
+        # In a production scenario, you might want to prevent the service from starting
         raise
-    
+
     yield
+
+    logger.info("Auth Service is shutting down...")
+    # Disconnect from the database
+    await db_service.disconnect()
+    logger.info("Database connection closed.")
     
-    logger.info("Shutting down Auth Service...")
+    # Stop monitoring
+    if monitoring_service.is_enabled():
+        monitoring_service.stop_system_monitoring()
+        logger.info("System monitoring has stopped.")
 
-# Create FastAPI app
-app = FastAPI(
-    title="Eindr Auth Service",
-    description="Authentication and authorization service for Eindr",
-    version="1.0.0",
-    lifespan=lifespan
-)
+# Assign the lifespan manager to the app
+app.router.lifespan_context = lifespan
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --- Router Inclusion ---
+# Include the authentication routes
+app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 
-# Include routers
-app.include_router(auth.router)
+# --- Root and Health Check Endpoints ---
+# These are now provided by the EnhancedAPIService, but we can override or add more.
+
+@app.get("/", tags=["Health"])
+async def root():
+    """Root endpoint providing basic service information."""
+    return {
+        "service": config_service.get_config('service').name,
+        "version": config_service.get_config('service').version,
+        "status": "healthy",
+        "environment": config_service.environment
+    }
 
 @app.get("/")
 async def root():
@@ -63,15 +86,15 @@ async def health_check():
     return {"status": "healthy", "service": "auth-service"}
 
 if __name__ == "__main__":
-    # Get port from environment variable (Railway sets PORT)
-    port = int(os.getenv("PORT", settings.PORT))
-    host = os.getenv("HOST", settings.HOST)
+    # Get server config from the enhanced config service
+    api_conf = config_service.get_config('api')
     
-    print(f"Starting Auth Service on {host}:{port}")
+    logger.info(f"Starting Auth Service on {api_conf.host}:{api_conf.port}")
     
     uvicorn.run(
         "src.main:app",
-        host=host,
-        port=port,
-        reload=settings.DEBUG
+        host=api_conf.host,
+        port=api_conf.port,
+        reload=api_conf.reload,
+        log_level=logger.config.level.lower() if logger.config else 'info'
     )
