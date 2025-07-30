@@ -156,7 +156,17 @@ class SharedModuleImporter:
         logger.warning("Creating minimal fallback RefreshTokenService implementation")
         
         try:
+            import secrets
             from sqlalchemy.ext.declarative import declarative_base
+            
+            class FallbackRefreshToken:
+                """Minimal fallback refresh token record"""
+                def __init__(self, customer_id, token_hash, device_id=None, user_agent=None, ip_address=None):
+                    self.customer_id = customer_id
+                    self.token_hash = token_hash
+                    self.device_id = device_id
+                    self.user_agent = user_agent
+                    self.ip_address = ip_address
             
             class FallbackRefreshTokenService:
                 def __init__(self, db, redis_client=None):
@@ -164,9 +174,18 @@ class SharedModuleImporter:
                     self.redis_client = redis_client
                     logger.warning("Using fallback RefreshTokenService implementation")
                 
-                def create_refresh_token(self, *args, **kwargs):
+                def create_refresh_token(self, customer_id, device_id=None, user_agent=None, ip_address=None, **kwargs):
                     logger.warning("create_refresh_token called with fallback implementation")
-                    return None, None
+                    # Generate a secure token for fallback
+                    refresh_token = secrets.token_urlsafe(32)
+                    token_record = FallbackRefreshToken(
+                        customer_id=customer_id,
+                        token_hash=refresh_token,  # In fallback, we use the token directly
+                        device_id=device_id,
+                        user_agent=user_agent,
+                        ip_address=ip_address
+                    )
+                    return refresh_token, token_record
                 
                 def validate_token(self, *args, **kwargs):
                     logger.warning("validate_token called with fallback implementation")
@@ -174,6 +193,14 @@ class SharedModuleImporter:
                 
                 def revoke_token(self, *args, **kwargs):
                     logger.warning("revoke_token called with fallback implementation")
+                    return None
+                
+                def revoke_all_tokens(self, customer_id, reason="fallback"):
+                    logger.warning("revoke_all_tokens called with fallback implementation")
+                    return 0
+                
+                def rotate_token(self, *args, **kwargs):
+                    logger.warning("rotate_token called with fallback implementation")
                     return None
             
             RefreshTokenBase = declarative_base()

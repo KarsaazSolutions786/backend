@@ -34,6 +34,9 @@ COPY services/auth-service/test_shared_import.py .
 COPY services/auth-service/test_login.py .
 COPY services/auth-service/test_server.py .
 
+# Ensure no conflicting symlinks exist in the container
+RUN find /app -name "shared" -type l -delete || true
+
 # Create a simple test script to verify shared module availability
 RUN echo 'import sys; print("Python path:", sys.path); import shared; print("Shared module imported successfully")' > test_shared.py
 
