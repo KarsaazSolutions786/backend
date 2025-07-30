@@ -1,0 +1,55 @@
+FROM python:3.11-slim
+
+# Add build argument to force rebuild
+ARG BUILD_DATE=unknown
+ARG VCS_REF=unknown
+
+# Set default port for Railway
+ENV PORT=8080
+
+# Ensure the working directory is set to /app
+WORKDIR /app
+
+# Set environment variables for Railway deployment
+ENV PYTHONPATH=/app:/app/src:/app/shared
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY backend/services/auth-service/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code and shared dependencies
+COPY backend/services/auth-service/src/ ./src/
+COPY backend/shared/ ./shared/
+COPY backend/services/auth-service/migrations/ ./migrations/
+COPY backend/services/auth-service/alembic.ini .
+
+# Create a simple test script to verify shared module availability
+RUN echo 'import sys; print("Python path:", sys.path); import shared; print("Shared module imported successfully")' > test_shared.py
+
+# Expose the port
+EXPOSE $PORT
+
+# Copy and make executable
+COPY backend/services/auth-service/start.sh ./start.sh
+RUN chmod +x /app/start.sh
+
+# Add debugging for shared module
+RUN echo '#!/bin/bash' > debug_shared.sh && \
+    echo 'echo "=== Debug: Checking shared module availability ==="' >> debug_shared.sh && \
+    echo 'ls -la /app/' >> debug_shared.sh && \
+    echo 'ls -la /app/shared/' >> debug_shared.sh && \
+    echo 'python -c "import sys; print(\"PYTHONPATH:\", sys.path)"' >> debug_shared.sh && \
+    echo 'python test_shared.py || echo "Failed to import shared module"' >> debug_shared.sh && \
+    echo 'echo "=== End Debug ==="' >> debug_shared.sh && \
+    chmod +x debug_shared.sh
+
+# Run with environment variables
+CMD ["/app/start.sh"]

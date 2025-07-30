@@ -28,6 +28,19 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     logger.info("Starting Auth Service...")
     
+    # Debug: Check shared module availability at startup
+    try:
+        from .utils.shared_importer import is_shared_available
+        shared_available = is_shared_available()
+        logger.info(f"Shared module availability check: {shared_available}")
+        
+        if not shared_available:
+            logger.warning("Shared module not available - service will use fallback implementations")
+        else:
+            logger.info("Shared module is available and loaded successfully")
+    except Exception as e:
+        logger.error(f"Error checking shared module availability: {e}")
+    
     try:
         # Initialize database
         init_db()
@@ -78,7 +91,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # Include routers
-app.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+app.include_router(auth.router, tags=["Authentication"])
 
 @app.get("/health")
 async def health_check():

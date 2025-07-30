@@ -27,6 +27,12 @@ class SharedModuleImporter:
         current_file = os.path.abspath(__file__)
         current_dir = os.path.dirname(current_file)
         
+        # Debug: Print current environment
+        logger.info(f"Current file: {current_file}")
+        logger.info(f"Current directory: {current_dir}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Current sys.path: {sys.path}")
+        
         # Define possible shared module locations
         possible_paths = [
             '/app/shared',  # Docker/Railway deployment
@@ -35,6 +41,18 @@ class SharedModuleImporter:
             os.path.join(os.getcwd(), 'shared'),  # Current working directory
             os.path.join(os.path.dirname(os.getcwd()), 'shared'),  # Parent directory
         ]
+        
+        # Debug: Check all possible paths
+        logger.info("Checking possible shared module paths:")
+        for path in possible_paths:
+            exists = os.path.exists(path)
+            logger.info(f"  {path} - {'EXISTS' if exists else 'NOT FOUND'}")
+            if exists:
+                try:
+                    files = os.listdir(path)
+                    logger.info(f"    Contents: {files}")
+                except Exception as e:
+                    logger.error(f"    Error listing contents: {e}")
         
         # Add valid paths to sys.path
         for path in possible_paths:
@@ -47,9 +65,31 @@ class SharedModuleImporter:
         try:
             import shared
             logger.info("Successfully imported shared module")
+            logger.info(f"Shared module file: {shared.__file__ if hasattr(shared, '__file__') else 'Unknown'}")
+            logger.info(f"Shared module version: {shared.__version__ if hasattr(shared, '__version__') else 'Unknown'}")
             return True
         except ImportError as e:
             logger.error(f"Failed to import shared module: {e}")
+            logger.error(f"Import error details: {type(e).__name__}: {str(e)}")
+            
+            # Try to provide more debugging information
+            try:
+                import sys
+                logger.error(f"Current sys.path when import failed: {sys.path}")
+                
+                # Check if shared directory exists in any sys.path location
+                for path in sys.path:
+                    shared_path = os.path.join(path, 'shared')
+                    if os.path.exists(shared_path):
+                        logger.error(f"Found shared directory at: {shared_path}")
+                        try:
+                            files = os.listdir(shared_path)
+                            logger.error(f"  Contents: {files}")
+                        except Exception as list_e:
+                            logger.error(f"  Could not list contents: {list_e}")
+            except Exception as debug_e:
+                logger.error(f"Error during import debugging: {debug_e}")
+            
             return False
     
     def _load_refresh_token_classes(self) -> Tuple[Any, Any]:
