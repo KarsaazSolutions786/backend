@@ -32,6 +32,9 @@ COPY services/auth-service/migrations/ ./migrations/
 COPY services/auth-service/alembic.ini .
 COPY services/auth-service/start.sh ./start.sh
 
+# Add diagnostic script for testing imports
+COPY test_import.py ./test_import.py
+
 # Make start script executable
 RUN chmod +x /app/start.sh
 

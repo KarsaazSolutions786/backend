@@ -12,32 +12,19 @@ import sys
 import os
 import traceback
 
-# Import RefreshTokenService from shared module
-try:
-    from shared.refresh_token_service import RefreshTokenService
-    logger = logging.getLogger(__name__)
-    logger.info("Successfully imported RefreshTokenService from shared module")
-except ImportError as e:
-    logger = logging.getLogger(__name__)
-    logger.error(f"Failed to import RefreshTokenService from shared module: {e}")
-    # Use a fallback implementation for development
-    class RefreshTokenService:
-        def __init__(self, db, redis_client=None):
-            self.db = db
-            self.redis_client = redis_client
-            logger.warning("Using minimal RefreshTokenService implementation")
-        
-        def create_refresh_token(self, *args, **kwargs):
-            logger.warning("create_refresh_token called with minimal implementation")
-            return None, None
-        
-        def validate_token(self, *args, **kwargs):
-            logger.warning("validate_token called with minimal implementation")
-            return None
-        
-        def revoke_token(self, *args, **kwargs):
-            logger.warning("revoke_token called with minimal implementation")
-            return None
+# Import RefreshTokenService from shared module using robust importer
+from src.utils.shared_importer import get_shared_classes
+
+# Initialize shared classes
+RefreshTokenBase, RefreshTokenService = get_shared_classes()
+
+# Check if shared module was successfully loaded
+shared_imported = RefreshTokenService is not None and 'fallback' not in str(type(RefreshTokenService)).lower()
+
+if shared_imported:
+    logger.info("Successfully loaded RefreshTokenService from shared module")
+else:
+    logger.warning("Using fallback RefreshTokenService implementation")
 
 from src.database import get_db
 from src.models import Customer, CustomerSession, LoginAttempt
