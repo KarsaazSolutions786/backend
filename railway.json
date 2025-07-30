@@ -1,0 +1,110 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": {
+    "auth-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/auth-service/Dockerfile.railway"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "ai-pipeline-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/ai-pipeline-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "api-gateway": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/api-gateway/Dockerfile"
+      },
+      "startCommand": "kong start --vv"
+    },
+    "chat-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/chat-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "customer-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/customer-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "friend-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/friend-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "history-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/history-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "intent-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/intent-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "ledger-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/ledger-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "note-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/note-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "reminder-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/reminder-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "scheduler-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/scheduler-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "stt-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/stt-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "tts-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/tts-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    },
+    "user-service": {
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "services/user-service/Dockerfile"
+      },
+      "startCommand": "/app/start.sh"
+    }
+  }
+}
