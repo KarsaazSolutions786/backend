@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from ..models import Customer, CustomerSession, LoginAttempt, CustomerProfile
 from ..config import settings
 from ..database import get_db
-# from shared.simple_auth import get_current_customer_id  # Temporarily disabled
+from .jwt_service import JWTService, get_current_customer_id
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+        self.jwt_service = JWTService()
     
     def hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
@@ -155,49 +156,7 @@ class AuthService:
         self.db.query(CustomerSession).filter(CustomerSession.customer_id == customer_id).delete()
         self.db.commit()
 
-class JWTService:
-    def __init__(self):
-        self.secret_key = settings.SECRET_KEY
-        self.algorithm = settings.ALGORITHM
-        self.access_token_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        self.refresh_token_expire_days = settings.REFRESH_TOKEN_EXPIRE_DAYS
-    
-    def create_access_token(self, data: dict) -> str:
-        """Create an access token"""
-        to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
-        to_encode.update({"exp": expire, "type": "access"})
-        
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-    
-    def create_refresh_token(self, data: dict) -> str:
-        """Create a refresh token"""
-        to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
-        to_encode.update({"exp": expire, "type": "refresh"})
-        
-        return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
-    
-    def verify_token(self, token: str) -> dict:
-        """Verify and decode a token"""
-        try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token has expired"
-            )
-        except jwt.JWTError:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-    
-    def get_customer_id_from_token(self, token: str) -> int:
-        """Extract customer ID from token"""
-        payload = self.verify_token(token)
-        customer_id = payload.get("sub")
+
         
         if not customer_id:
             raise HTTPException(
@@ -296,4 +255,4 @@ def create_service_auth_header(customer_id: int) -> dict:
 def verify_service_token(token: str) -> int:
     """Verify token from internal service-to-service communication"""
     jwt_service = JWTService()
-    return jwt_service.get_customer_id_from_token(token) 
+    return jwt_service.get_customer_id_from_token(token)

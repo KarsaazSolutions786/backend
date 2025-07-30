@@ -38,25 +38,7 @@ from src.schemas import (
 from src.config import settings
 from src.services.auth_service import AuthService
 from src.services.jwt_service import JWTService
-# from shared.simple_auth import get_current_customer_id  # Temporarily disabled
-
-# Temporary local implementation
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Depends, HTTPException, status
-import jwt
-from src.config import settings
-
-def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
-    """Temporary local implementation of get_current_customer_id"""
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        customer_id = payload.get("sub")
-        if customer_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return int(customer_id)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+from shared.simple_auth import get_current_customer_id
 
 # Import enhanced security modules
 try:
@@ -75,8 +57,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 security = HTTPBearer()
 
-# Initialize JWT service
-jwt_service = JWTService()
+
 
 def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     """Get AuthService instance with database dependency"""
@@ -192,7 +173,7 @@ async def register_customer(
             "permissions": ["user"]  # Basic customer permissions
         }
         
-        access_token = jwt_service.create_access_token(data=token_data)
+        access_token = auth_service.jwt_service.create_access_token(data=token_data)
         
         # Create refresh token using RefreshTokenService
         refresh_token, _ = refresh_token_service.create_refresh_token(
