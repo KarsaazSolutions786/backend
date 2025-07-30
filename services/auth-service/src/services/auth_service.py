@@ -10,11 +10,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 import bcrypt
 from typing import Dict, Optional
+from email_validator import validate_email, EmailNotValidError  # Added for email validation
 
 from models import Customer, CustomerSession, LoginAttempt, CustomerProfile
 from config import settings
 from database import get_db
-from services.jwt_service import JWTService
+from shared.auth import JWTService  # Updated to use shared JWTService
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,12 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        self.jwt_service = JWTService()
+        self.jwt_service = JWTService()  # Now using shared JWTService
     
     def hash_password(self, password: str) -> str:
         """Hash a password using bcrypt"""
+        if len(password) < 8:  # Added password strength check
+            raise ValueError("Password must be at least 8 characters long")
         return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     def verify_password(self, password: str, hashed_password: str) -> bool:
@@ -40,6 +43,10 @@ class AuthService:
     
     def create_customer(self, email: str, password: str, full_name: str, gender: str, is_new: bool = True) -> Customer:
         """Create a new customer with profile"""
+        try:
+            validate_email(email)  # Validate email format
+        except EmailNotValidError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email format")
         # Check if customer already exists
         existing_customer = self.db.query(Customer).filter(Customer.email == email).first()
         if existing_customer:
@@ -151,9 +158,11 @@ class AuthService:
         """Get customer by ID"""
         return self.db.query(Customer).filter(Customer.id == customer_id).first()
     
-    def invalidate_sessions(self, customer_id: int):
-        """Invalidate all sessions for a customer"""
+    def invalidate_sessions(self, customer_id: int, token: str = None):
+        """Invalidate all sessions for a customer and revoke token if provided"""
         self.db.query(CustomerSession).filter(CustomerSession.customer_id == customer_id).delete()
+        if token:
+            JWTService.revoke_token(token)  # Revoke the JWT using shared service
         self.db.commit()
 
 
@@ -172,11 +181,9 @@ async def get_current_customer(
     db: Session = Depends(get_db)
 ) -> Dict:
     """Get current authenticated customer"""
-    jwt_service = JWTService()
-    
     try:
-        # Verify token
-        payload = jwt_service.verify_token(credentials.credentials)
+        # Verify token using shared JWTService
+        payload = JWTService.decode_token(credentials.credentials)
         customer_id = payload.get("sub")
         
         if not customer_id:
@@ -248,11 +255,10 @@ def require_verified(current_customer: Dict = None):  # Temporarily disabled ver
 
 def create_service_auth_header(customer_id: int) -> dict:
     """Create auth header for internal service-to-service communication"""
-    jwt_service = JWTService()
-    token = jwt_service.create_access_token({"sub": str(customer_id)})
+    token = JWTService.create_token({"sub": str(customer_id)})  # Using shared create_token
     return {"Authorization": f"Bearer {token}"}
 
 def verify_service_token(token: str) -> int:
     """Verify token from internal service-to-service communication"""
-    jwt_service = JWTService()
-    return jwt_service.get_customer_id_from_token(token)
+    payload = JWTService.decode_token(token)
+    return int(payload.get("sub"))
