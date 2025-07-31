@@ -405,11 +405,17 @@ async def get_friend_request_history(
             requester = get_customer_by_id(db, record.requester_id)
             requested = get_customer_by_id(db, record.requested_id)
             
+            # Determine the action from the current user's perspective
+            action = record.action
+            if record.action == "sent" and record.requested_id == customer_id:
+                # If someone sent a request to the current user, show it as "incoming"
+                action = "incoming"
+            
             result.append(FriendRequestHistoryResponse(
                 id=record.id,
                 requester_id=record.requester_id,
                 requested_id=record.requested_id,
-                action=record.action,
+                action=action,
                 message=record.message,
                 created_at=record.created_at,
                 requester_email=requester.email if requester else None,
