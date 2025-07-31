@@ -4,6 +4,9 @@ from sqlalchemy.orm import sessionmaker
 from .config import settings
 import logging
 
+# Import models to ensure they are registered with Base
+from . import models
+
 logger = logging.getLogger(__name__)
 
 # Create SQLAlchemy engine
