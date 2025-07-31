@@ -73,6 +73,36 @@ async def get_customers(
         pages=(total + limit - 1) // limit
     )
 
+@router.get("/search", response_model=CustomersListResponse)
+async def search_customers(
+    query: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    current_customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """Search customers by email, full_name or user_name (case-insensitive, partial match)"""
+    offset = (page - 1) * limit
+    from ..models import CustomerProfile
+    
+    # Search in both customer email and profile fields
+    customer_query = db.query(Customer).outerjoin(CustomerProfile).filter(
+        (Customer.email.ilike(f"%{query}%")) |
+        (CustomerProfile.full_name.ilike(f"%{query}%")) |
+        (CustomerProfile.user_name.ilike(f"%{query}%"))
+    )
+    
+    total = customer_query.count()
+    customers = customer_query.offset(offset).limit(limit).all()
+    
+    return CustomersListResponse(
+        customers=[CustomerResponse.from_orm(customer) for customer in customers],
+        total=total,
+        page=page,
+        limit=limit,
+        pages=(total + limit - 1) // limit
+    )
+
 @router.get("/search-by-name", response_model=CustomersListResponse)
 async def search_customers_by_name(
     name: str = Query(..., min_length=1),
@@ -471,4 +501,4 @@ async def unregister_customer_device(
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "customer-service"} 
+    return {"status": "healthy", "service": "customer-service"}

@@ -241,123 +241,22 @@ async def create_customer(request: Request, current_user = Depends(get_current_u
 # ======================
 # REMINDER SERVICE ROUTES
 # ======================
-
-@app.get("/reminders")
-async def get_reminders(current_user = Depends(get_current_user)):
-    """Get all reminders for current user"""
-    # Mock implementation
-    return {
-        "reminders": [
-            {"id": 1, "title": "Meeting", "description": "Team meeting", "due_date": "2024-01-15T10:00:00Z"},
-            {"id": 2, "title": "Call", "description": "Client call", "due_date": "2024-01-16T14:00:00Z"}
-        ]
-    }
-
-@app.post("/reminders")
-async def create_reminder(request: Request, current_user = Depends(get_current_user)):
-    """Create a new reminder"""
-    try:
-        body = await request.json()
-        return {
-            "id": 123,
-            "title": body.get("title"),
-            "description": body.get("description"),
-            "due_date": body.get("due_date"),
-            "user_id": current_user.get("sub")
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# Note: Reminder service endpoints are handled by the dedicated reminder microservice
 
 # ======================
 # NOTE SERVICE ROUTES
 # ======================
-
-@app.get("/notes")
-async def get_notes(current_user = Depends(get_current_user)):
-    """Get all notes for current user"""
-    # Mock implementation
-    return {
-        "notes": [
-            {"id": 1, "title": "Project Ideas", "content": "Some project ideas...", "created_at": "2024-01-01T00:00:00Z"},
-            {"id": 2, "title": "Meeting Notes", "content": "Important meeting notes...", "created_at": "2024-01-02T00:00:00Z"}
-        ]
-    }
-
-@app.post("/notes")
-async def create_note(request: Request, current_user = Depends(get_current_user)):
-    """Create a new note"""
-    try:
-        body = await request.json()
-        return {
-            "id": 123,
-            "title": body.get("title"),
-            "content": body.get("content"),
-            "user_id": current_user.get("sub"),
-            "created_at": "2024-01-01T00:00:00Z"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# Note: Note service endpoints are handled by the dedicated note microservice
 
 # ======================
 # LEDGER SERVICE ROUTES
 # ======================
-
-@app.get("/ledger")
-async def get_ledger_entries(current_user = Depends(get_current_user)):
-    """Get all ledger entries for current user"""
-    # Mock implementation
-    return {
-        "entries": [
-            {"id": 1, "description": "Salary", "amount": 5000, "type": "income", "date": "2024-01-01"},
-            {"id": 2, "description": "Rent", "amount": -1500, "type": "expense", "date": "2024-01-05"}
-        ]
-    }
-
-@app.post("/ledger")
-async def create_ledger_entry(request: Request, current_user = Depends(get_current_user)):
-    """Create a new ledger entry"""
-    try:
-        body = await request.json()
-        return {
-            "id": 123,
-            "description": body.get("description"),
-            "amount": body.get("amount"),
-            "type": body.get("type"),
-            "user_id": current_user.get("sub"),
-            "date": body.get("date")
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# Note: Ledger service endpoints are handled by the dedicated ledger microservice
 
 # ======================
 # FRIEND SERVICE ROUTES
 # ======================
-
-@app.get("/friends")
-async def get_friends(current_user = Depends(get_current_user)):
-    """Get all friends for current user"""
-    # Mock implementation
-    return {
-        "friends": [
-            {"id": 1, "name": "Alice", "email": "alice@example.com", "status": "active"},
-            {"id": 2, "name": "Bob", "email": "bob@example.com", "status": "pending"}
-        ]
-    }
-
-@app.post("/friends")
-async def add_friend(request: Request, current_user = Depends(get_current_user)):
-    """Add a new friend"""
-    try:
-        body = await request.json()
-        return {
-            "id": 123,
-            "name": body.get("name"),
-            "email": body.get("email"),
-            "user_id": current_user.get("sub"),
-            "status": "pending"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+# Note: Friend service endpoints are handled by the dedicated friend microservice
 
 # ======================
 # CHAT SERVICE ROUTES
@@ -391,4 +290,4 @@ async def chat_endpoint(request: Request, current_user = Depends(get_current_use
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run(app, host="0.0.0.0", port=port) 
+    uvicorn.run(app, host="0.0.0.0", port=port)
