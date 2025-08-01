@@ -19,7 +19,7 @@ security = HTTPBearer()
 
 class AuthConfig:
     """Authentication configuration"""
-    SECRET_KEY = os.getenv("JWT_SECRET", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+    SECRET_KEY = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
     ALGORITHM = "HS256"
     
     # Validate production environment
@@ -157,4 +157,4 @@ def get_current_customer(credentials: HTTPAuthorizationCredentials = Depends(sec
         "id": customer_id,
         "customer_id": customer_id,
         "customer_id_str": str(customer_id)  # For backward compatibility
-    } 
+    }
