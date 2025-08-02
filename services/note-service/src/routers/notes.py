@@ -27,13 +27,38 @@ def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(
     try:
         token = credentials.credentials
         secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        
+        # Decode and validate JWT token with required claims
+        payload = jwt.decode(
+            token, 
+            secret_key, 
+            algorithms=["HS256"],
+            audience="eindr-api",  # Validate audience claim
+            issuer="eindr-issuer"   # Validate issuer claim
+        )
+        
+        # Check required fields
         customer_id = payload.get("sub")
         if customer_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
+            
+        # Validate token type
+        token_type = payload.get("type")
+        if token_type != "access":
+            raise HTTPException(status_code=401, detail="Invalid token: wrong token type")
+            
         return int(customer_id)
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidAudienceError:
+        raise HTTPException(status_code=401, detail="Invalid token: wrong audience")
+    except jwt.InvalidIssuerError:
+        raise HTTPException(status_code=401, detail="Invalid token: wrong issuer")
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid token: invalid customer ID format")
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter

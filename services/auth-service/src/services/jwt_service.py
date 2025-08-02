@@ -28,7 +28,9 @@ class JWTService:
         to_encode.update({
             "exp": expire,
             "iat": datetime.utcnow(),
-            "type": "access"
+            "type": "access",
+            "iss": "eindr-issuer",  # Required by Kong JWT plugin
+            "aud": "eindr-api"      # Required by Kong JWT plugin
         })
         
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
@@ -48,7 +50,9 @@ class JWTService:
         to_encode.update({
             "exp": expire,
             "iat": datetime.utcnow(),
-            "type": "refresh"
+            "type": "refresh",
+            "iss": "eindr-issuer",  # Required by Kong JWT plugin
+            "aud": "eindr-api"      # Required by Kong JWT plugin
         })
         
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
@@ -157,4 +161,4 @@ class JWTService:
             return remaining if remaining.total_seconds() > 0 else None
         
         except Exception:
-            return None 
+            return None

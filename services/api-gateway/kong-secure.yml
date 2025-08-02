@@ -821,4 +821,4 @@ consumers:
   - username: eindr-auth-service
     jwt_secrets:
       - key: eindr-issuer
-        secret: "replace-with-secure-secret-in-production" 
+        secret: "eindr-super-secure-jwt-secret-key-for-production-2024-v1"

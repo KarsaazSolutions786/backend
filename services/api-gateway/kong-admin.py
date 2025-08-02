@@ -330,7 +330,7 @@ def setup_microservices_gateway():
     kong.create_consumer("eindr-auth-service")
     kong.add_jwt_to_consumer(
         username="eindr-auth-service",
-        key="eindr-auth-service",
+        key="eindr-issuer",  # Must match the 'iss' claim in JWT tokens
         secret="eindr-super-secure-jwt-secret-key-for-production-2024-v1"
     )
     
