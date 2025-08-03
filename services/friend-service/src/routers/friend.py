@@ -6,13 +6,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
 try:
     from simple_auth import get_current_customer_id
 except ImportError:
-    # Fallback to local secure implementation
+    # Fallback to local secure implementation with audience and issuer validation
     from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
     from fastapi import Depends, HTTPException, status
     import jwt
     
     def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
-        """Secure local implementation as fallback"""
+        """Secure local implementation as fallback with audience and issuer validation"""
         try:
             token = credentials.credentials
             secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
@@ -29,7 +29,9 @@ except ImportError:
                 token, 
                 secret_key, 
                 algorithms=["HS256"],
-                options={"verify_signature": True, "verify_exp": True}
+                audience="eindr-api",
+                issuer="eindr-issuer",
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
             )
             customer_id = payload.get("sub")
             if customer_id is None:

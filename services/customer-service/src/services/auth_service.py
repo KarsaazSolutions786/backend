@@ -50,11 +50,13 @@ security = HTTPBearer()
 def verify_jwt_token(token: str) -> Dict:
     """Secure JWT token verification with signature validation"""
     try:
-        # Use secure JWT decode with signature verification
+        # Use secure JWT decode with signature verification and audience/issuer validation
         payload = jwt.decode(
             token, 
             AuthConfig.SECRET_KEY, 
             algorithms=[AuthConfig.ALGORITHM],
+            audience="eindr-api",  # Validate audience claim
+            issuer="eindr-issuer",  # Validate issuer claim
             options={"verify_signature": True, "verify_exp": True}
         )
         
@@ -238,4 +240,4 @@ class LegacyAuthService:
     
     async def verify_token(self, token: str) -> Dict:
         """Legacy token verification"""
-        return verify_jwt_token(token) 
+        return verify_jwt_token(token)

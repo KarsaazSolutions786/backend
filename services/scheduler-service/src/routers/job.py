@@ -29,7 +29,9 @@ except ImportError:
                 token, 
                 secret_key, 
                 algorithms=["HS256"],
-                options={"verify_signature": True, "verify_exp": True}
+                audience="eindr-api",
+                issuer="eindr-issuer",
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
             )
             customer_id = payload.get("sub")
             if customer_id is None:

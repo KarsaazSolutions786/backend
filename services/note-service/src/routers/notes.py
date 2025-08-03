@@ -16,49 +16,12 @@ from ..schemas import (
 )
 # from shared.simple_auth import get_current_customer_id  # Temporarily disabled
 
-# Temporary local implementation
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import Depends, HTTPException, status
-import jwt
-import os
+# Use proper auth service
+from ..services.auth_service import get_current_customer
 
-def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
-    """Temporary local implementation of get_current_customer_id"""
-    try:
-        token = credentials.credentials
-        secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
-        
-        # Decode and validate JWT token with required claims
-        payload = jwt.decode(
-            token, 
-            secret_key, 
-            algorithms=["HS256"],
-            audience="eindr-api",  # Validate audience claim
-            issuer="eindr-issuer"   # Validate issuer claim
-        )
-        
-        # Check required fields
-        customer_id = payload.get("sub")
-        if customer_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token: missing subject")
-            
-        # Validate token type
-        token_type = payload.get("type")
-        if token_type != "access":
-            raise HTTPException(status_code=401, detail="Invalid token: wrong token type")
-            
-        return int(customer_id)
-        
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidAudienceError:
-        raise HTTPException(status_code=401, detail="Invalid token: wrong audience")
-    except jwt.InvalidIssuerError:
-        raise HTTPException(status_code=401, detail="Invalid token: wrong issuer")
-    except jwt.PyJWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid token: invalid customer ID format")
+def get_current_customer_id(customer_data: dict = Depends(get_current_customer)) -> int:
+    """Extract customer ID from authenticated customer data"""
+    return customer_data["customer_id"]
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter

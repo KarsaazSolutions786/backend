@@ -43,7 +43,9 @@ except ImportError:
                 token, 
                 secret_key, 
                 algorithms=["HS256"],
-                options={"verify_signature": True, "verify_exp": True}
+                audience="eindr-api",
+                issuer="eindr-issuer",
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
             )
             customer_id = payload.get("sub")
             if customer_id is None:
@@ -181,4 +183,4 @@ def ledger_summary(db: Session = Depends(get_db), current_customer_id: int = Dep
         .group_by(LedgerEntry.friend_id)
         .all()
     )
-    return [LedgerSummary(friend_id=row[0], total_amount=float(row[1] or 0)) for row in rows] 
+    return [LedgerSummary(friend_id=row[0], total_amount=float(row[1] or 0)) for row in rows]

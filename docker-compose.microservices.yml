@@ -488,7 +488,7 @@ services:
       TTS_SERVICE_URL: http://tts-service:8000
       AI_HTTP_TIMEOUT: '30'
     ports:
-      - "8081:8000"
+      - "8013:8000"
     volumes:
       - ./services/ai-pipeline-service:/app
     networks:
