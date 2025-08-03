@@ -39,7 +39,8 @@ def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(
     """Temporary local implementation of get_current_customer_id"""
     try:
         token = credentials.credentials
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        # Use the JWT service for proper token verification with audience validation
+        payload = jwt_service.verify_token(token)
         customer_id = payload.get("sub")
         if customer_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -683,4 +684,4 @@ async def validate_token(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Token validation failed"
-        ) 
+        )

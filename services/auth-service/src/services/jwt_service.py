@@ -65,9 +65,13 @@ class JWTService:
         try:
             # Log token details for debugging
             logger.info(f"Verifying token: {token[:10]}...")
+            logger.info(f"Using secret key: {self.secret_key[:10]}...")
+            logger.info(f"Using algorithm: {self.algorithm}")
             
-            # Decode token
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            # Decode token with audience validation
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api")
+            
+            logger.info(f"Token decoded successfully. Payload: {payload}")
             
             # Validate token payload
             if not payload:
@@ -86,14 +90,16 @@ class JWTService:
                 logger.warning(f"Invalid token type: {payload.get('type')}")
                 raise jwt.JWTError("Invalid token type")
             
+            logger.info("Token validation successful")
             return payload
         
-        except jwt.ExpiredSignatureError:
-            logger.warning("Token has expired")
+        except jwt.ExpiredSignatureError as e:
+            logger.error(f"Token has expired: {str(e)}")
             raise
         
         except jwt.InvalidTokenError as e:
             logger.error(f"Invalid token error: {str(e)}")
+            logger.error(f"Token being verified: {token}")
             raise
         
         except Exception as e:
@@ -105,7 +111,7 @@ class JWTService:
     def verify_refresh_token(self, token: str) -> Dict[str, Any]:
         """Verify and decode a refresh token"""
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api")
             
             # Check token type
             if payload.get("type") != "refresh":
