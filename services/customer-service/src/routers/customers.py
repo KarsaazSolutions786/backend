@@ -34,8 +34,15 @@ def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(
         print(f"DEBUG ROUTER: Using SECRET_KEY: {secret_key[:20]}...")
         print(f"DEBUG ROUTER: Token to decode: {token[:50]}...")
         
-        # Decode without audience/issuer validation to match test token
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        # Decode with audience validation to match auth service tokens
+        payload = jwt.decode(
+            token, 
+            secret_key, 
+            algorithms=["HS256"],
+            audience="eindr-api",
+            issuer="eindr-issuer",
+            options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
+        )
         print(f"DEBUG ROUTER: Decoded payload: {payload}")
         
         customer_id = payload.get("sub")

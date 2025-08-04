@@ -186,8 +186,8 @@ services:
       context: .
       dockerfile: ./services/customer-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
-      AUTH_SERVICE_URL: http://auth-service:8000
+      DATABASE_URL: postgresql://eindr:eindr_pass@host.docker.internal:5433/eindr_db
+      AUTH_SERVICE_URL: https://auth-production-37f1.up.railway.app/
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: customer-service
       PORT: 8000
