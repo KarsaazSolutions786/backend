@@ -83,6 +83,12 @@ class CustomerResponse(CustomerBase):
     locked_until: Optional[datetime] = None
     profile: Optional[CustomerProfileResponse] = None  # Ensure profile is included
     
+    # New fields for enhanced /customers/me endpoint
+    subscription_status_id: Optional[int] = None
+    active_reminders_count: int = 0
+    active_notes_count: int = 0
+    friends_list_count: int = 0
+    
     class Config:
         from_attributes = True
 
@@ -159,4 +165,4 @@ class CustomerStats(BaseModel):
     total_customers: int
     active_customers: int
     verified_customers: int
-    inactive_customers: int 
+    inactive_customers: int
