@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # Auth service
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8000")
     
+    # JWT Settings (must match auth-service configuration)
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", SECRET_KEY)  # Backward compatibility
+    ALGORITHM: str = "HS256"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

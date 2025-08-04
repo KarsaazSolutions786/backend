@@ -15,6 +15,9 @@ from sqlalchemy.orm import Session
 import jwt
 from datetime import datetime
 
+# Import settings
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 # Try to import shared authentication
@@ -30,8 +33,9 @@ except ImportError:
 
 class AuthConfig:
     """Authentication configuration"""
-    SECRET_KEY = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
-    ALGORITHM = "HS256"
+    # Use settings from config.py to ensure consistency with auth service
+    SECRET_KEY = settings.SECRET_KEY
+    ALGORITHM = settings.ALGORITHM
     
     # Validate that we're not using a weak default key in production
     if os.getenv("ENVIRONMENT") == "production" and SECRET_KEY in [
@@ -50,6 +54,11 @@ security = HTTPBearer()
 def verify_jwt_token(token: str) -> Dict:
     """Secure JWT token verification with signature validation"""
     try:
+        print(f"DEBUG: Verifying token with SECRET_KEY: {AuthConfig.SECRET_KEY[:20]}...")
+        print(f"DEBUG: Token to verify: {token[:50]}...")
+        logger.info(f"Verifying token with SECRET_KEY: {AuthConfig.SECRET_KEY[:20]}...")
+        logger.info(f"Token to verify: {token[:50]}...")
+        
         # Use secure JWT decode with signature verification and audience/issuer validation
         payload = jwt.decode(
             token, 
@@ -60,39 +69,50 @@ def verify_jwt_token(token: str) -> Dict:
             options={"verify_signature": True, "verify_exp": True}
         )
         
+        print(f"DEBUG: Token payload: {payload}")
+        logger.info(f"Token payload: {payload}")
+        
         # Validate required fields
         customer_id = payload.get("sub")
         if not customer_id:
+            print(f"DEBUG: Missing required fields - customer_id: {customer_id}")
+            logger.error(f"Missing required fields - customer_id: {customer_id}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token: missing subject"
             )
         
+        print("DEBUG: Token verification successful")
+        logger.info("Token verification successful")
         return {
             "customer_id": int(customer_id),
             "email": payload.get("email", ""),
             "is_verified": payload.get("is_verified", True),
             "is_active": payload.get("is_active", True)
         }
-    except jwt.ExpiredSignatureError:
-        logger.warning("JWT token has expired")
+    except jwt.ExpiredSignatureError as e:
+        print(f"DEBUG: JWT token has expired: {str(e)}")
+        logger.warning(f"JWT token has expired: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired"
         )
     except jwt.InvalidTokenError as e:
+        print(f"DEBUG: Invalid JWT token: {str(e)}")
         logger.error(f"JWT validation failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token"
         )
     except ValueError as e:
+        print(f"DEBUG: Invalid customer ID in token: {str(e)}")
         logger.error(f"Invalid customer ID in token: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid customer ID in token"
         )
     except Exception as e:
+        print(f"DEBUG: Unexpected error during token verification: {str(e)}")
         logger.error(f"Token verification error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

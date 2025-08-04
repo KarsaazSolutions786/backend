@@ -191,6 +191,8 @@ services:
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: customer-service
       PORT: 8000
+      JWT_SECRET: eindr-super-secure-jwt-secret-key-for-production-2024-v1
+      SECRET_KEY: eindr-super-secure-jwt-secret-key-for-production-2024-v1
     ports:
       - "8002:8000"
     volumes:

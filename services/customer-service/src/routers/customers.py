@@ -31,12 +31,22 @@ def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(
     try:
         token = credentials.credentials
         secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+        print(f"DEBUG ROUTER: Using SECRET_KEY: {secret_key[:20]}...")
+        print(f"DEBUG ROUTER: Token to decode: {token[:50]}...")
+        
+        # Decode without audience/issuer validation to match test token
         payload = jwt.decode(token, secret_key, algorithms=["HS256"])
+        print(f"DEBUG ROUTER: Decoded payload: {payload}")
+        
         customer_id = payload.get("sub")
         if customer_id is None:
+            print("DEBUG ROUTER: Missing 'sub' field in token")
             raise HTTPException(status_code=401, detail="Invalid token")
+        
+        print(f"DEBUG ROUTER: Successfully extracted customer_id: {customer_id}")
         return int(customer_id)
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as e:
+        print(f"DEBUG ROUTER: JWT decode error: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 logger = logging.getLogger(__name__)
