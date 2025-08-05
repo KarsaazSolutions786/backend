@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import settings
+# Import all models to ensure they are registered with Base
+from .models import Base, Customer, PriorityLevel, Timezone, RepeatPattern, Reminder, ReminderShare, ReminderNotification
 import logging
 
 logger = logging.getLogger(__name__)
@@ -18,9 +19,6 @@ engine = create_engine(
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create Base class
-Base = declarative_base()
 
 def get_db():
     """Dependency to get database session"""
@@ -40,4 +38,4 @@ def init_db():
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
-        raise 
+        raise

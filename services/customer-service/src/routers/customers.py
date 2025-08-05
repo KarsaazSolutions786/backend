@@ -71,13 +71,12 @@ async def get_active_reminders_count(customer_id: int, token: str) -> int:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{REMINDER_SERVICE_URL}/reminders",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"status": "active", "limit": 1}  # We only need the count
+                f"{REMINDER_SERVICE_URL}/reminders/stats",
+                headers={"Authorization": f"Bearer {token}"}
             )
             if response.status_code == 200:
                 data = response.json()
-                return data.get("total", 0)
+                return data.get("active", 0)
     except Exception as e:
         logger.warning(f"Failed to fetch reminders count: {e}")
     return 0
@@ -87,9 +86,8 @@ async def get_active_notes_count(customer_id: int, token: str) -> int:
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                f"{NOTE_SERVICE_URL}/notes",
-                headers={"Authorization": f"Bearer {token}"},
-                params={"limit": 1}  # We only need the count
+                f"{NOTE_SERVICE_URL}/notes/stats",
+                headers={"Authorization": f"Bearer {token}"}
             )
             if response.status_code == 200:
                 data = response.json()

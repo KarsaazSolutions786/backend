@@ -1,11 +1,10 @@
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from .config import settings
 import logging
 
-# Import models to ensure they are registered with Base
-from . import models
+# Import all models to ensure they are registered with Base
+from .models import Base, Customer, Friendship, FriendPermission, FriendRequestHistory
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +21,6 @@ engine = create_engine(
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create Base class
-Base = declarative_base()
-
 def get_db():
     """Dependency to get database session"""
     db = SessionLocal()
@@ -39,7 +35,22 @@ def get_db():
 def init_db():
     """Initialize database tables"""
     try:
+        logger.info(f"Attempting to create tables for: {list(Base.metadata.tables.keys())}")
         Base.metadata.create_all(bind=engine)
+        
+        # Verify tables were created
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        logger.info(f"Tables found in database: {existing_tables}")
+        
+        expected_tables = list(Base.metadata.tables.keys())
+        missing_tables = [table for table in expected_tables if table not in existing_tables]
+        if missing_tables:
+            logger.error(f"Missing tables: {missing_tables}")
+        else:
+            logger.info("All expected tables are present")
+            
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")

@@ -161,7 +161,7 @@ services:
   auth-service:
     image: backend-auth-service:latest
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       REDIS_URL: redis://redis:6379
       JWT_SECRET: eindr-super-secure-jwt-secret-key-for-production-2024-v1
       SERVICE_NAME: auth-service
@@ -186,7 +186,7 @@ services:
       context: .
       dockerfile: ./services/customer-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@host.docker.internal:5433/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: https://auth-production-37f1.up.railway.app/
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: customer-service
@@ -214,7 +214,7 @@ services:
       context: .
       dockerfile: ./services/reminder-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: reminder-service
@@ -240,7 +240,7 @@ services:
       context: .
       dockerfile: ./services/note-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: note-service
@@ -266,7 +266,7 @@ services:
       context: .
       dockerfile: ./services/ledger-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: ledger-service
@@ -292,7 +292,7 @@ services:
       context: .
       dockerfile: ./services/friend-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: friend-service
@@ -318,7 +318,7 @@ services:
       context: .
       dockerfile: ./services/history-service/Dockerfile
     environment:
-      DATABASE_URL: postgresql://eindr:eindr_pass@new-postgres-server:5432/eindr_db
+      DATABASE_URL: postgresql://postgres:RBOtydiLpXJRdJQHftfkdxqIzUbezvtz@ballast.proxy.rlwy.net:59003/eindr_db
       AUTH_SERVICE_URL: http://auth-service:8000
       RABBITMQ_URL: amqp://eindr:eindr123@rabbitmq:5672/
       SERVICE_NAME: history-service
