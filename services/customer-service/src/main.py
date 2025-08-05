@@ -33,6 +33,10 @@ async def lifespan(app: FastAPI):
         # Initialize database
         init_db()
         logger.info("Database initialized successfully")
+        
+        # HTTP client removed - using direct database queries instead
+        logger.info("Direct database access configured")
+        
         logger.info("Customer service initialized successfully")
         
     except Exception as e:
@@ -40,6 +44,14 @@ async def lifespan(app: FastAPI):
         raise
     
     yield
+    
+    # Cleanup on shutdown
+    try:
+        from .routers.customers import close_http_client
+        await close_http_client()
+        logger.info("HTTP client closed successfully")
+    except Exception as e:
+        logger.error(f"Error closing HTTP client: {e}")
     
     logger.info("Customer service shut down successfully")
 

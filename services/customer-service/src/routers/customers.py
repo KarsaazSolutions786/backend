@@ -5,14 +5,18 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, timedelta
 import logging
 import secrets
-import httpx
 import asyncio
+# Removed httpx import as we're now using direct database queries
+# from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+# from httpx import ConnectTimeout, ReadTimeout, RequestError
 
 from ..database import get_db
 from ..models import (
     Customer, CustomerPreference as CustomerPreferences, 
     CustomerDevice, CustomerProfile, Timezone, Language
 )
+# Import additional models for direct database queries
+from sqlalchemy import text
 from ..schemas import (
     CustomerResponse, CustomerCreate, CustomerUpdate,
     CustomerPreferencesResponse, CustomerPreferencesUpdate,
@@ -61,55 +65,75 @@ def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Service URLs - these should be environment variables in production
-REMINDER_SERVICE_URL = os.getenv("REMINDER_SERVICE_URL", "http://reminder-service:8000")
-NOTE_SERVICE_URL = os.getenv("NOTE_SERVICE_URL", "http://note-service:8000")
-FRIEND_SERVICE_URL = os.getenv("FRIEND_SERVICE_URL", "http://friend-service:8000")
+# Removed HTTP client configuration as we're now using direct database queries
 
-async def get_active_reminders_count(customer_id: int, token: str) -> int:
-    """Get count of active reminders for a customer"""
+# @retry(
+#     retry=retry_if_exception_type((ConnectTimeout, ReadTimeout, RequestError)),
+#     stop=stop_after_attempt(3),
+#     wait=wait_exponential(multiplier=1, min=1, max=10)
+# )
+async def get_active_reminders_count(customer_id: int, db: Session) -> int:
+    """Get count of active reminders for a customer using direct database query"""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{REMINDER_SERVICE_URL}/reminders/stats",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("active", 0)
+        # Direct database query to count active reminders
+        result = db.execute(
+            text("SELECT COUNT(*) FROM reminders WHERE customer_id = :customer_id AND is_active = true"),
+            {"customer_id": customer_id}
+        )
+        count = result.scalar() or 0
+        logger.info(f"Active reminders count for customer {customer_id}: {count}")
+        return count
+        
     except Exception as e:
-        logger.warning(f"Failed to fetch reminders count: {e}")
-    return 0
+        logger.error(f"Error getting reminders count for customer {customer_id}: {e}")
+        return 0
 
-async def get_active_notes_count(customer_id: int, token: str) -> int:
-    """Get count of active notes for a customer"""
+# @retry(
+#     retry=retry_if_exception_type((ConnectTimeout, ReadTimeout, RequestError)),
+#     stop=stop_after_attempt(3),
+#     wait=wait_exponential(multiplier=1, min=1, max=10)
+# )
+async def get_active_notes_count(customer_id: int, db: Session) -> int:
+    """Get count of notes for a customer using direct database query"""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{NOTE_SERVICE_URL}/notes/stats",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("total", 0)
+        # Direct database query to count notes
+        result = db.execute(
+            text("SELECT COUNT(*) FROM notes WHERE customer_id = :customer_id"),
+            {"customer_id": customer_id}
+        )
+        count = result.scalar() or 0
+        logger.info(f"Notes count for customer {customer_id}: {count}")
+        return count
+        
     except Exception as e:
-        logger.warning(f"Failed to fetch notes count: {e}")
-    return 0
+        logger.error(f"Error getting notes count for customer {customer_id}: {e}")
+        return 0
 
-async def get_friends_count(customer_id: int, token: str) -> int:
-    """Get count of friends for a customer"""
+# @retry(
+#     retry=retry_if_exception_type((ConnectTimeout, ReadTimeout, RequestError)),
+#     stop=stop_after_attempt(3),
+#     wait=wait_exponential(multiplier=1, min=1, max=10)
+# )
+async def get_friends_count(customer_id: int, db: Session) -> int:
+    """Get count of friends for a customer using direct database query"""
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                f"{FRIEND_SERVICE_URL}/friends/stats",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data.get("total_friends", 0)
+        # Direct database query to count accepted friendships
+        # Count both directions: where customer is customer_id or friend_id
+        result = db.execute(
+            text("""
+                SELECT COUNT(*) FROM friendships 
+                WHERE (customer_id = :customer_id OR friend_id = :customer_id) 
+                AND status = 'accepted'
+            """),
+            {"customer_id": customer_id}
+        )
+        count = result.scalar() or 0
+        logger.info(f"Friends count for customer {customer_id}: {count}")
+        return count
+        
     except Exception as e:
-        logger.warning(f"Failed to fetch friends count: {e}")
-    return 0
+        logger.error(f"Error getting friends count for customer {customer_id}: {e}")
+        return 0
 
 async def get_subscription_status_id(customer_id: int, db: Session) -> Optional[int]:
     """Get subscription status ID for a customer"""
@@ -365,47 +389,40 @@ async def get_current_customer_profile(
             db.commit()
             db.refresh(customer)
         
-        # Extract JWT token from request headers
-        token = None
-        auth_header = request.headers.get("authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
-        
-        # Fetch additional data from other services concurrently
+        # Fetch additional data using direct database queries
         subscription_status_id = None
         active_reminders_count = 0
         active_notes_count = 0
         friends_count = 0
         
-        if token:
-            # Run all service calls concurrently for better performance
-            subscription_task = get_subscription_status_id(current_customer_id, db)
-            reminders_task = get_active_reminders_count(current_customer_id, token)
-            notes_task = get_active_notes_count(current_customer_id, token)
-            friends_task = get_friends_count(current_customer_id, token)
-            
-            # Wait for all tasks to complete
-            subscription_status_id, active_reminders_count, active_notes_count, friends_count = await asyncio.gather(
-                subscription_task,
-                reminders_task,
-                notes_task,
-                friends_task,
-                return_exceptions=True
-            )
-            
-            # Handle any exceptions from the tasks
-            if isinstance(subscription_status_id, Exception):
-                logger.warning(f"Subscription status fetch failed: {subscription_status_id}")
-                subscription_status_id = None
-            if isinstance(active_reminders_count, Exception):
-                logger.warning(f"Reminders count fetch failed: {active_reminders_count}")
-                active_reminders_count = 0
-            if isinstance(active_notes_count, Exception):
-                logger.warning(f"Notes count fetch failed: {active_notes_count}")
-                active_notes_count = 0
-            if isinstance(friends_count, Exception):
-                logger.warning(f"Friends count fetch failed: {friends_count}")
-                friends_count = 0
+        # Run all database queries concurrently for better performance
+        subscription_task = get_subscription_status_id(current_customer_id, db)
+        reminders_task = get_active_reminders_count(current_customer_id, db)
+        notes_task = get_active_notes_count(current_customer_id, db)
+        friends_task = get_friends_count(current_customer_id, db)
+        
+        # Wait for all tasks to complete
+        subscription_status_id, active_reminders_count, active_notes_count, friends_count = await asyncio.gather(
+            subscription_task,
+            reminders_task,
+            notes_task,
+            friends_task,
+            return_exceptions=True
+        )
+        
+        # Handle any exceptions from the tasks
+        if isinstance(subscription_status_id, Exception):
+            logger.warning(f"Subscription status fetch failed: {subscription_status_id}")
+            subscription_status_id = None
+        if isinstance(active_reminders_count, Exception):
+            logger.warning(f"Reminders count fetch failed: {active_reminders_count}")
+            active_reminders_count = 0
+        if isinstance(active_notes_count, Exception):
+            logger.warning(f"Notes count fetch failed: {active_notes_count}")
+            active_notes_count = 0
+        if isinstance(friends_count, Exception):
+            logger.warning(f"Friends count fetch failed: {friends_count}")
+            friends_count = 0
         
         # Construct response manually to avoid SQLAlchemy state issues
         return CustomerResponse(
