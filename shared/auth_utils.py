@@ -57,13 +57,14 @@ class SecureJWTValidator:
             HTTPException: If token is invalid, expired, or malformed
         """
         try:
-            # Verify token signature and decode payload with audience validation
+            # Verify token signature and decode payload with audience and issuer validation
             payload = jwt.decode(
                 token, 
                 self.secret_key, 
                 algorithms=[self.algorithm],
                 audience="eindr-api",
-                options={"verify_signature": True, "verify_exp": True, "verify_aud": True}
+                issuer="eindr-issuer",
+                options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
             )
             
             # Validate token type (optional for backward compatibility)

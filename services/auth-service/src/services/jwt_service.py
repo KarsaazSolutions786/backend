@@ -68,8 +68,8 @@ class JWTService:
             logger.info(f"Using secret key: {self.secret_key[:10]}...")
             logger.info(f"Using algorithm: {self.algorithm}")
             
-            # Decode token with audience validation
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api")
+            # Decode token with audience and issuer validation
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api", issuer="eindr-issuer")
             
             logger.info(f"Token decoded successfully. Payload: {payload}")
             
@@ -111,7 +111,7 @@ class JWTService:
     def verify_refresh_token(self, token: str) -> Dict[str, Any]:
         """Verify and decode a refresh token"""
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api")
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm], audience="eindr-api", issuer="eindr-issuer")
             
             # Check token type
             if payload.get("type") != "refresh":
