@@ -124,13 +124,73 @@ class MicroserviceClient:
         return await self._make_request("POST", self.ledger_service_url, "/ledger", data=entry_data, token=token)
 
     # Friend Service Methods
-    async def get_friends(self, token: str) -> Dict[str, Any]:
-        """Get friends via friend service"""
-        return await self._make_request("GET", self.friend_service_url, "/friends", token=token)
+    async def get_friends(self, token: str, status: Optional[str] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> Dict[str, Any]:
+        """Get friends via friend service with optional filtering"""
+        params = []
+        if status:
+            params.append(f"status={status}")
+        if limit:
+            params.append(f"limit={limit}")
+        if offset:
+            params.append(f"offset={offset}")
+        
+        endpoint = "/friends"
+        if params:
+            endpoint += "?" + "&".join(params)
+        
+        return await self._make_request("GET", self.friend_service_url, endpoint, token=token)
     
-    async def add_friend(self, friend_data: Dict[str, Any], token: str) -> Dict[str, Any]:
-        """Add friend via friend service"""
+    async def send_friend_request(self, friend_data: Dict[str, Any], token: str) -> Dict[str, Any]:
+        """Send friend request via friend service"""
         return await self._make_request("POST", self.friend_service_url, "/friends", data=friend_data, token=token)
+    
+    async def accept_friend_request(self, friendship_id: int, token: str) -> Dict[str, Any]:
+        """Accept friend request via friend service"""
+        return await self._make_request("PUT", self.friend_service_url, f"/friends/requests/{friendship_id}/accept", token=token)
+    
+    async def decline_friend_request(self, friendship_id: int, token: str) -> Dict[str, Any]:
+        """Decline friend request via friend service"""
+        return await self._make_request("PUT", self.friend_service_url, f"/friends/requests/{friendship_id}/decline", token=token)
+    
+    async def block_friend(self, friendship_id: int, block_data: Optional[Dict[str, Any]], token: str) -> Dict[str, Any]:
+        """Block friend via friend service"""
+        return await self._make_request("PUT", self.friend_service_url, f"/friends/requests/{friendship_id}/block", data=block_data, token=token)
+    
+    async def unblock_friend(self, friendship_id: int, token: str) -> Dict[str, Any]:
+        """Unblock friend via friend service"""
+        return await self._make_request("PUT", self.friend_service_url, f"/friends/requests/{friendship_id}/unblock", token=token)
+    
+    async def cancel_friend_request(self, friendship_id: int, token: str) -> Dict[str, Any]:
+        """Cancel friend request via friend service"""
+        return await self._make_request("DELETE", self.friend_service_url, f"/friends/requests/{friendship_id}/cancel", token=token)
+    
+    async def get_blocked_friends(self, token: str) -> Dict[str, Any]:
+        """Get blocked friends via friend service"""
+        return await self._make_request("GET", self.friend_service_url, "/friends/blocked", token=token)
+    
+    async def get_incoming_friend_requests(self, token: str) -> Dict[str, Any]:
+        """Get incoming friend requests via friend service"""
+        return await self._make_request("GET", self.friend_service_url, "/friends/requests/incoming", token=token)
+    
+    async def get_outgoing_friend_requests(self, token: str) -> Dict[str, Any]:
+        """Get outgoing friend requests via friend service"""
+        return await self._make_request("GET", self.friend_service_url, "/friends/requests/outgoing", token=token)
+    
+    async def search_friends(self, search_data: Dict[str, Any], token: str) -> Dict[str, Any]:
+        """Search friends via friend service"""
+        return await self._make_request("POST", self.friend_service_url, "/friends/search", data=search_data, token=token)
+    
+    async def get_mutual_friends(self, friend_id: int, token: str) -> Dict[str, Any]:
+        """Get mutual friends via friend service"""
+        return await self._make_request("GET", self.friend_service_url, f"/friends/mutual/{friend_id}", token=token)
+    
+    async def get_friendship_stats(self, token: str) -> Dict[str, Any]:
+        """Get friendship statistics via friend service"""
+        return await self._make_request("GET", self.friend_service_url, "/friends/stats", token=token)
+    
+    async def get_friend_request_history(self, token: str) -> Dict[str, Any]:
+        """Get friend request history via friend service"""
+        return await self._make_request("GET", self.friend_service_url, "/friends/history", token=token)
 
     # Chat Service Methods
     async def chat(self, message_data: Dict[str, Any], token: str) -> Dict[str, Any]:
@@ -138,4 +198,4 @@ class MicroserviceClient:
         return await self._make_request("POST", self.chat_service_url, "/chat", data=message_data, token=token)
 
 # Global client instance
-microservice_client = MicroserviceClient() 
+microservice_client = MicroserviceClient()

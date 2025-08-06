@@ -11,6 +11,8 @@ class Customer(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.current_timestamp())
+    updated_at = Column(DateTime, default=func.current_timestamp(), onupdate=func.current_timestamp())
     
     # Self-referencing friendship relationships
     sent_friendships = relationship(
@@ -110,7 +112,7 @@ class FriendRequestHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     requester_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
     requested_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    action = Column(String, nullable=False)  # 'sent', 'accepted', 'declined', 'blocked', 'canceled'
+    action = Column(String, nullable=False)  # 'sent', 'accepted', 'declined', 'blocked', 'canceled', 'unblocked'
     message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=func.current_timestamp())
     
@@ -120,4 +122,4 @@ class FriendRequestHistory(Base):
     
     # Relationships
     requester = relationship("Customer", foreign_keys=[requester_id], back_populates="sent_requests")
-    requested = relationship("Customer", foreign_keys=[requested_id], back_populates="received_requests") 
+    requested = relationship("Customer", foreign_keys=[requested_id], back_populates="received_requests")
