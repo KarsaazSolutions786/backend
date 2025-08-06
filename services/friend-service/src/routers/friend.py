@@ -56,6 +56,7 @@ from pydantic import BaseModel, Field, ValidationError
 from datetime import datetime
 import logging
 import uuid
+# import httpx  # Removed - using direct database queries instead of API calls
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Customer, Friendship, FriendRequestHistory
@@ -117,6 +118,28 @@ class FriendRequestHistoryResponse(BaseModel):
     created_at: datetime
     requester_email: Optional[str]
     requested_email: Optional[str]
+
+class SuggestedUser(BaseModel):
+    id: int
+    email: str
+    display_name: Optional[str] = None
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_verified: bool = False
+    created_at: datetime
+    friendship_status: Optional[str] = None  # None, 'pending_sent', 'pending_received', 'friends', 'blocked'
+
+class SuggestionsResponse(BaseModel):
+    users: List[SuggestedUser]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+class SendFriendRequestToUser(BaseModel):
+    user_id: int = Field(..., description="ID of the user to send friend request to")
+    message: Optional[str] = Field(None, max_length=500, description="Optional message with the friend request")
 
 # Helper functions
 def get_customer_by_email(db: Session, email: str) -> Optional[Customer]:
@@ -846,3 +869,197 @@ async def get_mutual_friends(
     except Exception as e:
         logger.error(f"Error getting mutual friends: {e}")
         raise HTTPException(status_code=500, detail="Failed to get mutual friends")
+
+@router.get("/suggestions", response_model=SuggestionsResponse)
+async def get_suggested_users(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(20, ge=1, le=100, description="Number of users per page"),
+    search: Optional[str] = Query(None, description="Search by name or email"),
+    customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Get suggested users for the suggestion tab.
+    Returns all users excluding the current user and shows friendship status.
+    """
+    try:
+        # Calculate offset for pagination
+        offset = (page - 1) * limit
+        
+        # Build base query for customers, excluding current user
+        query = db.query(Customer).filter(
+            Customer.id != customer_id,
+            Customer.is_active == True
+        )
+        
+        # Apply search filter if provided
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                Customer.email.ilike(search_term)
+            )
+        
+        # Get total count for pagination
+        total = query.count()
+        
+        # Apply pagination and get users
+        users = query.order_by(Customer.created_at.desc()).offset(offset).limit(limit).all()
+        
+        # Get all friendship relationships for the current user
+        friendships = db.query(Friendship).filter(
+            (Friendship.customer_id == customer_id) | (Friendship.friend_id == customer_id)
+        ).all()
+        
+        # Create a mapping of user_id -> friendship_status
+        friendship_status_map = {}
+        for friendship in friendships:
+            other_user_id = friendship.friend_id if friendship.customer_id == customer_id else friendship.customer_id
+            
+            if friendship.status == "accepted":
+                friendship_status_map[other_user_id] = "friends"
+            elif friendship.status == "pending":
+                if friendship.customer_id == customer_id:
+                    friendship_status_map[other_user_id] = "pending_sent"
+                else:
+                    friendship_status_map[other_user_id] = "pending_received"
+            elif friendship.status == "blocked":
+                friendship_status_map[other_user_id] = "blocked"
+        
+        # Process the users and add friendship status
+        suggested_users = []
+        for user in users:
+            # Extract display name from email (before @ symbol) as fallback
+            display_name = user.email.split('@')[0] if user.email else None
+            
+            suggested_user = SuggestedUser(
+                id=user.id,
+                email=user.email,
+                display_name=display_name,
+                full_name=None,  # Not available in current Customer model
+                bio=None,  # Not available in current Customer model
+                avatar_url=None,  # Not available in current Customer model
+                is_verified=False,  # Not available in current Customer model
+                created_at=user.created_at,
+                friendship_status=friendship_status_map.get(user.id)
+            )
+            suggested_users.append(suggested_user)
+        
+        # Calculate pagination info
+        pages = (total + limit - 1) // limit if total > 0 else 1
+        
+        return SuggestionsResponse(
+            users=suggested_users,
+            total=total,
+            page=page,
+            limit=limit,
+            pages=pages
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting suggested users: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get suggested users")
+
+@router.post("/requests/send-to-user", response_model=FriendResponse)
+async def send_friend_request_to_user(
+    request_data: SendFriendRequestToUser,
+    request: Request,
+    customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """
+    Send a friend request to a user by their ID.
+    This is used from the suggestion tab.
+    """
+    try:
+        target_user_id = request_data.user_id
+        
+        # Validate that user is not trying to send request to themselves
+        if target_user_id == customer_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot send friend request to yourself"
+            )
+        
+        # Check if target user exists using direct database query
+        target_customer = get_customer_by_id(db, target_user_id)
+        if not target_customer:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
+        
+        target_user_email = target_customer.email
+        
+        # Ensure current user exists in the local database
+        current_customer = ensure_customer_exists(db, customer_id)
+        
+        # Check if friendship already exists
+        existing_friendship = db.query(Friendship).filter(
+            ((Friendship.customer_id == customer_id) & (Friendship.friend_id == target_user_id)) |
+            ((Friendship.customer_id == target_user_id) & (Friendship.friend_id == customer_id))
+        ).first()
+        
+        if existing_friendship:
+            if existing_friendship.status == "pending":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Friend request already pending"
+                )
+            elif existing_friendship.status == "accepted":
+                raise HTTPException(
+                    status_code=400,
+                    detail="You are already friends with this user"
+                )
+            elif existing_friendship.status == "blocked":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot send friend request to blocked user"
+                )
+        
+        # Create new friendship request
+        new_friendship = Friendship(
+            id=str(uuid.uuid4()),
+            customer_id=customer_id,
+            friend_id=target_user_id,
+            status="pending",
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(new_friendship)
+        
+        # Log the friend request in history
+        history_entry = FriendRequestHistory(
+            requester_id=customer_id,
+            requested_id=target_user_id,
+            action="sent",
+            message=request_data.message,
+            created_at=datetime.utcnow()
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(new_friendship)
+        
+        # Get target user display name from email
+        display_name = target_user_email.split('@')[0]
+        
+        logger.info(f"Friend request sent from customer {customer_id} to user {target_user_id}")
+        
+        return FriendResponse(
+            id=new_friendship.id,
+            customer_id=str(customer_id),
+            friend_id=str(target_user_id),
+            friend_name=display_name,
+            friend_email=target_user_email,
+            status=new_friendship.status,
+            created_at=new_friendship.created_at,
+            accepted_at=new_friendship.accepted_at
+        )
+        
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        logger.error(f"Error sending friend request to user: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to send friend request")
