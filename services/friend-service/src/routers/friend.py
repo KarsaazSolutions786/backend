@@ -137,9 +137,7 @@ class SuggestionsResponse(BaseModel):
     limit: int
     pages: int
 
-class SendFriendRequestToUser(BaseModel):
-    user_id: int = Field(..., description="ID of the user to send friend request to")
-    message: Optional[str] = Field(None, max_length=500, description="Optional message with the friend request")
+
 
 # Helper functions
 def get_customer_by_email(db: Session, email: str) -> Optional[Customer]:
@@ -958,108 +956,3 @@ async def get_suggested_users(
     except Exception as e:
         logger.error(f"Error getting suggested users: {e}")
         raise HTTPException(status_code=500, detail="Failed to get suggested users")
-
-@router.post("/requests/send-to-user", response_model=FriendResponse)
-async def send_friend_request_to_user(
-    request_data: SendFriendRequestToUser,
-    request: Request,
-    customer_id: int = Depends(get_current_customer_id),
-    db: Session = Depends(get_db)
-):
-    """
-    Send a friend request to a user by their ID.
-    This is used from the suggestion tab.
-    """
-    try:
-        target_user_id = request_data.user_id
-        
-        # Validate that user is not trying to send request to themselves
-        if target_user_id == customer_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot send friend request to yourself"
-            )
-        
-        # Check if target user exists using direct database query
-        target_customer = get_customer_by_id(db, target_user_id)
-        if not target_customer:
-            raise HTTPException(
-                status_code=404,
-                detail="User not found"
-            )
-        
-        target_user_email = target_customer.email
-        
-        # Ensure current user exists in the local database
-        current_customer = ensure_customer_exists(db, customer_id)
-        
-        # Check if friendship already exists
-        existing_friendship = db.query(Friendship).filter(
-            ((Friendship.customer_id == customer_id) & (Friendship.friend_id == target_user_id)) |
-            ((Friendship.customer_id == target_user_id) & (Friendship.friend_id == customer_id))
-        ).first()
-        
-        if existing_friendship:
-            if existing_friendship.status == "pending":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Friend request already pending"
-                )
-            elif existing_friendship.status == "accepted":
-                raise HTTPException(
-                    status_code=400,
-                    detail="You are already friends with this user"
-                )
-            elif existing_friendship.status == "blocked":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot send friend request to blocked user"
-                )
-        
-        # Create new friendship request
-        new_friendship = Friendship(
-            id=str(uuid.uuid4()),
-            customer_id=customer_id,
-            friend_id=target_user_id,
-            status="pending",
-            created_at=datetime.utcnow()
-        )
-        
-        db.add(new_friendship)
-        
-        # Log the friend request in history
-        history_entry = FriendRequestHistory(
-            requester_id=customer_id,
-            requested_id=target_user_id,
-            action="sent",
-            message=request_data.message,
-            created_at=datetime.utcnow()
-        )
-        
-        db.add(history_entry)
-        db.commit()
-        db.refresh(new_friendship)
-        
-        # Get target user display name from email
-        display_name = target_user_email.split('@')[0]
-        
-        logger.info(f"Friend request sent from customer {customer_id} to user {target_user_id}")
-        
-        return FriendResponse(
-            id=new_friendship.id,
-            customer_id=str(customer_id),
-            friend_id=str(target_user_id),
-            friend_name=display_name,
-            friend_email=target_user_email,
-            status=new_friendship.status,
-            created_at=new_friendship.created_at,
-            accepted_at=new_friendship.accepted_at
-        )
-        
-    except HTTPException:
-        raise
-
-    except Exception as e:
-        logger.error(f"Error sending friend request to user: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail="Failed to send friend request")
