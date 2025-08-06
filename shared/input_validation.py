@@ -249,7 +249,7 @@ def secure_email_field():
     """Create a secure email field with validation"""
     return Field(
         ...,
-        regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+        pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
         max_length=254,
         description="Valid email address"
     )
@@ -395,4 +395,4 @@ class ValidationUtils:
         # Sanitize as regular string
         query = InputSanitizer.sanitize_string(query, max_length=max_length)
         
-        return query.strip() 
+        return query.strip()

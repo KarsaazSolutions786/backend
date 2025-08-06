@@ -166,7 +166,12 @@ class JWTService:
         """Create an access token"""
         to_encode = data.copy()
         expire = datetime.utcnow() + timedelta(minutes=self.access_token_expire_minutes)
-        to_encode.update({"exp": expire, "type": "access"})
+        to_encode.update({
+            "exp": expire, 
+            "type": "access",
+            "aud": "eindr-api",  # Audience claim required by services
+            "iss": "eindr-issuer"  # Issuer claim required by services
+        })
         
         return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
     
@@ -174,7 +179,12 @@ class JWTService:
         """Create a refresh token"""
         to_encode = data.copy()
         expire = datetime.utcnow() + timedelta(days=self.refresh_token_expire_days)
-        to_encode.update({"exp": expire, "type": "refresh"})
+        to_encode.update({
+            "exp": expire, 
+            "type": "refresh",
+            "aud": "eindr-api",  # Audience claim required by services
+            "iss": "eindr-issuer"  # Issuer claim required by services
+        })
         
         return jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
     
@@ -296,4 +306,4 @@ def create_service_auth_header(customer_id: int) -> dict:
 def verify_service_token(token: str) -> int:
     """Verify token from internal service-to-service communication"""
     jwt_service = JWTService()
-    return jwt_service.get_customer_id_from_token(token) 
+    return jwt_service.get_customer_id_from_token(token)
