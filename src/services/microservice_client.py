@@ -139,7 +139,21 @@ class MicroserviceClient:
             endpoint += "?" + "&".join(params)
         
         return await self._make_request("GET", self.friend_service_url, endpoint, token=token)
-    
+
+    async def get_accepted_friends(self, token: str, limit: Optional[int] = None, offset: Optional[int] = None) -> Dict[str, Any]:
+        """Get only accepted friends via friend service"""
+        params = []
+        if limit:
+            params.append(f"limit={limit}")
+        if offset:
+            params.append(f"offset={offset}")
+        
+        endpoint = "/friends/accepted"
+        if params:
+            endpoint += "?" + "&".join(params)
+        
+        return await self._make_request("GET", self.friend_service_url, endpoint, token=token)
+
     async def send_friend_request(self, friend_data: Dict[str, Any], token: str) -> Dict[str, Any]:
         """Send friend request via friend service"""
         return await self._make_request("POST", self.friend_service_url, "/friends", data=friend_data, token=token)

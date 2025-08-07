@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./friend_service.db")

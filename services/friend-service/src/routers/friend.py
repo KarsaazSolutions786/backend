@@ -306,8 +306,50 @@ async def get_friends(
         return result
         
     except Exception as e:
-        logger.error(f"Error getting mutual friends: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get mutual friends")
+        logger.error(f"Error getting friends: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get friends")
+
+@router.get("/accepted", response_model=List[FriendResponse])
+async def get_accepted_friends(
+    limit: Optional[int] = Query(50, ge=1, le=100, description="Maximum number of accepted friends to return"),
+    offset: Optional[int] = Query(0, ge=0, description="Number of accepted friends to skip"),
+    customer_id: int = Depends(get_current_customer_id),
+    db: Session = Depends(get_db)
+):
+    """Get only accepted friends (friends whose requests have been accepted)"""
+    try:
+        # Query for friendships involving the current user with accepted status only
+        accepted_friendships = db.query(Friendship).filter(
+            (Friendship.customer_id == customer_id) | (Friendship.friend_id == customer_id),
+            Friendship.status == "accepted"
+        ).order_by(Friendship.accepted_at.desc()).offset(offset).limit(limit).all()
+        
+        result = []
+        for friendship in accepted_friendships:
+            # Determine the friend's details
+            if friendship.customer_id == customer_id:
+                friend_id = friendship.friend_id
+            else:
+                friend_id = friendship.customer_id
+            
+            friend = get_customer_by_id(db, friend_id)
+            if friend:
+                result.append(FriendResponse(
+                    id=str(friendship.id),
+                    customer_id=str(customer_id),
+                    friend_id=str(friend_id),
+                    friend_name=friend.email.split('@')[0],  # Use email prefix as name for now
+                    friend_email=friend.email,
+                    status=friendship.status,
+                    created_at=friendship.created_at,
+                    accepted_at=friendship.accepted_at
+                ))
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting accepted friends: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get accepted friends")
 
 @router.delete("/requests/{friendship_id}/cancel")
 async def cancel_friend_request(
