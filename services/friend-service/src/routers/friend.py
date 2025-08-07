@@ -14,8 +14,9 @@ except ImportError:
     def get_current_customer_id(credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())) -> int:
         """Secure local implementation as fallback with audience and issuer validation"""
         try:
+            from ..config import settings
             token = credentials.credentials
-            secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+            secret_key = settings.SECRET_KEY
             
             # Validate production environment
             if os.getenv("ENVIRONMENT") == "production" and secret_key in [
@@ -28,7 +29,7 @@ except ImportError:
             payload = jwt.decode(
                 token, 
                 secret_key, 
-                algorithms=["HS256"],
+                algorithms=[settings.ALGORITHM],
                 audience="eindr-api",
                 issuer="eindr-issuer",
                 options={"verify_signature": True, "verify_exp": True, "verify_aud": True, "verify_iss": True}
