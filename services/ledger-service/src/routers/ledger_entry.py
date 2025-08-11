@@ -249,6 +249,59 @@ async def get_friends_list(
             detail="Failed to fetch friends list"
         )
 
+# Enhanced summary endpoint for both app friends and non-app contacts
+@router.get("/summary", response_model=LedgerSummaryResponse)
+def ledger_summary(db: Session = Depends(get_db), current_customer_id: int = Depends(get_current_customer_id)):
+    """Get ledger summary with app friends and non-app contacts"""
+    # Get all ledger entries for the current customer
+    entries = db.query(LedgerEntry).filter(
+        LedgerEntry.customer_id == current_customer_id
+    ).all()
+    
+    # Group entries by friend
+    friend_summaries = {}
+    total_balance = 0.0
+    total_transactions = len(entries)
+    
+    for entry in entries:
+        # Create a unique key for each friend (using friend_id if available, otherwise friend_name)
+        friend_key = entry.friend_id if entry.friend_id else entry.friend_name
+        
+        if friend_key not in friend_summaries:
+            friend_summaries[friend_key] = {
+                'friend_id': entry.friend_id,
+                'friend_name': entry.friend_name,
+                'friend_phone': entry.friend_phone,
+                'friend_email': entry.friend_email,
+                'total_amount': 0.0,
+                'transaction_count': 0,
+                'is_app_user': entry.friend_id is not None
+            }
+        
+        # Calculate amount based on direction (1 = owed to you, 2 = you owe)
+        amount = entry.amount if entry.ledger_direction_id == 1 else -entry.amount
+        friend_summaries[friend_key]['total_amount'] += amount
+        friend_summaries[friend_key]['transaction_count'] += 1
+        total_balance += amount
+    
+    # Separate app friends from non-app contacts
+    app_friends = []
+    non_app_contacts = []
+    
+    for summary in friend_summaries.values():
+        summary_obj = LedgerSummary(**summary)
+        if summary['is_app_user']:
+            app_friends.append(summary_obj)
+        else:
+            non_app_contacts.append(summary_obj)
+    
+    return LedgerSummaryResponse(
+        app_friends=app_friends,
+        non_app_contacts=non_app_contacts,
+        total_balance=total_balance,
+        total_transactions=total_transactions
+    )
+
 # Get by id
 @router.get("/{entry_id}", response_model=LedgerEntryResponse)
 def get_entry(entry_id: int, db: Session = Depends(get_db), current_customer_id: int = Depends(get_current_customer_id)):
@@ -288,75 +341,3 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db), current_customer_
     db.delete(entry)
     db.commit()
     return {"message": "Ledger entry deleted successfully"}
-
-# Enhanced summary endpoint for both app friends and non-app contacts
-@router.get("/summary", response_model=LedgerSummaryResponse)
-def ledger_summary(db: Session = Depends(get_db), current_customer_id: int = Depends(get_current_customer_id)):
-    customer_id = current_customer_id
-    
-    # Get summaries for app friends (where friend_id is not null)
-    app_friends_data = (
-        db.query(
-            LedgerEntry.friend_id,
-            func.sum(LedgerEntry.amount).label("total_amount"),
-            func.count(LedgerEntry.id).label("transaction_count")
-        )
-        .filter(LedgerEntry.customer_id == customer_id)
-        .filter(LedgerEntry.friend_id.isnot(None))
-        .group_by(LedgerEntry.friend_id)
-        .all()
-    )
-    
-    # Get summaries for non-app contacts (where friend_id is null)
-    non_app_contacts_data = (
-        db.query(
-            LedgerEntry.friend_name,
-            LedgerEntry.friend_phone,
-            LedgerEntry.friend_email,
-            func.sum(LedgerEntry.amount).label("total_amount"),
-            func.count(LedgerEntry.id).label("transaction_count")
-        )
-        .filter(LedgerEntry.customer_id == customer_id)
-        .filter(LedgerEntry.friend_id.is_(None))
-        .group_by(LedgerEntry.friend_name, LedgerEntry.friend_phone, LedgerEntry.friend_email)
-        .all()
-    )
-    
-    # Build app friends summary
-    app_friends = [
-        LedgerSummary(
-            friend_id=row[0],
-            friend_name=None,
-            friend_phone=None,
-            friend_email=None,
-            total_amount=float(row[1] or 0),
-            transaction_count=int(row[2] or 0),
-            is_app_user=True
-        )
-        for row in app_friends_data
-    ]
-    
-    # Build non-app contacts summary
-    non_app_contacts = [
-        LedgerSummary(
-            friend_id=None,
-            friend_name=row[0],
-            friend_phone=row[1],
-            friend_email=row[2],
-            total_amount=float(row[3] or 0),
-            transaction_count=int(row[4] or 0),
-            is_app_user=False
-        )
-        for row in non_app_contacts_data
-    ]
-    
-    # Calculate totals
-    total_balance = sum([friend.total_amount for friend in app_friends + non_app_contacts])
-    total_transactions = sum([friend.transaction_count for friend in app_friends + non_app_contacts])
-    
-    return LedgerSummaryResponse(
-        app_friends=app_friends,
-        non_app_contacts=non_app_contacts,
-        total_balance=total_balance,
-         total_transactions=total_transactions
-     )
