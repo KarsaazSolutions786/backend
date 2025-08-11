@@ -21,6 +21,10 @@ if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
     PORT=8000
 fi
 
+echo "Running database migrations..."
+# Run database migrations
+alembic upgrade head
+
 echo "Starting service on port $PORT"
 
 # Start the FastAPI application with explicit port

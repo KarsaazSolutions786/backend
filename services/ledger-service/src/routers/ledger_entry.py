@@ -30,7 +30,7 @@ except ImportError:
         """Secure local implementation as fallback"""
         try:
             token = credentials.credentials
-            secret_key = os.getenv("SECRET_KEY", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
+            secret_key = os.getenv("JWT_SECRET", "eindr-super-secure-jwt-secret-key-for-production-2024-v1")
             
             # Validate production environment
             if os.getenv("ENVIRONMENT") == "production" and secret_key in [
@@ -38,7 +38,7 @@ except ImportError:
                 "your-secret-key-here-change-in-production",
                 "eindr-super-secret-key-change-in-production-123456789"
             ]:
-                raise ValueError("Production environment requires a secure SECRET_KEY")
+                raise ValueError("Production environment requires a secure JWT_SECRET")
             
             payload = jwt.decode(
                 token, 
