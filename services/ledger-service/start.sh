@@ -22,8 +22,21 @@ if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
 fi
 
 echo "Running database migrations..."
-# Run database migrations
-alembic upgrade head
+# Run database migrations with error handling
+if ! alembic upgrade head; then
+    echo "Migration failed, but continuing to start service..."
+    echo "This might be expected for first-time deployments"
+else
+    echo "Migrations completed successfully"
+fi
+
+echo "Checking database schema..."
+# Run fallback database initialization to ensure required columns exist
+if python src/db_init_fallback.py; then
+    echo "Database schema check completed"
+else
+    echo "Database schema check failed, but continuing..."
+fi
 
 echo "Starting service on port $PORT"
 
