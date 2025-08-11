@@ -26,6 +26,20 @@ class Customer(Base):
         cascade="all, delete-orphan"
     )
 
+class Friendship(Base):
+    __tablename__ = "friendships"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    friend_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    status = Column(String, nullable=False, default="pending")  # 'pending', 'accepted', 'blocked'
+    created_at = Column(DateTime, server_default=func.current_timestamp())
+    updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    
+    # Relationships
+    user = relationship("Customer", foreign_keys=[user_id])
+    friend = relationship("Customer", foreign_keys=[friend_id])
+
 class LedgerDirection(Base):
     __tablename__ = "ledger_direction"
     
@@ -42,10 +56,22 @@ class LedgerEntry(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    friend_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    amount = Column(Numeric(10, 2), nullable=True)
+    
+    # For app users (friends)
+    friend_id = Column(Integer, ForeignKey("customers.id"), nullable=True)
+    
+    # For non-app contacts
+    friend_name = Column(String(255), nullable=True)
+    friend_phone = Column(String(20), nullable=True)
+    friend_email = Column(String(255), nullable=True)
+    
+    # Transaction details
+    amount = Column(Numeric(10, 2), nullable=False)
     ledger_direction_id = Column(Integer, ForeignKey("ledger_direction.id"), nullable=False)
     notes = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="saved")  # 'draft', 'saved'
+    
+    # Metadata
     created_at = Column(DateTime, server_default=func.current_timestamp())
     updated_at = Column(DateTime, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
     
@@ -53,7 +79,6 @@ class LedgerEntry(Base):
     customer = relationship("Customer", foreign_keys=[customer_id], back_populates="ledger_entries_as_customer")
     friend = relationship("Customer", foreign_keys=[friend_id], back_populates="ledger_entries_as_friend")
     direction = relationship("LedgerDirection", back_populates="ledger_entries")
-    # Removed complex self-referential relationships for now
 
 class LedgerEntryRelation(Base):
     __tablename__ = "ledger_entry_relations"
@@ -85,4 +110,4 @@ class LedgerSummary(Base):
     
     # Relationships
     customer = relationship("Customer", foreign_keys=[customer_id])
-    friend = relationship("Customer", foreign_keys=[friend_id]) 
+    friend = relationship("Customer", foreign_keys=[friend_id])
