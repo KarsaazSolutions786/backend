@@ -3,20 +3,23 @@ from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from ..database import get_db
 from sqlalchemy.exc import IntegrityError
-from ..models import LedgerEntry, Customer, Friendship
+from ..models import LedgerEntry, Customer, Friendship, LedgerDirection
 from datetime import datetime
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter
 from fastapi.responses import JSONResponse
 import os
+import logging
 # Use secure shared authentication 
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../shared'))
+
+logger = logging.getLogger(__name__)
 
 try:
     from simple_auth import get_current_customer_id
@@ -87,6 +90,7 @@ class LedgerEntryCreate(BaseModel):
     notes: Optional[str] = None
     status: str = Field(default="saved", pattern="^(draft|saved)$")
     
+    @model_validator(mode='after')
     def validate_friend_info(self):
         """Ensure either friend_id or friend contact info is provided"""
         if not self.friend_id and not (self.friend_name or self.friend_phone or self.friend_email):
@@ -164,17 +168,24 @@ class FriendInfo(BaseModel):
 def create_ledger_entry(request: Request, entry: LedgerEntryCreate, db: Session = Depends(get_db), current_customer_id: int = Depends(get_current_customer_id)):
     customer_id = current_customer_id
 
-    # Validate friend information
-    try:
-        entry.validate_friend_info()
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
     # If friend_id is provided, validate it exists
     if entry.friend_id:
-        friend = db.query(Customer).filter(Customer.id == entry.friend_id).first()
-        if not friend:
-            raise HTTPException(status_code=400, detail="Invalid friend_id: Friend not found")
+        try:
+            friend = db.query(Customer).filter(Customer.id == entry.friend_id).first()
+            if not friend:
+                raise HTTPException(status_code=400, detail="Invalid friend_id: Friend not found")
+        except Exception as e:
+            logger.error(f"Error validating friend_id {entry.friend_id}: {e}")
+            raise HTTPException(status_code=400, detail="Error validating friend information")
+
+    # Validate ledger_direction_id exists
+    try:
+        direction = db.query(LedgerDirection).filter(LedgerDirection.id == entry.ledger_direction_id).first()
+        if not direction:
+            raise HTTPException(status_code=400, detail="Invalid ledger_direction_id: Direction not found")
+    except Exception as e:
+        logger.error(f"Error validating ledger_direction_id {entry.ledger_direction_id}: {e}")
+        raise HTTPException(status_code=400, detail="Error validating ledger direction")
 
     # Create new ledger entry
     new_entry = LedgerEntry(
@@ -194,7 +205,12 @@ def create_ledger_entry(request: Request, entry: LedgerEntryCreate, db: Session 
         db.commit()
     except IntegrityError as e:
         db.rollback()
+        logger.error(f"Database integrity error: {e}")
         raise HTTPException(status_code=400, detail="Database integrity error: " + str(e.orig))
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Unexpected database error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error while creating ledger entry")
     
     db.refresh(new_entry)
     return new_entry
